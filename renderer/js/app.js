@@ -65,7 +65,6 @@ const dom = {
   detailLabel:     document.getElementById('detail-label'),
   detailMeta:      document.getElementById('detail-meta'),
   exportControls:  document.getElementById('export-controls'),
-  gifControls:     document.getElementById('gif-controls'),
   gifToolbar:      document.getElementById('gif-toolbar'),
   gifFrameStrip:   document.getElementById('gif-frame-strip'),
   gifFrameList:    document.getElementById('gif-frame-list'),
@@ -434,7 +433,6 @@ function setExportFormat(fmt) {
   document.querySelectorAll('.fmt-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.fmt === fmt);
   });
-  dom.gifControls.classList.toggle('visible', fmt === 'gif');
   if (fmt === 'gif') {
     enterGifMode();
   } else {
@@ -590,11 +588,17 @@ function renderGifFrameStrip() {
     canvas.width  = GIF_THUMB_W;
     canvas.height = GIF_THUMB_H;
     canvas.className = 'gif-chip-canvas';
-    const thumbScale = GIF_THUMB_W / GBCam.PHOTO_WIDTH;
 
     // Resolve palette for this frame
     const pal = frame.paletteId ? PALETTES[frame.paletteId] : state.palette;
-    if (pal) GBCam.renderToCanvas(canvas.getContext('2d'), photo.pixels, pal, thumbScale);
+    if (pal) {
+      // GBCam.renderToCanvas needs an integer scale — render at 1× then scale via drawImage
+      const tmp = Object.assign(document.createElement('canvas'), {
+        width: GBCam.PHOTO_WIDTH, height: GBCam.PHOTO_HEIGHT,
+      });
+      GBCam.renderToCanvas(tmp.getContext('2d'), photo.pixels, pal, 1);
+      canvas.getContext('2d').drawImage(tmp, 0, 0, GIF_THUMB_W, GIF_THUMB_H);
+    }
 
     // Palette swatch button
     const palBtn = document.createElement('button');

@@ -230,30 +230,6 @@
             </div>
           </div>
 
-          <div id="gif-controls">
-            <div class="range-wrap">
-              <div class="range-header">
-                <span class="ctrl-label">Frame delay</span>
-                <span class="range-val" id="gif-delay-val">250ms</span>
-              </div>
-              <input type="range" id="gif-delay"
-                     min="50" max="2000" step="50" value="250">
-            </div>
-            <!-- GIF loop mode -->
-            <div class="ctrl-group">
-              <div class="ctrl-label">Loop</div>
-              <div class="seg-control">
-                <button class="seg-btn gif-loop-btn active" data-loop="infinite">∞ Loop</button>
-                <button class="seg-btn gif-loop-btn" data-loop="once">Once</button>
-                <button class="seg-btn gif-loop-btn" data-loop="bounce">Bounce</button>
-              </div>
-            </div>
-
-            <button id="btn-export-gif" class="btn btn-primary btn-full">
-              Export Animated GIF
-            </button>
-          </div>
-
           <!-- PNG export buttons -->
           <div class="ctrl-group">
             <button id="btn-export-single" class="btn btn-primary btn-full">
@@ -279,9 +255,20 @@
 
   <!-- ── GIF mode toolbar (bottom, above strip) ────────────────────────────── -->
   <div id="gif-toolbar">
-    <span>🎞 GIF mode — click photos to add frames</span>
+    <span class="gif-mode-label">🎞 GIF</span>
+    <div class="gif-toolbar-delay">
+      <span class="gif-ctrl-label">Delay</span>
+      <input type="range" id="gif-delay" min="50" max="2000" step="50" value="250" title="Frame delay">
+      <span id="gif-delay-val">250ms</span>
+    </div>
+    <div class="seg-control gif-loop-seg">
+      <button class="seg-btn gif-loop-btn active" data-loop="infinite">∞ Loop</button>
+      <button class="seg-btn gif-loop-btn" data-loop="once">Once</button>
+      <button class="seg-btn gif-loop-btn" data-loop="bounce">Bounce</button>
+    </div>
     <span class="spacer"></span>
-    <span id="gif-count">0 frames selected</span>
+    <span id="gif-count">0 frames</span>
+    <button id="btn-export-gif" class="btn btn-primary btn-sm">Export GIF</button>
     <button id="gif-cancel" class="btn btn-ghost btn-sm">Cancel</button>
   </div>
 
