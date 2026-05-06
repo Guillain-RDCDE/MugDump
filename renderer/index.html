@@ -50,20 +50,6 @@
     <button id="btn-export-palettes" class="btn btn-ghost btn-sm" title="Export all custom palettes to JSON">Export</button>
   </div>
 
-  <!-- ── GIF mode toolbar ───────────────────────────────────────────────────── -->
-  <div id="gif-toolbar">
-    <span>🎞 GIF mode — click photos to add frames</span>
-    <span class="spacer"></span>
-    <span id="gif-count">0 frames selected</span>
-    <button id="gif-cancel" class="btn btn-ghost btn-sm">Cancel</button>
-  </div>
-
-  <!-- ── GIF frame strip ─────────────────────────────────────────────────── -->
-  <div id="gif-frame-strip">
-    <div id="gif-frame-list"></div>
-    <div id="gif-frame-empty">Click photos in the grid to add frames</div>
-  </div>
-
   <!-- ── Welcome / empty state ──────────────────────────────────────────────── -->
   <div id="welcome">
     <div class="welcome-icon">📷</div>
@@ -195,6 +181,55 @@
             </div>
           </div>
 
+          <!-- Tone controls (brightness, contrast, split toning) -->
+          <div class="ctrl-group" id="tone-controls">
+            <div class="tone-header">
+              <div class="ctrl-label">Tone</div>
+              <button id="tone-reset" class="btn btn-ghost btn-xs" title="Reset all tone adjustments">Reset</button>
+            </div>
+            <div class="range-wrap">
+              <div class="range-header">
+                <span class="ctrl-label">Brightness</span>
+                <span class="range-val" id="tone-brightness-val">0</span>
+              </div>
+              <input type="range" id="tone-brightness" min="-100" max="100" step="5" value="0">
+            </div>
+            <div class="range-wrap">
+              <div class="range-header">
+                <span class="ctrl-label">Contrast</span>
+                <span class="range-val" id="tone-contrast-val">0</span>
+              </div>
+              <input type="range" id="tone-contrast" min="-100" max="100" step="5" value="0">
+            </div>
+            <div class="tone-section-label">Split Toning</div>
+            <div class="range-wrap">
+              <div class="range-header">
+                <span class="ctrl-label">Intensity</span>
+                <span class="range-val" id="tone-intensity-val">0%</span>
+              </div>
+              <input type="range" id="tone-intensity" min="0" max="100" step="5" value="0">
+            </div>
+            <div id="tone-split-detail">
+              <div class="tone-color-row">
+                <div class="tone-color-col">
+                  <div class="ctrl-label">Shadows</div>
+                  <input type="color" id="tone-shadow-color" value="#0033aa" class="tone-color-input">
+                </div>
+                <div class="tone-color-col">
+                  <div class="ctrl-label">Highlights</div>
+                  <input type="color" id="tone-highlight-color" value="#ff8800" class="tone-color-input">
+                </div>
+              </div>
+              <div class="range-wrap">
+                <div class="range-header">
+                  <span class="ctrl-label">Balance</span>
+                  <span class="range-val" id="tone-balance-val">0</span>
+                </div>
+                <input type="range" id="tone-balance" min="-100" max="100" step="5" value="0">
+              </div>
+            </div>
+          </div>
+
           <div id="gif-controls">
             <div class="range-wrap">
               <div class="range-header">
@@ -217,9 +252,6 @@
             <button id="btn-export-gif" class="btn btn-primary btn-full">
               Export Animated GIF
             </button>
-            <button id="btn-export-video" class="btn btn-full" style="margin-top:4px;">
-              Export as Video (MP4)
-            </button>
           </div>
 
           <!-- PNG export buttons -->
@@ -238,6 +270,20 @@
       </div><!-- /detail-content -->
     </div><!-- /detail-panel -->
   </div><!-- /main -->
+
+  <!-- ── GIF frame strip (bottom) ─────────────────────────────────────────── -->
+  <div id="gif-frame-strip">
+    <div id="gif-frame-list"></div>
+    <div id="gif-frame-empty">Click photos in the grid to add frames</div>
+  </div>
+
+  <!-- ── GIF mode toolbar (bottom, above strip) ────────────────────────────── -->
+  <div id="gif-toolbar">
+    <span>🎞 GIF mode — click photos to add frames</span>
+    <span class="spacer"></span>
+    <span id="gif-count">0 frames selected</span>
+    <button id="gif-cancel" class="btn btn-ghost btn-sm">Cancel</button>
+  </div>
 
   <!-- ── Status bar ─────────────────────────────────────────────────────────── -->
   <div id="statusbar">

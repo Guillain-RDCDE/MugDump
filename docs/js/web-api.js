@@ -175,8 +175,7 @@ window.api = {
     const { frames, delay, scale, loop, defaultName } = options;
     const w = frames[0].width * scale;
     const h = frames[0].height * scale;
-    const delayCs = Math.max(1, Math.round(delay / 10));
-    // repeat: 0 = infinite, -1 = play once (gifenc convention)
+    // gifenc expects delay in milliseconds (unlike omggif which uses centiseconds)
     const repeat = (loop === 'once') ? -1 : 0;
 
     let bytes;
@@ -189,7 +188,7 @@ window.api = {
         const scaled = scaleIndicesWeb(new Uint8Array(frame.indices), frame.width, frame.height, scale);
         gif.writeFrame(scaled, w, h, {
           palette: frame.palette, // [[r,g,b], ...]
-          delay: delayCs,
+          delay,   // ms — gifenc expects milliseconds directly
           repeat,
         });
       }

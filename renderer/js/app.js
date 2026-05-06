@@ -42,6 +42,13 @@ const state = {
   gifDelay: 250,           // ms per frame
   gifLoop: 'infinite',     // 'infinite' | 'once' | 'bounce'
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
+  // Tone adjustments
+  brightness:      0,      // -100 to +100
+  contrast:        0,      // -100 to +100
+  toneIntensity:   0,      // 0–100 (split toning strength)
+  shadowColor:     '#0033aa',
+  highlightColor:  '#ff8800',
+  toneBalance:     0,      // -100 (more shadow) to +100 (more highlight)
 };
 
 // ── DOM refs ───────────────────────────────────────────────────────────────
@@ -324,6 +331,7 @@ function renderDetail(index) {
     applyExportFilter(ctx, dom.detailCanvas.width, dom.detailCanvas.height, PREVIEW_SCALE,
       state.exportFilter, state.filterIntensity, state.filterVariant);
   }
+  applyToneAdjustments(ctx, dom.detailCanvas.width, dom.detailCanvas.height);
 
   dom.detailLabel.textContent = `Photo ${index + 1}`;
   const t = getTransform(index);
@@ -454,6 +462,7 @@ async function exportSinglePng() {
   const { width, height } = { width: canvas.width, height: canvas.height };
   applyExportFilter(ctx, width, height, scale,
     state.exportFilter, state.filterIntensity, state.filterVariant);
+  applyToneAdjustments(ctx, width, height);
 
   const dataUrl = canvas.toDataURL('image/png');
   const filterTag = state.exportFilter !== 'none' ? `_${state.exportFilter}` : '';
@@ -483,6 +492,7 @@ async function exportBatchPng() {
     renderPhotoWithTransform(ctx, photo, state.palette, batchScale, photo.index);
     applyExportFilter(ctx, canvas.width, canvas.height, batchScale,
       state.exportFilter, state.filterIntensity, state.filterVariant);
+    applyToneAdjustments(ctx, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL('image/png');
     const name = `gbcam_${String(photo.index + 1).padStart(2, '0')}_${state.palette.id}_${scaleTag}${filterTag}.png`;
     batch.push({ dataUrl, name });
@@ -984,8 +994,10 @@ function wireButtons() {
   document.getElementById('btn-export-single').addEventListener('click', exportSinglePng);
   document.getElementById('btn-export-all').addEventListener('click', exportBatchPng);
   document.getElementById('btn-export-gif').addEventListener('click', exportGif);
-  document.getElementById('btn-export-video')?.addEventListener('click', exportVideo);
   document.getElementById('btn-contact-sheet')?.addEventListener('click', exportContactSheet);
+
+  // Tone controls
+  setupToneControls();
 
   // Titlebar: export .sav + project + reload
   document.getElementById('tb-export-sav')?.addEventListener('click', exportSav);
@@ -1883,6 +1895,7 @@ function updateGifPreview() {
       applyExportFilter(frameCtx, dom.detailCanvas.width, dom.detailCanvas.height, PREVIEW_SCALE,
         state.exportFilter, state.filterIntensity, state.filterVariant);
     }
+    applyToneAdjustments(frameCtx, dom.detailCanvas.width, dom.detailCanvas.height);
 
     dom.detailLabel.textContent = 'GIF Preview';
     const palLabel = frameObj.paletteId ? ` · ${pal?.name}` : '';
@@ -2231,6 +2244,63 @@ function buildFilterParams(filter) {
  * @param {number} intensity — 0.0–1.0 (default 1.0)
  * @param {string} variant   — crt only: 'fine'|'medium'|'thick'|'wide' (default 'medium')
  */
+// ── Tone adjustments (brightness / contrast / split toning) ─────────────────
+
+function applyToneAdjustments(ctx, width, height) {
+  const { brightness, contrast, toneIntensity, shadowColor, highlightColor, toneBalance } = state;
+  if (brightness === 0 && contrast === 0 && toneIntensity === 0) return;
+
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const d = imageData.data;
+
+  // Pre-compute contrast factor (S-curve through 128)
+  const contrastFactor = contrast !== 0
+    ? (259 * (contrast + 255)) / (255 * (259 - contrast))
+    : 1;
+
+  // Parse split toning colors
+  const sr = parseInt(shadowColor.slice(1, 3), 16);
+  const sg = parseInt(shadowColor.slice(3, 5), 16);
+  const sb = parseInt(shadowColor.slice(5, 7), 16);
+  const hr = parseInt(highlightColor.slice(1, 3), 16);
+  const hg = parseInt(highlightColor.slice(3, 5), 16);
+  const hb = parseInt(highlightColor.slice(5, 7), 16);
+  const toneStr   = toneIntensity / 100;
+  const mid       = (toneBalance + 100) / 200; // 0..1, default 0.5
+
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue;
+    let r = d[i], g = d[i + 1], b = d[i + 2];
+
+    // Brightness
+    if (brightness !== 0) {
+      r = Math.min(255, Math.max(0, r + brightness));
+      g = Math.min(255, Math.max(0, g + brightness));
+      b = Math.min(255, Math.max(0, b + brightness));
+    }
+
+    // Contrast
+    if (contrast !== 0) {
+      r = Math.min(255, Math.max(0, Math.round(contrastFactor * (r - 128) + 128)));
+      g = Math.min(255, Math.max(0, Math.round(contrastFactor * (g - 128) + 128)));
+      b = Math.min(255, Math.max(0, Math.round(contrastFactor * (b - 128) + 128)));
+    }
+
+    // Split toning — blend toward shadow/highlight tint based on luminance
+    if (toneIntensity > 0) {
+      const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      const sw  = mid > 0    ? Math.max(0, 1 - lum / mid)          : 0;
+      const hw  = mid < 1    ? Math.max(0, (lum - mid) / (1 - mid)): 0;
+      r = Math.min(255, Math.max(0, Math.round(r + toneStr * (sw * (sr - r) + hw * (hr - r)))));
+      g = Math.min(255, Math.max(0, Math.round(g + toneStr * (sw * (sg - g) + hw * (hg - g)))));
+      b = Math.min(255, Math.max(0, Math.round(b + toneStr * (sw * (sb - b) + hw * (hb - b)))));
+    }
+
+    d[i] = r; d[i + 1] = g; d[i + 2] = b;
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
 function applyExportFilter(ctx, width, height, scale, filter,
                            intensity = 1.0, variant = 'medium') {
   if (!filter || filter === 'none') return;
@@ -2592,99 +2662,6 @@ async function openProject() {
   showToast(`Project loaded: ${result.name}`);
 }
 
-// ── Export: video (MP4/WebM via MediaRecorder) ─────────────────────────────
-
-async function exportVideo() {
-  if (state.gifFrameOrder.length === 0) {
-    showToast('Select at least one photo for video export');
-    return;
-  }
-  if (!('MediaRecorder' in window)) {
-    showToast('Video export not supported in this browser');
-    return;
-  }
-
-  const scale = state.exportScale === 'custom'
-    ? Math.max(1, Math.round((parseInt(document.getElementById('custom-width')?.value) || 512) / GBCam.PHOTO_WIDTH))
-    : state.exportScale;
-
-  const baseFrames = state.gifFrameOrder;
-  let sequence = baseFrames;
-  if (state.gifLoop === 'bounce' && baseFrames.length > 2) {
-    const mid = [...baseFrames].reverse().slice(1, baseFrames.length - 1);
-    sequence = [...baseFrames, ...mid];
-  }
-
-  const width  = GBCam.PHOTO_WIDTH  * scale;
-  const height = GBCam.PHOTO_HEIGHT * scale;
-
-  // Pick best supported MIME type
-  const candidates = [
-    'video/mp4',
-    'video/webm;codecs=vp9',
-    'video/webm;codecs=vp8',
-    'video/webm',
-  ];
-  const mimeType = candidates.find(m => {
-    try { return MediaRecorder.isTypeSupported(m); } catch(_) { return false; }
-  }) || 'video/webm';
-  const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
-
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
-
-  const stream = canvas.captureStream(0); // 0 = manual frame push
-  const recorder = new MediaRecorder(stream, { mimeType });
-  const chunks = [];
-
-  recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-
-  const loopTag = state.gifLoop !== 'infinite' ? `_${state.gifLoop}` : '';
-  const defaultName = `gbcam_${state.palette.id}_${scale}x${loopTag}.${ext}`;
-
-  recorder.onstop = () => {
-    const blob = new Blob(chunks, { type: mimeType });
-    const url  = URL.createObjectURL(blob);
-    const a    = Object.assign(document.createElement('a'), { href: url, download: defaultName });
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    showToast(`Video saved (${sequence.length} frames · ${ext.toUpperCase()})`);
-    // Re-enable the button
-    const btn = document.getElementById('btn-export-video');
-    if (btn) { btn.disabled = false; btn.textContent = `Export as Video (${ext.toUpperCase()})`; }
-  };
-
-  // Disable button while recording
-  const btn = document.getElementById('btn-export-video');
-  if (btn) { btn.disabled = true; btn.textContent = 'Recording…'; }
-
-  recorder.start();
-  const track = stream.getVideoTracks()[0];
-
-  for (const frame of sequence) {
-    const photo = state.photos[frame.photoIndex];
-    if (!photo || photo.isEmpty) continue;
-    const pal = (frame.paletteId && PALETTES[frame.paletteId]) || state.palette;
-    ctx.clearRect(0, 0, width, height);
-    GBCam.renderToCanvas(ctx, photo.pixels, pal, scale);
-    if (state.exportFilter !== 'none') {
-      applyExportFilter(ctx, width, height, scale,
-        state.exportFilter, state.filterIntensity, state.filterVariant);
-    }
-    if (track && track.requestFrame) track.requestFrame();
-    await new Promise(r => setTimeout(r, state.gifDelay));
-  }
-
-  // Ensure at least one more frame is flushed before stopping
-  if (track && track.requestFrame) track.requestFrame();
-  await new Promise(r => setTimeout(r, 80));
-  recorder.stop();
-}
-
 // ── Hide empty slots ─────────────────────────────────────────────────────────
 
 function toggleHideEmpty() {
@@ -2802,6 +2779,7 @@ function renderPresentation() {
     applyExportFilter(ctx, dom.presCanvas.width, dom.presCanvas.height, scale,
       state.exportFilter, state.filterIntensity, state.filterVariant);
   }
+  applyToneAdjustments(ctx, dom.presCanvas.width, dom.presCanvas.height);
 
   const filled = state.photos.filter(p => !p.isEmpty).length;
   const pos    = state.photos.slice(0, _presIndex + 1).filter(p => !p.isEmpty).length;
@@ -2849,6 +2827,7 @@ async function exportContactSheet() {
       applyExportFilter(tctx, tmp.width, tmp.height, 4,
         state.exportFilter, state.filterIntensity, state.filterVariant);
     }
+    applyToneAdjustments(tctx, tmp.width, tmp.height);
     sc.drawImage(tmp, x, y);
 
     // Photo number label
@@ -2975,6 +2954,85 @@ function setupKeyboard() {
     if (e.key === 'r' &&  e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-ccw'); renderDetail(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
     if (e.key === 'h')                { applyTransformAction(state.selectedIndex, 'flip-h');      renderDetail(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
     if (e.key === 'v')                { applyTransformAction(state.selectedIndex, 'flip-v');      renderDetail(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
+  });
+}
+
+// ── Tone controls wiring ─────────────────────────────────────────────────────
+
+function setupToneControls() {
+  function redrawDetail() {
+    if (state.selectedIndex !== null) renderDetail(state.selectedIndex);
+  }
+
+  const brightnessEl   = document.getElementById('tone-brightness');
+  const brightnessVal  = document.getElementById('tone-brightness-val');
+  const contrastEl     = document.getElementById('tone-contrast');
+  const contrastVal    = document.getElementById('tone-contrast-val');
+  const intensityEl    = document.getElementById('tone-intensity');
+  const intensityVal   = document.getElementById('tone-intensity-val');
+  const shadowColorEl  = document.getElementById('tone-shadow-color');
+  const highlightColorEl = document.getElementById('tone-highlight-color');
+  const balanceEl      = document.getElementById('tone-balance');
+  const balanceVal     = document.getElementById('tone-balance-val');
+  const resetBtn       = document.getElementById('tone-reset');
+
+  if (!brightnessEl) return; // not in DOM (shouldn't happen)
+
+  brightnessEl.addEventListener('input', () => {
+    state.brightness = parseInt(brightnessEl.value);
+    brightnessVal.textContent = state.brightness > 0 ? `+${state.brightness}` : String(state.brightness);
+    redrawDetail();
+  });
+
+  contrastEl.addEventListener('input', () => {
+    state.contrast = parseInt(contrastEl.value);
+    contrastVal.textContent = state.contrast > 0 ? `+${state.contrast}` : String(state.contrast);
+    redrawDetail();
+  });
+
+  intensityEl.addEventListener('input', () => {
+    state.toneIntensity = parseInt(intensityEl.value);
+    intensityVal.textContent = `${state.toneIntensity}%`;
+    redrawDetail();
+  });
+
+  shadowColorEl.addEventListener('input', () => {
+    state.shadowColor = shadowColorEl.value;
+    if (state.toneIntensity > 0) redrawDetail();
+  });
+
+  highlightColorEl.addEventListener('input', () => {
+    state.highlightColor = highlightColorEl.value;
+    if (state.toneIntensity > 0) redrawDetail();
+  });
+
+  balanceEl.addEventListener('input', () => {
+    state.toneBalance = parseInt(balanceEl.value);
+    balanceVal.textContent = state.toneBalance > 0 ? `+${state.toneBalance}` : String(state.toneBalance);
+    if (state.toneIntensity > 0) redrawDetail();
+  });
+
+  resetBtn?.addEventListener('click', () => {
+    state.brightness    = 0;
+    state.contrast      = 0;
+    state.toneIntensity = 0;
+    state.toneBalance   = 0;
+    state.shadowColor      = '#0033aa';
+    state.highlightColor   = '#ff8800';
+
+    brightnessEl.value      = 0;
+    contrastEl.value        = 0;
+    intensityEl.value       = 0;
+    balanceEl.value         = 0;
+    shadowColorEl.value     = '#0033aa';
+    highlightColorEl.value  = '#ff8800';
+
+    brightnessVal.textContent = '0';
+    contrastVal.textContent   = '0';
+    intensityVal.textContent  = '0%';
+    balanceVal.textContent    = '0';
+
+    redrawDetail();
   });
 }
 

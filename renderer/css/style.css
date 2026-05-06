@@ -624,7 +624,7 @@ input[type="range"] {
   gap: 8px;
   padding: 6px 16px;
   background: rgba(255, 214, 10, 0.06);
-  border-bottom: 1px solid rgba(255, 214, 10, 0.15);
+  border-top: 1px solid rgba(255, 214, 10, 0.15);
   font-size: 12px;
   color: var(--yellow);
   flex-shrink: 0;
@@ -1238,7 +1238,7 @@ input[type="range"] {
   display: none;
   flex-direction: column;
   background: var(--surface);
-  border-bottom: 1px solid var(--border-dim);
+  border-top: 1px solid var(--border-dim);
   flex-shrink: 0;
 }
 #gif-frame-strip.visible { display: flex; }
@@ -1620,4 +1620,55 @@ input[type="range"] {
 
 .fp-row {
   margin-top: 8px;
+}
+
+/* ── Tone controls ────────────────────────────────────────────────────────── */
+
+.tone-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.btn-xs {
+  padding: 2px 7px;
+  font-size: 10px;
+  border-radius: var(--radius-sm);
+}
+
+.tone-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+
+.tone-color-row {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.tone-color-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.tone-color-input {
+  width: 48px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  cursor: pointer;
+  padding: 2px;
+}
+
+#tone-split-detail {
+  margin-top: 4px;
 }
