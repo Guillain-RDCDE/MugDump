@@ -22,7 +22,7 @@ const state = {
   filterIntensity: 1.0,     // 0.0–1.0
   filterVariant:   'medium', // crt only: 'fine'|'medium'|'thick'|'wide'
   filterParams: {           // per-filter granular parameters
-    crt:      { phosphor: 'green' },   // 'none'|'green'|'amber'
+    crt:      { phosphor: 'green', curve: 'none' }, // phosphor: 'none'|'green'|'amber'; curve: 'none'|'mild'|'strong'
     lcd:      { subpixel: 10 },        // 0–20 %
     dot:      { radius: 44 },          // 20–80 % of scale
     glow:     { blur: 110 },           // 50–300 % of scale
@@ -2704,6 +2704,7 @@ function buildFilterParams(filter, displayParams) {
 
   if (filter === 'crt') {
     addSeg('Phosphor tint', 'phosphor', [['none','None'],['green','Green'],['amber','Amber']]);
+    addSeg('Screen shape',  'curve',    [['none','Flat'],['mild','Mild'],['strong','Strong']]);
   } else if (filter === 'lcd') {
     addSlider('Sub-pixel tint', 'subpixel', 0, 20, 1, v => `${v}%`);
   } else if (filter === 'dot') {
@@ -2838,6 +2839,27 @@ function applyExportFilter(ctx, width, height, scale, filter,
           ec.fillRect(0, y, width, s);
         }
       }
+    }
+
+    // Screen curvature — edge darkening + specular highlight
+    const curve = (filterParams.crt || {}).curve ?? 'none';
+    if (curve !== 'none') {
+      const cx = width / 2, cy = height / 2;
+      const isStrong = curve === 'strong';
+      const edgeDark = isStrong ? 0.55 : 0.28;
+      const innerR   = Math.min(width, height) * (isStrong ? 0.18 : 0.30);
+      const outerR   = Math.max(width, height) * 0.85;
+      const edgeGrad = ec.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+      edgeGrad.addColorStop(0, 'rgba(0,0,0,0)');
+      edgeGrad.addColorStop(1, `rgba(0,0,0,${edgeDark})`);
+      ec.fillStyle = edgeGrad;
+      ec.fillRect(0, 0, width, height);
+      const specA    = isStrong ? 0.11 : 0.055;
+      const specGrad = ec.createRadialGradient(cx, height * 0.08, 0, cx, height * 0.30, width * 0.50);
+      specGrad.addColorStop(0, `rgba(255,255,255,${specA})`);
+      specGrad.addColorStop(1, 'rgba(255,255,255,0)');
+      ec.fillStyle = specGrad;
+      ec.fillRect(0, 0, width, height);
     }
 
   } else if (filter === 'lcd') {
@@ -3647,6 +3669,67 @@ function wireButtonsPaletteEditor() {
   });
 }
 
+// ── Collapsible sidebar sections ──────────────────────────────────────────────
+
+function setupCollapsibleSections() {
+  const STORAGE_KEY = 'darkroom:collapsed-sections';
+  let collapsed = new Set();
+  try { collapsed = new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')); } catch(_) {}
+
+  function saveState() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...collapsed])); } catch(_) {}
+  }
+
+  document.querySelectorAll('#export-controls .ctrl-group').forEach(group => {
+    const directLabel = group.querySelector(':scope > .ctrl-label');
+    const toneHeader  = group.querySelector(':scope > .tone-header');
+    if (!directLabel && !toneHeader) return;
+
+    const clickTarget = directLabel || toneHeader;
+    const labelEl     = clickTarget.classList.contains('ctrl-label')
+                          ? clickTarget
+                          : clickTarget.querySelector('.ctrl-label');
+    const sectionId   = labelEl ? labelEl.textContent.trim() : 'section';
+
+    group.classList.add('collapsible');
+    group.dataset.sectionId = sectionId;
+
+    if (labelEl) {
+      const chevron = document.createElement('span');
+      chevron.className = 'section-chevron';
+      chevron.setAttribute('aria-hidden', 'true');
+      chevron.textContent = '▾';
+      labelEl.prepend(chevron);
+    }
+
+    const allChildren  = [...group.children];
+    const headerIdx    = allChildren.indexOf(clickTarget);
+    const bodyChildren = allChildren.slice(headerIdx + 1);
+    if (bodyChildren.length === 0) return;
+
+    const outer = document.createElement('div');
+    outer.className = 'section-body-outer';
+    const inner = document.createElement('div');
+    inner.className = 'section-body-inner';
+    bodyChildren.forEach(c => inner.appendChild(c));
+    outer.appendChild(inner);
+    group.appendChild(outer);
+
+    if (collapsed.has(sectionId)) group.classList.add('collapsed');
+
+    clickTarget.style.cursor = 'pointer';
+    clickTarget.addEventListener('click', e => {
+      if (e.target !== clickTarget && e.target !== labelEl &&
+          e.target !== labelEl?.querySelector('.section-chevron') &&
+          e.target.closest('button')) return;
+      const nowCollapsed = group.classList.toggle('collapsed');
+      if (nowCollapsed) collapsed.add(sectionId);
+      else collapsed.delete(sectionId);
+      saveState();
+    });
+  });
+}
+
 function init() {
   buildPaletteBar();
   wireButtons();
@@ -3654,6 +3737,7 @@ function init() {
   setupDragDrop();
   setupPanelResize();
   setupKeyboard();
+  setupCollapsibleSections();
   setStatus('No file loaded');
   setExportScale(8);
   setThumbnailSize(120); // default: ~120px thumbnails (auto-fill)
