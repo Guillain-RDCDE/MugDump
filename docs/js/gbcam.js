@@ -6,12 +6,13 @@
  *   - Bank 0 (0x0000–0x1FFF): game state, thumbnail data, slot metadata
  *   - Banks 1–15 (0x2000–0x1FFFF): full photo tile data
  *
- * Each photo is 128×112 pixels in Game Boy 2bpp tile format:
- *   - 16 tiles wide × 14 tiles tall = 224 tiles
- *   - 16 bytes per tile (8×8 pixels, 2 bits per pixel)
- *   - 3584 bytes per photo (0xE00)
+ * Each photo slot is 0x1000 bytes (4096), laid out as:
+ *   - 0x000–0xDFF (3584 bytes): 128×112 pixel image in 2bpp tile format
+ *                               16 tiles wide × 14 tiles tall = 224 tiles × 16 bytes
+ *   - 0xE00–0xEFF (256 bytes):  4×4 tile thumbnail (16×14px 2bpp)
+ *   - 0xF00–0xFFF (256 bytes):  metadata / camera settings
  *
- * 30 photos × 3584 bytes = 107,520 bytes, starting at offset 0x2000
+ * 30 photos × 4096 bytes + 0x2000 header = 131072 bytes (128KB SRAM exact)
  *
  * Color index mapping (per BGP register in the GB Camera):
  *   0 = lightest (maps to palette[0])
@@ -31,7 +32,8 @@ window.GBCam = (() => {
   const TILES_WIDE        = PHOTO_WIDTH  / TILE_PX;   // 16
   const TILES_TALL        = PHOTO_HEIGHT / TILE_PX;   // 14
   const TILES_PER_PHOTO   = TILES_WIDE * TILES_TALL;  // 224
-  const BYTES_PER_PHOTO   = TILES_PER_PHOTO * BYTES_PER_TILE; // 3584 = 0xE00
+  const BYTES_PER_PHOTO   = TILES_PER_PHOTO * BYTES_PER_TILE; // 3584 = 0xE00 (image data only)
+  const SLOT_SIZE         = 0x1000;  // 4096 — full slot (image + thumbnail + metadata)
   const PHOTO_COUNT       = 30;
   const PHOTO_DATA_OFFSET = 0x2000;  // Start of photo data in SRAM
   const SRAM_SIZE         = 131072;  // 128KB
@@ -65,7 +67,7 @@ window.GBCam = (() => {
   // where each value is 0–3 (the color index, not yet mapped to a palette).
 
   function decodePhoto(sav, photoIndex) {
-    const photoOffset = PHOTO_DATA_OFFSET + photoIndex * BYTES_PER_PHOTO;
+    const photoOffset = PHOTO_DATA_OFFSET + photoIndex * SLOT_SIZE;
     const pixels = new Uint8Array(PHOTO_WIDTH * PHOTO_HEIGHT);
 
     for (let tileRow = 0; tileRow < TILES_TALL; tileRow++) {
@@ -93,7 +95,7 @@ window.GBCam = (() => {
   // the slot is considered empty. Real photos always have a mix of the 4 shades.
 
   function isPhotoEmpty(sav, photoIndex) {
-    const offset = PHOTO_DATA_OFFSET + photoIndex * BYTES_PER_PHOTO;
+    const offset = PHOTO_DATA_OFFSET + photoIndex * SLOT_SIZE;
     const freq = new Uint32Array(256);
     for (let i = 0; i < BYTES_PER_PHOTO; i++) {
       freq[sav[offset + i]]++;
