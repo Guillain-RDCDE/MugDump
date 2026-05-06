@@ -281,38 +281,43 @@ html, body {
   padding: 24px;
 }
 
+/* Hide empty state + show controls once a file is loaded */
+.has-file #detail-empty { display: none; }
+
 #detail-empty .icon {
   font-size: 32px;
   opacity: 0.4;
 }
 
-#detail-content {
+/* ── GIF animated preview (detail panel, GIF mode only) ─────────────────────── */
+
+#gif-preview-wrap {
   display: none;
   flex-direction: column;
-  flex: 1;
-  overflow: hidden;
-}
-
-#detail-content.visible { display: flex; }
-
-/* (overridden by the new rules added above) */
-
-#detail-info {
-  padding: 12px 16px;
+  align-items: center;
+  background: var(--bg);
   border-bottom: 1px solid var(--border-dim);
+  padding: 12px 12px 8px;
+  flex-shrink: 0;
+}
+#gif-preview-wrap.visible { display: flex; }
+
+#gif-preview-canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  max-width: 100%;
+  max-height: 180px;
+  width: auto;
+  height: auto;
+  display: block;
 }
 
-#detail-info .photo-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 2px;
-}
-
-#detail-info .photo-meta {
-  font-size: 11px;
+#gif-preview-info {
+  font-size: 10px;
   color: var(--text-3);
   font-family: var(--font-mono);
+  margin-top: 5px;
+  letter-spacing: 0.2px;
 }
 
 /* ── Export controls ──────────────────────────────────────────────────────── */
@@ -321,10 +326,12 @@ html, body {
   flex: 1;
   overflow-y: auto;
   padding: 12px 16px;
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 14px;
 }
+
+.has-file #export-controls { display: flex; }
 
 #export-controls::-webkit-scrollbar { width: 4px; }
 #export-controls::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 2px; }
@@ -737,31 +744,7 @@ input[type="range"] {
   background: var(--accent);
 }
 
-/* ── Detail preview — fills panel width, no fixed max-height ─────────────── */
-
-#detail-preview-wrap {
-  background: var(--bg);
-  border-bottom: 1px solid var(--border-dim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px;
-  overflow: hidden;
-  flex-shrink: 0;
-  /* Cap height so controls always have room — canvas scales down within */
-  max-height: 42vh;
-}
-
-#detail-canvas {
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-  /* Fills available width AND available height — whichever runs out first */
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  display: block;
-}
+/* (detail preview canvas removed — lightbox handles solo view) */
 
 /* ── Scale button pixel sub-labels ────────────────────────────────────────── */
 
@@ -1720,4 +1703,125 @@ input[type="range"] {
 
 #tone-split-detail {
   margin-top: 4px;
+}
+
+/* ── Lightbox solo view ────────────────────────────────────────────────────── */
+
+#lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.96);
+  z-index: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  -webkit-app-region: no-drag;
+}
+#lightbox-overlay.hidden { display: none; }
+
+#lb-canvas-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  padding: 60px 100px 12px;
+}
+
+#lb-canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
+  border-radius: 4px;
+  box-shadow: 0 20px 80px rgba(0,0,0,0.8);
+}
+
+#lb-close {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: none;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  color: var(--text-2);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: border-color 0.12s, color 0.12s;
+}
+#lb-close:hover { border-color: var(--text); color: var(--text); }
+
+.lb-nav {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: var(--radius);
+  width: 44px;
+  height: 64px;
+  color: var(--text-2);
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+  z-index: 10;
+}
+.lb-nav:hover { background: rgba(255,255,255,0.14); color: var(--text); }
+#lb-prev { left: 16px; }
+#lb-next { right: 16px; }
+
+#lb-footer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 80px;
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.5);
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+
+#lb-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 120px;
+}
+
+#lb-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#lb-meta {
+  font-size: 10px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+
+#lb-transforms {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1;
+}
+
+#lb-export {
+  flex-shrink: 0;
+  margin-left: auto;
 }
