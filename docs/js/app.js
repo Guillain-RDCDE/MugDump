@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.7.3';
+const APP_VERSION = 'v0.8.0';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -158,6 +158,8 @@ function syncColorSwatchBtn(input, hex) {
   if (input._cpBtn) input._cpBtn.style.background = hex;
 }
 
+const THUMB_SCALE = 2; // grid thumbnails rendered at 2× for filter clarity
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const state = {
@@ -177,7 +179,7 @@ const state = {
     crt:      { phosphor: 'green', curve: 'none' }, // phosphor: 'none'|'green'|'amber'; curve: 'none'|'mild'|'strong'
     lcd:      { subpixel: 10 },        // 0–20 %
     dot:      { radius: 44 },          // 20–80 % of scale
-    glow:     { blur: 110 },           // 50–300 % of scale
+    glow:     { blur: 110, phosphor: 'green' }, // 50–300 % of scale; phosphor: 'none'|'green'|'amber'
     chroma:   { shift: 75 },           // 25–300 % of scale
     jitter:   { amount: 40 },          // 5–100 % of scale
     grid:     { opacity: 30 },         // 10–60 %
@@ -210,6 +212,7 @@ const state = {
   selectedPhotos:     new Set(), // indices of currently selected photos (multi)
   lastSelectedIndex:  null,      // last clicked photo index, for shift-range
   focusedFilter:      null,      // which filter's param panel is open
+  effectClipboard:    null,      // copied effect settings for paste
 };
 
 
@@ -623,16 +626,18 @@ function renderGrid() {
       placeholder.textContent = '—';
       slot.appendChild(placeholder);
     } else {
-      // Canvas thumbnail
+      // Canvas thumbnail — rendered at THUMB_SCALE (2×) so filters are visible
       const canvas = document.createElement('canvas');
-      canvas.width  = GBCam.PHOTO_WIDTH;
-      canvas.height = GBCam.PHOTO_HEIGHT;
-      const ctx = canvas.getContext('2d');
+      canvas.width  = GBCam.PHOTO_WIDTH  * THUMB_SCALE;
+      canvas.height = GBCam.PHOTO_HEIGHT * THUMB_SCALE;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       const effThumb = getEffectiveSettings(photo.index);
-      GBCam.renderToCanvas(ctx, photo.pixels, effThumb.palette);
-      // Filters not applied to thumbnails — too destructive at 128×112px.
-      // Tone adjustments are lightweight and fine at native res.
-      applyToneAdjustments(ctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, effThumb);
+      renderPhotoWithTransform(ctx, photo, effThumb.palette, THUMB_SCALE, photo.index);
+      applyToneAdjustments(ctx, canvas.width, canvas.height, effThumb);
+      if (state.activeFilters.size > 0) {
+        applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
+                           effThumb.filterIntensity, effThumb.filterVariant, effThumb.filterParams);
+      }
       slot.appendChild(canvas);
 
       // GIF selection (invisible div for event delegation; frame number via data attr)
@@ -704,12 +709,19 @@ function repaintGridSlot(index) {
   if (!slot) return;
   const canvas = slot.querySelector('canvas');
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  // Thumbnails rendered at native res (CSS handles upscale via image-rendering:pixelated).
-  // Filters not applied to thumbnails — destructive at 128×112px. Tone is fine.
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const eff = getEffectiveSettings(index);
-  GBCam.renderToCanvas(ctx, photo.pixels, eff.palette);
+  // Re-size canvas to THUMB_SCALE if it hasn't been already
+  if (canvas.width !== GBCam.PHOTO_WIDTH * THUMB_SCALE) {
+    canvas.width  = GBCam.PHOTO_WIDTH  * THUMB_SCALE;
+    canvas.height = GBCam.PHOTO_HEIGHT * THUMB_SCALE;
+  }
+  renderPhotoWithTransform(ctx, photo, eff.palette, THUMB_SCALE, index);
   applyToneAdjustments(ctx, canvas.width, canvas.height, eff);
+  if (state.activeFilters.size > 0) {
+    applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
+                       eff.filterIntensity, eff.filterVariant, eff.filterParams);
+  }
   // Slot badge — photo-specific settings override indicator
   slot.classList.toggle('has-photo-settings', hasPhotoOverride(index));
 }
@@ -1131,6 +1143,8 @@ function exitGifMode() {
     el.removeAttribute('data-gif-frame');
   });
   if (dom.gifPreviewWrap) dom.gifPreviewWrap.classList.remove('visible');
+  hideGifPreviewInfo();
+  updateSidebarPreview(); // restore single-photo preview
 }
 
 function toggleGifSelection(index, slotEl) {
@@ -1580,6 +1594,49 @@ function wireButtons() {
       updateSidebarPreview();
     });
   });
+
+  // Checkbox-style filter rows
+  document.querySelectorAll('.filter-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      toggleFilter(cb.dataset.filter);
+      repaintGrid();
+      if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+      if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+      updateSidebarPreview();
+    });
+  });
+  document.querySelectorAll('.filter-settings-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const f = btn.dataset.filter;
+      if (!state.activeFilters.has(f)) {
+        state.activeFilters.add(f);
+        updateFilterUI();
+        repaintGrid();
+        if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+        updateSidebarPreview();
+      }
+      state.focusedFilter = f;
+      _refreshFilterParamPanel();
+    });
+  });
+
+  // Copy / Paste effects
+  const copyBtn  = document.getElementById('btn-copy-effects');
+  const pasteBtn = document.getElementById('btn-paste-effects');
+  if (copyBtn)  copyBtn.addEventListener('click',  copyEffects);
+  if (pasteBtn) pasteBtn.addEventListener('click', pasteEffects);
+
+  // Save preset
+  const savePresetBtn = document.getElementById('btn-save-preset');
+  if (savePresetBtn) {
+    savePresetBtn.addEventListener('click', () => {
+      const name = prompt('Preset name:');
+      if (name && name.trim()) savePreset(name.trim());
+    });
+  }
+
+  // Render preset list on load
+  renderPresetList();
 
   // Filter intensity slider
   const intensitySlider = document.getElementById('filter-intensity');
@@ -2544,9 +2601,14 @@ function updateGifPreview() {
     frames = [...baseFrames, ...mid];
   }
 
-  if (dom.gifPreviewWrap) dom.gifPreviewWrap.classList.add('visible');
+  // Both the GIF animation and the single-photo preview share the same canvas
+  const sharedCanvas = document.getElementById('sidebar-preview-canvas');
+  const infoEl       = document.getElementById('gif-preview-info');
+  const emptyEl      = document.getElementById('sidebar-preview-empty');
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (infoEl)  infoEl.style.display  = '';
 
-  const PREVIEW_SCALE = 4;
+  const PREVIEW_SCALE = 2;
   let frameIdx = 0;
   const loopLabel = state.gifLoop === 'bounce' ? ' · ↔ bounce' : state.gifLoop === 'once' ? ' · once' : '';
 
@@ -2556,21 +2618,22 @@ function updateGifPreview() {
     const photo = state.photos[frameObj.photoIndex];
     if (!photo || photo.isEmpty) { frameIdx++; return; }
 
-    dom.gifPreviewCanvas.width  = GBCam.PHOTO_WIDTH  * PREVIEW_SCALE;
-    dom.gifPreviewCanvas.height = GBCam.PHOTO_HEIGHT * PREVIEW_SCALE;
-    const frameCtx = dom.gifPreviewCanvas.getContext('2d');
+    const canvas = sharedCanvas;
+    canvas.width  = GBCam.PHOTO_WIDTH  * PREVIEW_SCALE;
+    canvas.height = GBCam.PHOTO_HEIGHT * PREVIEW_SCALE;
+    const frameCtx = canvas.getContext('2d', { willReadFrequently: true });
     const effGif = getEffectiveSettings(frameObj.photoIndex);
     const pal = frameObj.paletteId ? PALETTES[frameObj.paletteId] : effGif.palette;
     GBCam.renderToCanvas(frameCtx, photo.pixels, pal, PREVIEW_SCALE);
     if (state.activeFilters.size > 0) {
-      applyActiveEffects(frameCtx, dom.gifPreviewCanvas.width, dom.gifPreviewCanvas.height, PREVIEW_SCALE,
+      applyActiveEffects(frameCtx, canvas.width, canvas.height, PREVIEW_SCALE,
         effGif.filterIntensity, effGif.filterVariant, effGif.filterParams);
     }
-    applyToneAdjustments(frameCtx, dom.gifPreviewCanvas.width, dom.gifPreviewCanvas.height, effGif);
+    applyToneAdjustments(frameCtx, canvas.width, canvas.height, effGif);
 
     const palLabel = frameObj.paletteId ? ` · ${pal?.name}` : '';
-    if (dom.gifPreviewInfo) {
-      dom.gifPreviewInfo.textContent =
+    if (infoEl) {
+      infoEl.textContent =
         `Frame ${n + 1}/${frames.length} · Photo ${frameObj.photoIndex + 1}${palLabel}${loopLabel}`;
     }
     frameIdx++;
@@ -2580,6 +2643,13 @@ function updateGifPreview() {
   if (frames.length > 1) {
     state.gifPreviewTimer = setInterval(showFrame, state.gifDelay);
   }
+}
+
+// Hide gif info bar when not in gif preview mode
+function hideGifPreviewInfo() {
+  const infoEl  = document.getElementById('gif-preview-info');
+  const emptyEl = document.getElementById('sidebar-preview-empty');
+  if (infoEl) infoEl.style.display = 'none';
 }
 
 // ── Recent palettes (kept for project file backwards-compat) ──────────────
@@ -2975,6 +3045,7 @@ function buildFilterParams(filter, displayParams) {
     addSlider('Dot size', 'radius', 20, 80, 2, v => `${v}%`);
   } else if (filter === 'glow') {
     addSlider('Bloom radius', 'blur', 50, 300, 10, v => `${v}%`);
+    addSeg('Phosphor colour', 'phosphor', [['none','None'],['green','Green'],['amber','Amber']]);
   } else if (filter === 'chroma') {
     addSlider('Channel shift', 'shift', 25, 300, 5, v => `${v}%`);
   } else if (filter === 'jitter') {
@@ -3074,35 +3145,39 @@ function applyExportFilter(ctx, width, height, scale, filter,
   const ec  = eff.getContext('2d');
 
   if (filter === 'crt') {
-    // Scanline density/thickness controlled by variant
-    // fine: 1 thin line per row, low alpha
-    // medium: 1 line + soft edge (default)
-    // thick: 2 px lines per row
-    // wide: every other row blacked out (CRT phosphor strip look)
-    const configs = {
-      fine:   { lineH: 1, lineA: 0.38, softA: 0,    tintA: 0.03 },
-      medium: { lineH: 1, lineA: 0.55, softA: 0.20, tintA: 0.04 },
-      thick:  { lineH: 2, lineA: 0.65, softA: 0.25, tintA: 0.05 },
-      wide:   { lineH: Math.max(1, Math.round(s * 0.45)), lineA: 0.72, softA: 0, tintA: 0.06 },
+    // Scanline gap: a dark strip at the BOTTOM of each simulated GB pixel row.
+    // Each variant controls what fraction of the row height becomes a dark gap.
+    // This means variants are dramatically different at any scale ≥ 2.
+    const cfgs = {
+      fine:   { gap: 0.22, alpha: 0.45 },   // subtle gap, light darkening
+      medium: { gap: 0.40, alpha: 0.70 },   // classic CRT look
+      thick:  { gap: 0.58, alpha: 0.84 },   // heavy scanlines
+      wide:   { gap: 0.76, alpha: 0.94 },   // almost half the row is dark
     };
-    const cfg = configs[variant] || configs.medium;
+    const cfg = cfgs[variant] || cfgs.medium;
+    const rowH    = Math.max(1, s);
+    const gapH    = Math.max(1, Math.round(rowH * cfg.gap));
+    const brightH = Math.max(0, rowH - gapH);
 
-    for (let y = s - 1; y < height; y += s) {
-      ec.fillStyle = `rgba(0,0,0,${cfg.lineA})`;
-      ec.fillRect(0, y, width, cfg.lineH);
-      if (cfg.softA > 0 && s >= 3) {
-        ec.fillStyle = `rgba(0,0,0,${cfg.softA})`;
-        ec.fillRect(0, y - 1, width, 1);
-      }
+    // Draw dark gaps at the bottom of each GB pixel row
+    for (let row = 0; row < GBCam.PHOTO_HEIGHT; row++) {
+      const rowTop = row * rowH;
+      ec.fillStyle = `rgba(0,0,0,${cfg.alpha})`;
+      ec.fillRect(0, rowTop + brightH, width, gapH);
     }
-    // Phosphor tint per filterParams.crt.phosphor
-    if (s >= 4 && cfg.tintA > 0) {
-      const ph = (filterParams.crt || {}).phosphor ?? 'green';
-      const tintColor = ph === 'amber' ? `rgba(255,180,0,${cfg.tintA})` : ph === 'green' ? `rgba(0,255,60,${cfg.tintA})` : null;
+
+    // Phosphor tint — colour the bright part of each row
+    const ph = (filterParams.crt || {}).phosphor ?? 'green';
+    if (ph !== 'none' && brightH > 0) {
+      const phColors = {
+        green: 'rgba(0,255,60,0.14)',
+        amber: 'rgba(255,160,0,0.16)',
+      };
+      const tintColor = phColors[ph];
       if (tintColor) {
-        for (let y = 0; y < height; y += s * 2) {
+        for (let row = 0; row < GBCam.PHOTO_HEIGHT; row++) {
           ec.fillStyle = tintColor;
-          ec.fillRect(0, y, width, s);
+          ec.fillRect(0, row * rowH, width, brightH);
         }
       }
     }
@@ -3112,18 +3187,17 @@ function applyExportFilter(ctx, width, height, scale, filter,
     if (curve !== 'none') {
       const cx = width / 2, cy = height / 2;
       const isStrong = curve === 'strong';
-      // Edge darkening: radial gradient dims corners, simulating screen bowing away
-      const edgeDark = isStrong ? 0.55 : 0.28;
-      const innerR   = Math.min(width, height) * (isStrong ? 0.18 : 0.30);
-      const outerR   = Math.max(width, height) * 0.85;
+      const edgeDark = isStrong ? 0.62 : 0.34;
+      const innerR   = Math.min(width, height) * (isStrong ? 0.15 : 0.28);
+      const outerR   = Math.max(width, height) * 0.88;
       const edgeGrad = ec.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
       edgeGrad.addColorStop(0, 'rgba(0,0,0,0)');
       edgeGrad.addColorStop(1, `rgba(0,0,0,${edgeDark})`);
       ec.fillStyle = edgeGrad;
       ec.fillRect(0, 0, width, height);
-      // Specular highlight: subtle white bloom at top-centre (convex glass catches light)
-      const specA    = isStrong ? 0.11 : 0.055;
-      const specGrad = ec.createRadialGradient(cx, height * 0.08, 0, cx, height * 0.30, width * 0.50);
+      // Specular highlight at top-centre (convex glass look)
+      const specA    = isStrong ? 0.14 : 0.07;
+      const specGrad = ec.createRadialGradient(cx, height * 0.07, 0, cx, height * 0.28, width * 0.55);
       specGrad.addColorStop(0, `rgba(255,255,255,${specA})`);
       specGrad.addColorStop(1, 'rgba(255,255,255,0)');
       ec.fillStyle = specGrad;
@@ -3156,15 +3230,21 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
 
   } else if (filter === 'grid') {
+    // Pixel grid — draws lines on GB pixel boundaries so each pixel has a clear border.
+    // Only meaningful when each GB pixel occupies ≥ 2 screen pixels.
     const gridOpacity = ((filterParams.grid || {}).opacity ?? 30) / 100;
-    if (s >= 3) {
+    if (s >= 2) {
       ec.strokeStyle = `rgba(0,0,0,${gridOpacity})`;
       ec.lineWidth = 1;
-      for (let x = s; x < width; x += s) {
-        ec.beginPath(); ec.moveTo(x - 0.5, 0); ec.lineTo(x - 0.5, height); ec.stroke();
+      // Vertical lines between each GB pixel column
+      for (let col = 1; col < GBCam.PHOTO_WIDTH; col++) {
+        const x = col * s - 0.5;
+        ec.beginPath(); ec.moveTo(x, 0); ec.lineTo(x, height); ec.stroke();
       }
-      for (let y = s; y < height; y += s) {
-        ec.beginPath(); ec.moveTo(0, y - 0.5); ec.lineTo(width, y - 0.5); ec.stroke();
+      // Horizontal lines between each GB pixel row
+      for (let row = 1; row < GBCam.PHOTO_HEIGHT; row++) {
+        const y = row * s - 0.5;
+        ec.beginPath(); ec.moveTo(0, y); ec.lineTo(width, y); ec.stroke();
       }
     }
 
@@ -3261,19 +3341,37 @@ function applyExportFilter(ctx, width, height, scale, filter,
 
   } else if (filter === 'glow') {
     // ── Phosphor Glow ──────────────────────────────────────────────────────
-    // Classic phosphor bloom: composite a blurred copy of the source onto
-    // the canvas with 'screen' blend mode. Bright pixels bloom outward.
+    // Creates a coloured phosphor bloom: tint a copy of the source, blur it
+    // heavily, then screen-blend it back so bright pixels glow outward.
     const glowBlurPct = ((filterParams.glow || {}).blur ?? 110) / 100;
-    const blurPx  = Math.max(2, Math.round(s * glowBlurPct));
-    const bloom   = Object.assign(document.createElement('canvas'), { width, height });
-    const bc      = bloom.getContext('2d');
-    bc.filter     = `blur(${blurPx}px)`;
-    bc.drawImage(ctx.canvas, 0, 0);
-    bc.filter = 'none';
+    const ph          = (filterParams.glow || {}).phosphor ?? 'green';
+    const phColors    = { green: 'rgba(0,255,80,0.40)', amber: 'rgba(255,170,0,0.42)' };
 
+    // Step 1: draw source image onto tinting canvas
+    const bloomSrc = Object.assign(document.createElement('canvas'), { width, height });
+    const bsc = bloomSrc.getContext('2d');
+    bsc.drawImage(ctx.canvas, 0, 0);
+
+    // Step 2: overlay phosphor colour using 'source-atop' so tint only goes where pixels are
+    if (ph !== 'none') {
+      bsc.globalCompositeOperation = 'source-atop';
+      bsc.fillStyle = phColors[ph] || phColors.green;
+      bsc.fillRect(0, 0, width, height);
+      bsc.globalCompositeOperation = 'source-over';
+    }
+
+    // Step 3: blur the tinted source — must be large to produce visible bloom
+    const blurPx = Math.max(8, Math.round(s * 3.5 * glowBlurPct));
+    const bloom  = Object.assign(document.createElement('canvas'), { width, height });
+    const bc     = bloom.getContext('2d');
+    bc.filter    = `blur(${blurPx}px)`;
+    bc.drawImage(bloomSrc, 0, 0);
+    bc.filter    = 'none';
+
+    // Step 4: screen blend — bright pixels push toward white/colour with bloom aura
     ctx.save();
-    ctx.globalAlpha               = Math.min(1, Math.max(0, intensity));
-    ctx.globalCompositeOperation  = 'screen';
+    ctx.globalAlpha              = Math.min(1, Math.max(0, intensity));
+    ctx.globalCompositeOperation = 'screen';
     ctx.drawImage(bloom, 0, 0);
     ctx.restore();
     return; // composited directly; skip the generic end-of-function drawImage
@@ -4075,6 +4173,7 @@ function updateSidebarPreview() {
   }
 
   if (emptyEl) emptyEl.style.display = 'none';
+  hideGifPreviewInfo(); // hide GIF frame counter when showing static preview
 
   const SCALE = 2; // 128×112 → 256×224
   const W = GBCam.PHOTO_WIDTH  * SCALE;
@@ -4098,6 +4197,121 @@ function updateSidebarPreview() {
   ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
 }
 
+
+// ── Effect Presets ──────────────────────────────────────────────────────────
+
+const PRESET_KEY = 'dmgdr:presets:v1';
+
+function getPresets() {
+  try { return JSON.parse(localStorage.getItem(PRESET_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function savePreset(name) {
+  if (!name) return;
+  const presets = getPresets();
+  presets[name] = {
+    activeFilters:   [...state.activeFilters],
+    filterIntensity: state.filterIntensity,
+    filterVariant:   state.filterVariant,
+    filterParams:    JSON.parse(JSON.stringify(state.filterParams)),
+  };
+  localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+  renderPresetList();
+  showToast(`Preset "${name}" saved`);
+}
+
+function loadPreset(name) {
+  const presets = getPresets();
+  const p = presets[name];
+  if (!p) return;
+  state.activeFilters.clear();
+  (p.activeFilters || []).forEach(f => state.activeFilters.add(f));
+  state.filterIntensity = p.filterIntensity ?? 1.0;
+  state.filterVariant   = p.filterVariant   ?? 'medium';
+  if (p.filterParams) Object.assign(state.filterParams, JSON.parse(JSON.stringify(p.filterParams)));
+  updateFilterUI();
+  _refreshFilterParamPanel();
+  syncControlsToEffectiveSettings(state.selectedIndex);
+  repaintGrid();
+  showToast(`Preset "${name}" loaded`);
+}
+
+function deletePreset(name) {
+  const presets = getPresets();
+  delete presets[name];
+  localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+  renderPresetList();
+}
+
+function renderPresetList() {
+  const list = document.getElementById('preset-list');
+  if (!list) return;
+  const presets = getPresets();
+  const names = Object.keys(presets);
+  if (names.length === 0) {
+    list.innerHTML = '<span class="detail-hint" style="font-size:11px;">No presets saved yet</span>';
+    return;
+  }
+  list.innerHTML = '';
+  for (const name of names) {
+    const chip = document.createElement('div');
+    chip.className = 'preset-chip';
+    const lbl = document.createElement('span');
+    lbl.className = 'preset-chip-name';
+    lbl.textContent = name;
+    lbl.title = 'Load preset';
+    lbl.addEventListener('click', () => loadPreset(name));
+    const rm = document.createElement('button');
+    rm.className = 'preset-chip-rm';
+    rm.textContent = '✕';
+    rm.title = 'Delete preset';
+    rm.addEventListener('click', (e) => { e.stopPropagation(); deletePreset(name); });
+    chip.appendChild(lbl);
+    chip.appendChild(rm);
+    list.appendChild(chip);
+  }
+}
+
+// ── Effect copy / paste ──────────────────────────────────────────────────────
+
+function copyEffects() {
+  state.effectClipboard = {
+    activeFilters:   [...state.activeFilters],
+    filterIntensity: state.filterIntensity,
+    filterVariant:   state.filterVariant,
+    filterParams:    JSON.parse(JSON.stringify(state.filterParams)),
+  };
+  const pasteBtn = document.getElementById('btn-paste-effects');
+  if (pasteBtn) pasteBtn.disabled = false;
+  showToast('Effects copied');
+}
+
+function pasteEffects() {
+  if (!state.effectClipboard) return;
+  const cb = state.effectClipboard;
+  // Determine target photos
+  const targets = state.selectedPhotos.size > 0
+    ? [...state.selectedPhotos]
+    : state.selectedIndex !== null ? [state.selectedIndex] : [];
+  if (targets.length === 0) { showToast('Select a photo to paste to'); return; }
+  for (const idx of targets) {
+    if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+    const ps = state.photoSettings[idx];
+    ps.filterIntensity = cb.filterIntensity;
+    ps.filterVariant   = cb.filterVariant;
+    ps.filterParams    = JSON.parse(JSON.stringify(cb.filterParams));
+  }
+  // Also update global active filters (they apply to all)
+  state.activeFilters.clear();
+  cb.activeFilters.forEach(f => state.activeFilters.add(f));
+  updateFilterUI();
+  _refreshFilterParamPanel();
+  syncControlsToEffectiveSettings(state.selectedIndex);
+  repaintGrid();
+  showToast(`Effects pasted to ${targets.length} photo${targets.length > 1 ? 's' : ''}`);
+}
+
 // ── Stackable effects ────────────────────────────────────────────────────────
 
 function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVariant, filterParams) {
@@ -4113,8 +4327,18 @@ function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVa
 // ── Filter UI management ───────────────────────────────────────────────────
 
 function updateFilterUI() {
+  // Sync old-style buttons (if any remain)
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.classList.toggle('active', state.activeFilters.has(btn.dataset.filter));
+  });
+  // Sync new checkbox-style filter rows
+  document.querySelectorAll('.filter-check').forEach(cb => {
+    cb.checked = state.activeFilters.has(cb.dataset.filter);
+  });
+  document.querySelectorAll('.filter-row').forEach(row => {
+    const f = row.dataset.filter;
+    row.classList.toggle('filter-row-active', state.activeFilters.has(f));
+    row.classList.toggle('filter-row-focused', state.focusedFilter === f);
   });
 }
 
@@ -4137,6 +4361,10 @@ function _refreshFilterParamPanel() {
   const settingsEl = document.getElementById('filter-settings');
   const variantEl  = document.getElementById('crt-variant-wrap');
   const f = state.focusedFilter;
+  // Refresh focused-row styling
+  document.querySelectorAll('.filter-row').forEach(row => {
+    row.classList.toggle('filter-row-focused', row.dataset.filter === f);
+  });
   if (settingsEl) settingsEl.style.display = (f && state.activeFilters.has(f)) ? '' : 'none';
   if (variantEl)  variantEl.style.display  = (f === 'crt') ? '' : 'none';
   buildFilterParams(f || 'none');
