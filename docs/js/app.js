@@ -290,6 +290,7 @@ async function loadSavFile(result) {
 
   renderGrid();
   showMainView();
+  updateExportSelectedBtn();
   setStatus(`${name} — ${activeCount} photo${activeCount !== 1 ? 's' : ''} found`, true);
 }
 
@@ -360,6 +361,25 @@ function showMainView() {
   dom.app.classList.add('has-file');
 }
 
+function resetToWelcome() {
+  state.sav = null;
+  state.photos = [];
+  state.activeCount = 0;
+  state.filename = null;
+  state.filePath = null;
+  state.selectedIndex = null;
+  state.photoSettings = {};
+  state.gifMode = false;
+  state.gifSelection = new Set();
+  state.gifFrameOrder = [];
+  state.lightboxOpen = false;
+  state.viewMode = 'grid';
+  dom.main.style.display = 'none';
+  dom.welcome.classList.remove('hidden');
+  dom.app.classList.remove('has-file');
+  if (dom.photoGrid) dom.photoGrid.innerHTML = '';
+}
+
 // ── Grid ────────────────────────────────────────────────────────────────────
 
 function renderGrid() {
@@ -404,6 +424,10 @@ function renderGrid() {
       slot.appendChild(check);
 
       slot.addEventListener('click', () => selectPhoto(photo.index));
+      slot.addEventListener('dblclick', () => {
+        selectPhoto(photo.index);
+        enterSoloMode();
+      });
     }
 
     dom.photoGrid.appendChild(slot);
@@ -456,12 +480,19 @@ function repaintGridSlot(index) {
   const eff = getEffectiveSettings(index);
   GBCam.renderToCanvas(ctx, photo.pixels, eff.palette);
   applyToneAdjustments(ctx, canvas.width, canvas.height, eff);
-  // Slot badges
-  slot.classList.toggle('has-transform',      hasTransform(index));
+  // Slot badge — photo-specific settings override indicator
   slot.classList.toggle('has-photo-settings', hasPhotoOverride(index));
 }
 
 // ── Photo selection ─────────────────────────────────────────────────────────
+
+function updateExportSelectedBtn() {
+  const btn = document.getElementById('btn-export-single');
+  if (!btn) return;
+  const hasPhoto = state.selectedIndex !== null && state.photos[state.selectedIndex] && !state.photos[state.selectedIndex].isEmpty;
+  btn.disabled = !hasPhoto;
+  btn.style.opacity = hasPhoto ? '' : '0.4';
+}
 
 function selectPhoto(index) {
   if (state.gifMode) {
@@ -486,6 +517,7 @@ function selectPhoto(index) {
   if (state.applyScope === 'photo') {
     syncControlsToEffectiveSettings(index);
   }
+  updateExportSelectedBtn();
   // Lightbox no longer auto-opens on grid click — use F key or the ⛶ button
 }
 
@@ -1242,6 +1274,11 @@ function wireButtons() {
     await loadSavFile(result);
   });
   document.getElementById('btn-open-pocket').addEventListener('click', openPocketModal);
+
+  // Home button (title)
+  document.getElementById('btn-home')?.addEventListener('click', () => {
+    if (state.photos.length > 0) resetToWelcome();
+  });
 
   // Titlebar buttons
   document.getElementById('tb-open-sav').addEventListener('click', async () => {
@@ -3366,6 +3403,16 @@ function setupKeyboard() {
     if (e.key === 'f' || e.key === 'F') {
       if (state.presentationMode) { closePresentation(); return; }
       if (state.selectedIndex !== null) { openPresentation(state.selectedIndex); return; }
+    }
+
+    // View mode shortcuts: G = grid, S = solo
+    if (e.key === 'g' || e.key === 'G') {
+      if (state.photos.length > 0 && state.viewMode !== 'grid') { enterGridMode(); return; }
+    }
+    if (e.key === 's' || e.key === 'S') {
+      if (state.photos.length > 0 && state.selectedIndex !== null && state.viewMode !== 'solo') {
+        enterSoloMode(); return;
+      }
     }
 
     // Presentation navigation

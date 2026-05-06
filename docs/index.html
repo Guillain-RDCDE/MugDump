@@ -38,7 +38,8 @@
 
   <!-- ── Titlebar ─────────────────────────────────────────────────────────── -->
   <div id="titlebar">
-    <span class="app-name">DMG DarkRoom <span class="app-subtitle">GB Camera Companion</span></span>
+    <button id="btn-home" class="app-name-btn">DMG DarkRoom</button>
+    <span class="app-subtitle">GB Camera Companion // by <a href="https://allmyfriendsarejpegs.com" target="_blank">allmyfriendsarejpegs.com</a></span>
     <span class="spacer"></span>
     <button id="tb-open-sav"      class="btn btn-secondary btn-sm">Open .sav…</button>
     <button id="tb-open-pocket"   class="btn btn-ghost btn-sm">Open from Pocket SD…</button>
@@ -70,14 +71,13 @@
         <div id="palette-picker-list" class="palette-picker-list"></div>
         <div class="palette-picker-footer">
           <button id="btn-new-palette" class="btn btn-ghost btn-sm" style="width:100%;">+ New Custom Palette</button>
+          <button id="btn-import-palettes" class="btn btn-ghost btn-sm" style="width:100%;" title="Import palettes from JSON">Import Palettes…</button>
+          <button id="btn-export-palettes" class="btn btn-ghost btn-sm" style="width:100%;" title="Export all custom palettes to JSON">Export Palettes…</button>
         </div>
       </div>
     </div>
     <div id="fav-palettes"></div>
     <button id="btn-palette-grid" class="btn btn-ghost btn-sm" title="Browse all palettes applied to your photo">Browse</button>
-    <span class="palette-bar-sep"></span>
-    <button id="btn-import-palettes" class="btn btn-ghost btn-sm" title="Import palettes from JSON">Import</button>
-    <button id="btn-export-palettes" class="btn btn-ghost btn-sm" title="Export all custom palettes to JSON">Export</button>
   </div>
 
   <!-- ── Welcome ─────────────────────────────────────────────────────────── -->
@@ -197,42 +197,6 @@
             </div>
           </div>
 
-          <!-- Effects / filters -->
-          <div class="ctrl-group">
-            <div class="ctrl-label">Effects &amp; Filters</div>
-            <div class="filter-seg">
-              <button class="filter-btn" data-filter="crt">CRT</button>
-              <button class="filter-btn" data-filter="lcd">LCD</button>
-              <button class="filter-btn" data-filter="dot">Dot Matrix</button>
-              <button class="filter-btn" data-filter="glow">Phosphor Glow</button>
-              <button class="filter-btn" data-filter="chroma">Chroma</button>
-              <button class="filter-btn" data-filter="grid">Pixel Grid</button>
-              <button class="filter-btn" data-filter="vignette">Vignette</button>
-              <button class="filter-btn" data-filter="halftone">Halftone</button>
-            </div>
-            <!-- Filter settings — shown when any filter is active -->
-            <div id="filter-settings" style="display:none;">
-              <div class="range-wrap" style="margin-top:8px;">
-                <div class="range-header">
-                  <span class="ctrl-label">Intensity</span>
-                  <span class="range-val" id="filter-intensity-val">100%</span>
-                </div>
-                <input type="range" id="filter-intensity" min="0" max="100" step="5" value="100">
-              </div>
-              <!-- Per-filter granular controls — populated dynamically by JS -->
-              <div id="filter-params"></div>
-              <div id="crt-variant-wrap" style="display:none; margin-top:8px;">
-                <div class="ctrl-label" style="margin-bottom:4px;">Scanlines</div>
-                <div class="seg-control">
-                  <button class="seg-btn crt-variant-btn" data-variant="fine">Fine</button>
-                  <button class="seg-btn crt-variant-btn active" data-variant="medium">Medium</button>
-                  <button class="seg-btn crt-variant-btn" data-variant="thick">Thick</button>
-                  <button class="seg-btn crt-variant-btn" data-variant="wide">Wide</button>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <!-- Tone controls (brightness, contrast, split toning) -->
           <div class="ctrl-group" id="tone-controls">
             <div class="tone-header">
@@ -282,8 +246,44 @@
             </div>
           </div>
 
+          <!-- Effects / filters -->
           <div class="ctrl-group">
-            <button id="btn-export-single" class="btn btn-primary btn-full">Export This Photo</button>
+            <div class="ctrl-label">Effects &amp; Filters</div>
+            <div class="filter-seg">
+              <button class="filter-btn" data-filter="crt">CRT</button>
+              <button class="filter-btn" data-filter="lcd">LCD</button>
+              <button class="filter-btn" data-filter="dot">Dot Matrix</button>
+              <button class="filter-btn" data-filter="glow">Phosphor Glow</button>
+              <button class="filter-btn" data-filter="chroma">Chroma</button>
+              <button class="filter-btn" data-filter="grid">Pixel Grid</button>
+              <button class="filter-btn" data-filter="vignette">Vignette</button>
+              <button class="filter-btn" data-filter="halftone">Halftone</button>
+            </div>
+            <!-- Filter settings — shown when any filter is active -->
+            <div id="filter-settings" style="display:none;">
+              <div class="range-wrap" style="margin-top:8px;">
+                <div class="range-header">
+                  <span class="ctrl-label">Intensity</span>
+                  <span class="range-val" id="filter-intensity-val">100%</span>
+                </div>
+                <input type="range" id="filter-intensity" min="0" max="100" step="5" value="100">
+              </div>
+              <!-- Per-filter granular controls — populated dynamically by JS -->
+              <div id="filter-params"></div>
+              <div id="crt-variant-wrap" style="display:none; margin-top:8px;">
+                <div class="ctrl-label" style="margin-bottom:4px;">Scanlines</div>
+                <div class="seg-control">
+                  <button class="seg-btn crt-variant-btn" data-variant="fine">Fine</button>
+                  <button class="seg-btn crt-variant-btn active" data-variant="medium">Medium</button>
+                  <button class="seg-btn crt-variant-btn" data-variant="thick">Thick</button>
+                  <button class="seg-btn crt-variant-btn" data-variant="wide">Wide</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ctrl-group">
+            <button id="btn-export-single" class="btn btn-primary btn-full">Export Selected Photo</button>
             <button id="btn-export-all"    class="btn btn-secondary btn-full">Export All Photos</button>
           </div>
 
