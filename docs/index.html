@@ -98,14 +98,45 @@
   <div id="main" style="display:none;">
 
     <div id="grid-panel">
-      <!-- Gallery size control -->
       <div id="grid-header">
-        <span class="ctrl-label">Thumbnails</span>
-        <input type="range" id="thumb-size-slider" min="60" max="400" step="10" value="120">
-        <button id="btn-hide-empty" class="btn btn-ghost btn-sm" title="Hide empty photo slots">Hide empty</button>
+        <!-- View mode toggle -->
+        <div class="view-seg">
+          <button id="btn-view-grid" class="seg-btn active" title="Grid view (all photos)">⊞ Grid</button>
+          <button id="btn-view-solo" class="seg-btn" title="Solo view (one photo)">⊟ Solo</button>
+        </div>
+        <!-- Grid-only controls -->
+        <span class="ctrl-label grid-only">Thumbnails</span>
+        <input type="range" id="thumb-size-slider" min="60" max="400" step="10" value="120" class="grid-only">
+        <button id="btn-hide-empty" class="btn btn-ghost btn-sm grid-only" title="Hide empty photo slots">Hide empty</button>
         <button id="btn-contact-sheet" class="btn btn-ghost btn-sm file-only" title="Export all photos as a contact sheet">Export Contact Sheet…</button>
       </div>
+
+      <!-- Grid view -->
       <div id="photo-grid"></div>
+
+      <!-- Solo view — single large photo with navigation -->
+      <div id="solo-view">
+        <button id="solo-prev" class="solo-nav" title="Previous (←)">‹</button>
+        <div id="solo-canvas-wrap">
+          <canvas id="solo-canvas"></canvas>
+        </div>
+        <button id="solo-next" class="solo-nav" title="Next (→)">›</button>
+        <div id="solo-footer">
+          <div id="solo-info">
+            <span id="solo-label">Photo 1</span>
+            <span id="solo-meta">128×112px · 2bpp</span>
+          </div>
+          <div id="solo-transforms">
+            <button class="transform-btn" data-action="rotate-ccw" title="Rotate 90° left (Shift+R)">↺</button>
+            <button class="transform-btn" data-action="rotate-cw"  title="Rotate 90° right (R)">↻</button>
+            <button class="transform-btn" data-action="flip-h"     title="Flip horizontal (H)">⇄</button>
+            <button class="transform-btn" data-action="flip-v"     title="Flip vertical (V)">⇅</button>
+            <button class="transform-btn" data-action="reset-transform" title="Reset">⊙</button>
+            <span class="transform-sep"></span>
+            <button class="transform-btn" data-action="fullscreen" title="Fullscreen (F)">⛶</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Drag-resize handle -->
