@@ -367,13 +367,7 @@ html, body {
   color: var(--text);
 }
 
-/* GIF controls (only shown when gif mode active) */
-#gif-controls {
-  display: none;
-  flex-direction: column;
-  gap: 14px;
-}
-#gif-controls.visible { display: flex; }
+/* (gif-controls removed — controls now live in #gif-toolbar) */
 
 .range-wrap {
   display: flex;
@@ -621,7 +615,7 @@ input[type="range"] {
 #gif-toolbar {
   display: none;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 6px 16px;
   background: rgba(255, 214, 10, 0.06);
   border-top: 1px solid rgba(255, 214, 10, 0.15);
@@ -633,6 +627,61 @@ input[type="range"] {
 #gif-toolbar.visible { display: flex; }
 
 #gif-toolbar .spacer { flex: 1; }
+
+.gif-mode-label {
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.gif-toolbar-delay {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.gif-ctrl-label {
+  font-size: 11px;
+  color: var(--yellow);
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+#gif-toolbar #gif-delay {
+  width: 90px;
+  accent-color: var(--yellow);
+}
+
+#gif-toolbar #gif-delay-val {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--yellow);
+  min-width: 38px;
+}
+
+#gif-toolbar #gif-count {
+  font-size: 11px;
+  color: var(--yellow);
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.gif-loop-seg {
+  flex-shrink: 0;
+}
+
+.gif-loop-seg .seg-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+.gif-loop-seg .seg-btn.active {
+  background: rgba(255, 214, 10, 0.2);
+  border-color: rgba(255, 214, 10, 0.5);
+  color: var(--yellow);
+}
 
 /* ── Drag & drop overlay ──────────────────────────────────────────────────── */
 

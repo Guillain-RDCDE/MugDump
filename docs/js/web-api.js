@@ -175,8 +175,9 @@ window.api = {
     const { frames, delay, scale, loop, defaultName } = options;
     const w = frames[0].width * scale;
     const h = frames[0].height * scale;
-    // gifenc expects delay in milliseconds (unlike omggif which uses centiseconds)
-    const repeat = (loop === 'once') ? -1 : 0;
+    // gifenc expects delay in milliseconds (unlike omggif which uses centiseconds).
+    // For looping GIFs, pass repeat:0 (infinite) on the FIRST frame only — this writes
+    // the Netscape Application Block. For "once", omit repeat entirely (no NAB = play once).
 
     let bytes;
     try {
@@ -184,13 +185,16 @@ window.api = {
       const { GIFEncoder } = await import('https://cdn.jsdelivr.net/npm/gifenc@1.0.1/+esm');
       const gif = GIFEncoder();
 
-      for (const frame of frames) {
+      for (let fi = 0; fi < frames.length; fi++) {
+        const frame = frames[fi];
         const scaled = scaleIndicesWeb(new Uint8Array(frame.indices), frame.width, frame.height, scale);
-        gif.writeFrame(scaled, w, h, {
+        const opts = {
           palette: frame.palette, // [[r,g,b], ...]
           delay,   // ms — gifenc expects milliseconds directly
-          repeat,
-        });
+        };
+        // Only write the Netscape loop block on the first frame, and only when looping
+        if (fi === 0 && loop !== 'once') opts.repeat = 0;
+        gif.writeFrame(scaled, w, h, opts);
       }
       gif.finish();
       bytes = gif.bytes();
