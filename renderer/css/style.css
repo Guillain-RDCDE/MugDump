@@ -514,6 +514,45 @@ html, body {
   color: var(--text-3);
 }
 
+/* ── Collapsible sidebar sections ─────────────────────────────────────────── */
+
+.ctrl-group.collapsible > .ctrl-label,
+.ctrl-group.collapsible > .tone-header {
+  user-select: none;
+}
+
+.section-chevron {
+  display: inline-block;
+  font-size: 9px;
+  color: var(--text-3);
+  margin-right: 4px;
+  transition: transform 0.15s ease;
+  line-height: 1;
+}
+
+.ctrl-group.collapsed .section-chevron {
+  transform: rotate(-90deg);
+}
+
+.section-body-outer {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.2s ease;
+  /* gap: 6px is inherited from .ctrl-group flex — remove it on outer wrapper */
+}
+
+.ctrl-group.collapsed > .section-body-outer {
+  grid-template-rows: 0fr;
+}
+
+.section-body-inner {
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .seg-control {
   display: flex;
   gap: 4px;
