@@ -328,7 +328,7 @@ html, body {
 
 .photo-slot {
   position: relative;
-  aspect-ratio: 8 / 7; /* 128:112 */
+  padding-top: 87.5%; /* 7/8 — drives height from column width (128×112 = 8:7) */
   border: 2px solid var(--border-dim);
   border-radius: var(--radius-sm);
   cursor: pointer;
@@ -1957,14 +1957,96 @@ input[type="range"] {
 }
 
 .tone-color-input {
+  display: none; /* hidden — replaced by .color-swatch-btn */
+}
+
+.color-swatch-btn {
   width: 48px;
   height: 28px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
   cursor: pointer;
-  padding: 2px;
+  padding: 0;
+  flex-shrink: 0;
+  transition: border-color 0.1s;
 }
+.color-swatch-btn:hover { border-color: var(--accent); }
+
+/* ── Custom color picker panel ──────────────────────────────────────────────── */
+.color-picker-panel {
+  position: fixed;
+  z-index: 9999;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  width: 210px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.cp-preview {
+  width: 100%;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.cp-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cp-slider-label {
+  font-size: 10px;
+  color: var(--text-3);
+  width: 10px;
+  flex-shrink: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+.cp-slider-row input[type=range] {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--accent);
+}
+.cp-slider-val {
+  font-size: 10px;
+  color: var(--text-3);
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+.cp-hex-input {
+  width: 100%;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  text-align: center;
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.cp-hex-input:focus { border-color: var(--accent); }
+
+/* Palette editor color swatch (inline, no OS dialog) */
+.pal-color-swatch-btn {
+  width: 40px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: border-color 0.1s;
+}
+.pal-color-swatch-btn:hover { border-color: var(--accent); }
 
 #tone-split-detail {
   margin-top: 4px;
