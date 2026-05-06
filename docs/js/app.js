@@ -435,6 +435,7 @@ function updatePalettePickerBtn() {
 function buildPaletteBar() {
   buildPalettePickerUI();
   renderFavPalettes();
+  buildBrowseButtonIcon();
 }
 
 // ── Export scale / format controls ──────────────────────────────────────────
@@ -1689,6 +1690,7 @@ function buildPalettePickerUI() {
       } else {
         dropdown.classList.remove('hidden');
         btn.classList.add('open');
+        updateCurrentPalettePin(); // refresh active-palette pin at top of list
         if (search) {
           search.value = '';
           filterPaletteList('');
@@ -2023,6 +2025,7 @@ function renderFavPalettes() {
     const pal = PALETTES[id];
     const btn = document.createElement('button');
     btn.className = 'fav-pal-btn' + (state.palette.id === id ? ' active' : '');
+    btn.title = pal.name; // name shown as tooltip on hover
 
     const swatch = document.createElement('div');
     swatch.className = 'fav-pal-swatch';
@@ -2032,31 +2035,122 @@ function renderFavPalettes() {
       swatch.appendChild(span);
     }
 
-    const label = document.createElement('span');
-    label.className = 'fav-pal-label';
-    label.textContent = pal.name;
-
     btn.appendChild(swatch);
-    btn.appendChild(label);
 
     btn.addEventListener('click', () => {
       setPalette(id);
       renderFavPalettes(); // refresh active state
     });
 
-    // Star button to unfav without opening the browser
+    // Remove overlay — click the × to unfav
     const starBtn = document.createElement('button');
     starBtn.className = 'fav-pal-star';
-    starBtn.textContent = '★';
+    starBtn.textContent = '×';
     starBtn.title = 'Remove from favourites';
     starBtn.addEventListener('click', e => {
       e.stopPropagation();
-      toggleFavPalette(id); // removes it since it's already faved
+      toggleFavPalette(id);
     });
     btn.appendChild(starBtn);
 
     container.appendChild(btn);
   }
+}
+
+// ── Browse button: inject colourful mini-grid icon + update text ────────────
+
+function buildBrowseButtonIcon() {
+  const btn = document.getElementById('btn-palette-grid');
+  if (!btn) return;
+
+  // 3 representative palettes × 4 colours = 3-row colour grid
+  const ids = ['dmg', 'gbcam_gold', 'gbc_a_up'];
+  const cw = 5, ch = 5, gap = 1;
+  const cols = 4, rows = ids.length;
+  const W = cols * cw + (cols - 1) * gap;
+  const H = rows * ch + (rows - 1) * gap;
+
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.classList.add('pgrid-icon');
+
+  ids.forEach((id, row) => {
+    const pal = PALETTES[id];
+    if (!pal) return;
+    pal.colors.slice(0, 4).forEach((color, col) => {
+      const rect = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', col * (cw + gap));
+      rect.setAttribute('y', row * (ch + gap));
+      rect.setAttribute('width', cw);
+      rect.setAttribute('height', ch);
+      rect.setAttribute('fill', color);
+      svg.appendChild(rect);
+    });
+  });
+
+  btn.innerHTML = '';
+  btn.appendChild(svg);
+  const span = document.createElement('span');
+  span.textContent = 'All Palettes';
+  btn.appendChild(span);
+}
+
+// ── Current palette pin — shown at top of picker dropdown ──────────────────
+
+function updateCurrentPalettePin() {
+  const pin = document.getElementById('pal-current-pin');
+  if (!pin) return;
+  pin.innerHTML = '';
+
+  const id = state.palette?.id;
+  if (!id) return;
+  const pal = state.palette;
+
+  const label = document.createElement('div');
+  label.className = 'pal-pin-label';
+  label.textContent = 'Active palette';
+
+  const item = document.createElement('div');
+  item.className = 'pal-pin-item';
+
+  const swatch = document.createElement('div');
+  swatch.className = 'palette-swatch';
+  pal.colors.forEach(c => {
+    const s = document.createElement('span');
+    s.style.background = c;
+    swatch.appendChild(s);
+  });
+
+  const name = document.createElement('span');
+  name.className = 'pal-pin-name';
+  name.textContent = pal.name;
+
+  const star = document.createElement('button');
+  const isFaved = isFavPalette(id);
+  star.className = 'pal-pin-star' + (isFaved ? ' starred' : '');
+  star.textContent = '★';
+  star.title = isFaved ? 'Remove from favourites' : 'Add to favourites';
+  star.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleFavPalette(id);
+    const nowFaved = isFavPalette(id);
+    star.classList.toggle('starred', nowFaved);
+    star.title = nowFaved ? 'Remove from favourites' : 'Add to favourites';
+  });
+
+  item.appendChild(swatch);
+  item.appendChild(name);
+  item.appendChild(star);
+  item.addEventListener('click', () => {
+    setPalette(id);
+    closePalettePicker();
+  });
+
+  pin.appendChild(label);
+  pin.appendChild(item);
 }
 
 // ── Palette visual grid ────────────────────────────────────────────────────
