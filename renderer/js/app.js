@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.3.0';
+const APP_VERSION = 'v0.6.1';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
