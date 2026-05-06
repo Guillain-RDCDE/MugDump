@@ -3,34 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DMG DarkRoom — GB Camera Companion</title>
-  <meta name="description" content="Load Game Boy Camera .sav files, browse your photos, apply palettes and darkroom effects, and export as PNG or animated GIF.">
-  <link rel="canonical" href="https://dmgdarkroom.allmyfriendsarejpegs.com">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
+  <title>DMG DarkRoom</title>
   <link rel="stylesheet" href="css/style.css">
-  <style>
-    /* Web-specific overrides (no traffic-light padding, no app-region drag) */
-    #titlebar {
-      padding-left: 20px;
-      -webkit-app-region: unset;
-    }
-    #titlebar button { -webkit-app-region: unset; }
-
-    /* Palette grid header: no traffic-light clearance needed on web */
-    #palette-grid-header { padding-left: 16px; }
-
-    /* Browser banner for unsupported features */
-    #browser-banner {
-      display: none;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 16px;
-      background: rgba(255,214,10,0.08);
-      border-bottom: 1px solid rgba(255,214,10,0.2);
-      font-size: 12px;
-      color: #ffd60a;
-    }
-    #browser-banner.visible { display: flex; }
-  </style>
 </head>
 <body>
 
@@ -39,7 +15,7 @@
   <!-- ── Titlebar ─────────────────────────────────────────────────────────── -->
   <div id="titlebar">
     <button id="btn-home" class="app-name-btn">DMG DarkRoom</button>
-    <span class="app-subtitle">GB Camera Companion // by <a href="https://allmyfriendsarejpegs.com" target="_blank">allmyfriendsarejpegs.com</a></span>
+    <span class="app-subtitle">GB Camera Companion <span id="app-version"></span>// by <a href="https://allmyfriendsarejpegs.com" target="_blank">allmyfriendsarejpegs.com</a></span>
     <span class="spacer"></span>
     <button id="tb-open-sav"      class="btn btn-secondary btn-sm">Open .sav…</button>
     <button id="tb-open-pocket"   class="btn btn-ghost btn-sm">Open from Pocket SD…</button>
@@ -47,11 +23,6 @@
     <button id="tb-save-project"  class="btn btn-ghost btn-sm file-only">Save Project…</button>
     <button id="tb-export-sav"    class="btn btn-ghost btn-sm file-only">Export .sav…</button>
     <button id="tb-reload-sav"    class="btn btn-ghost btn-sm file-only" title="Reload this .sav file from disk">↺ Reload</button>
-  </div>
-
-  <!-- ── Browser compat banner ───────────────────────────────────────────── -->
-  <div id="browser-banner">
-    <span>⚠ Some features (directory picker, GIF export) require Chrome or Edge.</span>
   </div>
 
   <!-- ── Palette bar ────────────────────────────────────────────────────────── -->
@@ -80,23 +51,25 @@
     <button id="btn-palette-grid" class="btn btn-ghost btn-sm" title="Browse all palettes applied to your photo">Browse</button>
   </div>
 
-  <!-- ── Welcome ─────────────────────────────────────────────────────────── -->
+  <!-- ── Welcome / empty state ──────────────────────────────────────────────── -->
   <div id="welcome">
     <div class="welcome-icon">📷</div>
     <h2>DMG DarkRoom</h2>
     <p class="welcome-subtitle">GB Camera Companion</p>
-    <p>Load a Game Boy Camera <code>.sav</code> file to view and export your photos.</p>
+    <p>Load a Game Boy Camera <code>.sav</code> file to view, manage, and export your photos.</p>
     <div class="btn-row">
       <button id="btn-open-sav"    class="btn btn-primary">Open .sav file…</button>
-      <button id="btn-open-pocket" class="btn btn-secondary">Analogue Pocket SD card…</button>
+      <button id="btn-open-pocket" class="btn btn-secondary">Analogue Pocket…</button>
     </div>
-    <p style="font-size:11px;color:var(--text-3);margin-top:8px;">Or drag & drop a .sav file anywhere</p>
-    <p style="font-size:11px;color:var(--text-3);">Chrome/Edge recommended for full features</p>
+    <p style="font-size:11px; color:var(--text-3); margin-top:8px;">
+      Or drag & drop a .sav file anywhere
+    </p>
   </div>
 
-  <!-- ── Main view ───────────────────────────────────────────────────────── -->
+  <!-- ── Main view ──────────────────────────────────────────────────────────── -->
   <div id="main" style="display:none;">
 
+    <!-- Photo grid + solo view -->
     <div id="grid-panel">
       <div id="grid-header">
         <!-- View mode toggle -->
@@ -139,9 +112,10 @@
       </div>
     </div>
 
-    <!-- Drag-resize handle -->
+    <!-- Drag-resize handle between panels -->
     <div id="panel-resize-handle"></div>
 
+    <!-- Detail / export panel -->
     <div id="detail-panel">
 
       <!-- No-file placeholder -->
@@ -169,6 +143,7 @@
             <button id="btn-scope-reset" class="btn btn-ghost btn-sm hidden" title="Clear per-photo overrides for this photo">Reset ↺</button>
           </div>
 
+          <!-- Scale / export size -->
           <div class="ctrl-group">
             <div class="ctrl-label">Export size</div>
             <div class="seg-control" id="scale-control">
@@ -179,17 +154,18 @@
               <button class="seg-btn scale-btn" data-scale="custom">Custom</button>
             </div>
             <div id="custom-size-wrap" style="display:none;">
-              <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+              <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
                 <input type="number" id="custom-width" placeholder="512"
                   min="128" max="8192" step="1"
-                  style="width:70px;padding:4px 6px;border-radius:4px;border:1px solid var(--border);
-                         background:var(--surface-2);color:var(--text);font-size:12px;">
-                <span style="font-size:11px;color:var(--text-3);">px wide</span>
-                <span id="custom-size-display" style="font-size:11px;font-family:var(--font-mono);color:var(--text-2);">512×448</span>
+                  style="width:70px; padding:4px 6px; border-radius:4px; border:1px solid var(--border);
+                         background:var(--surface-2); color:var(--text); font-size:12px;">
+                <span style="font-size:11px; color:var(--text-3);">px wide</span>
+                <span id="custom-size-display" style="font-size:11px; font-family:var(--font-mono); color:var(--text-2);">512×448</span>
               </div>
             </div>
           </div>
 
+          <!-- Format -->
           <div class="ctrl-group">
             <div class="ctrl-label">Format</div>
             <div class="seg-control">
@@ -259,6 +235,7 @@
               <button class="filter-btn" data-filter="grid">Pixel Grid</button>
               <button class="filter-btn" data-filter="vignette">Vignette</button>
               <button class="filter-btn" data-filter="halftone">Halftone</button>
+              <button class="filter-btn" data-filter="jitter">Jitter</button>
             </div>
             <!-- Filter settings — shown when any filter is active -->
             <div id="filter-settings" style="display:none;">
@@ -283,14 +260,21 @@
             </div>
           </div>
 
+          <!-- PNG export buttons -->
           <div class="ctrl-group">
-            <button id="btn-export-single" class="btn btn-primary btn-full">Export Selected Photo</button>
-            <button id="btn-export-all"    class="btn btn-secondary btn-full">Export All Photos</button>
+            <button id="btn-export-single" class="btn btn-primary btn-full">
+              Export Selected Photo
+            </button>
+            <button id="btn-export-all" class="btn btn-secondary btn-full">
+              Export All Photos
+            </button>
           </div>
 
-        </div><!-- /export-controls -->
+
+
+      </div><!-- /export-controls -->
     </div><!-- /detail-panel -->
-  </div>
+  </div><!-- /main -->
 
   <!-- ── GIF frame strip (bottom) ─────────────────────────────────────────── -->
   <div id="gif-frame-strip">
@@ -317,13 +301,27 @@
     <button id="gif-cancel" class="btn btn-ghost btn-sm">Cancel</button>
   </div>
 
-  <!-- ── Status bar ──────────────────────────────────────────────────────── -->
+  <!-- ── Status bar ─────────────────────────────────────────────────────────── -->
   <div id="statusbar">
     <div class="status-dot" id="status-dot"></div>
     <span class="status-text" id="status-text">No file loaded</span>
   </div>
 
 </div><!-- /app -->
+
+<!-- ── Drop overlay ──────────────────────────────────────────────────────────── -->
+<div id="drop-overlay" class="hidden">
+  <div class="drop-msg">Drop .sav file to open</div>
+</div>
+
+<!-- ── Fullscreen presentation overlay ───────────────────────────────────────── -->
+<div id="presentation-overlay" class="hidden">
+  <button id="pres-close" title="Close (Escape)">✕</button>
+  <button id="pres-prev"  class="pres-nav" title="Previous (←)">‹</button>
+  <canvas id="pres-canvas"></canvas>
+  <button id="pres-next"  class="pres-nav" title="Next (→)">›</button>
+  <div id="pres-label"></div>
+</div>
 
 <!-- ── Lightbox solo view ──────────────────────────────────────────────────────── -->
 <div id="lightbox-overlay" class="hidden">
@@ -347,68 +345,69 @@
       <span class="transform-sep"></span>
       <button class="transform-btn" data-action="fullscreen" title="Fullscreen (F)">⛶</button>
     </div>
-    <button id="lb-export" class="btn btn-primary btn-sm">Export This Photo</button>
+    <button id="lb-export" class="btn btn-primary btn-sm">Export Selected Photo</button>
   </div>
 </div>
 
-<!-- ── Palette editor modal ────────────────────────────────────────────────── -->
+<!-- ── Palette editor modal ──────────────────────────────────────────────────── -->
 <div id="palette-modal" class="modal-overlay hidden">
   <div class="modal" style="width:580px;">
     <div class="modal-header">
       <h3 id="palette-modal-title">New Palette</h3>
       <button class="btn btn-ghost btn-sm" id="palette-modal-close">✕</button>
     </div>
-    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+    <div class="modal-body" style="display:flex; flex-direction:column; gap:14px;">
 
       <!-- Import section -->
       <div class="ctrl-group" style="gap:8px;">
         <div class="ctrl-label">Import palette</div>
 
         <!-- Row 1: URL / hex -->
-        <div style="display:flex;gap:8px;">
+        <div style="display:flex; gap:8px;">
           <input type="text" id="palette-lospec-url"
             placeholder="Lospec URL, coolors.co URL, or paste hex values…"
-            style="flex:1;padding:6px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);
-                   background:var(--surface-2);color:var(--text);font-size:12px;outline:none;
-                   font-family:var(--font-mono);-webkit-user-select:text;user-select:text;">
-          <button class="btn btn-secondary btn-sm" id="btn-lospec-import" style="white-space:nowrap;flex-shrink:0;">Import URL</button>
+            style="flex:1; padding:6px 8px; border-radius:var(--radius-sm); border:1px solid var(--border);
+                   background:var(--surface-2); color:var(--text); font-size:12px; outline:none;
+                   font-family:var(--font-mono); -webkit-user-select:text; user-select:text;">
+          <button class="btn btn-secondary btn-sm" id="btn-lospec-import" style="white-space:nowrap; flex-shrink:0;">Import URL</button>
         </div>
 
         <!-- Row 2: file load — clearly separate -->
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span style="font-size:11px;color:var(--text-3);flex-shrink:0;">or</span>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:11px; color:var(--text-3); flex-shrink:0;">or</span>
           <button class="btn btn-ghost btn-sm" id="btn-load-pal-file"
-            style="display:flex;align-items:center;gap:5px;">
+            style="display:flex; align-items:center; gap:5px;">
             <span>📂</span> Load .pal or .gbp file from disk…
           </button>
         </div>
 
-        <div id="lospec-status" style="font-size:11px;color:var(--text-3);min-height:14px;"></div>
+        <div id="lospec-status" style="font-size:11px; color:var(--text-3); min-height:14px;"></div>
       </div>
 
       <!-- Name + pickers + preview -->
-      <div style="display:flex;gap:20px;">
-        <div style="flex:1;display:flex;flex-direction:column;gap:12px;min-width:0;">
+      <div style="display:flex; gap:20px;">
+        <div style="flex:1; display:flex; flex-direction:column; gap:12px; min-width:0;">
           <div class="ctrl-group">
             <div class="ctrl-label">Name</div>
             <input type="text" id="palette-name-input" placeholder="My Palette"
-              style="width:100%;padding:6px 8px;border-radius:var(--radius-sm);border:1px solid var(--border);
-                     background:var(--surface-2);color:var(--text);font-size:13px;outline:none;">
+              style="width:100%; padding:6px 8px; border-radius:var(--radius-sm);
+                     border:1px solid var(--border); background:var(--surface-2);
+                     color:var(--text); font-size:13px; outline:none;">
           </div>
           <div class="ctrl-group">
             <div class="ctrl-label">Colors — lightest to darkest</div>
-            <div id="palette-color-pickers" style="display:flex;flex-direction:column;gap:8px;"></div>
+            <div id="palette-color-pickers" style="display:flex; flex-direction:column; gap:8px;"></div>
           </div>
         </div>
 
         <!-- Preview -->
-        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;flex-shrink:0;">
+        <div style="display:flex; flex-direction:column; align-items:center; gap:8px; flex-shrink:0;">
           <div class="ctrl-label">Preview</div>
           <canvas id="palette-preview-canvas" width="256" height="224"
-            style="image-rendering:pixelated;width:192px;height:168px;
-                   border:1px solid var(--border);border-radius:var(--radius-sm);"></canvas>
-          <span style="font-size:10px;color:var(--text-3);">Uses selected photo</span>
-          <div style="display:flex;gap:6px;margin-top:2px;">
+            style="image-rendering:pixelated; width:192px; height:168px;
+                   border:1px solid var(--border); border-radius:var(--radius-sm);"></canvas>
+          <span style="font-size:10px; color:var(--text-3);">Uses selected photo</span>
+          <div style="display:flex; gap:6px; margin-top:2px;">
             <button class="btn btn-ghost btn-sm" id="palette-modal-export-pal" title="Export as Analogue Pocket .pal">↓ .pal</button>
             <button class="btn btn-ghost btn-sm" id="palette-modal-export-gbp" title="Export as .gbp">↓ .gbp</button>
           </div>
@@ -417,41 +416,14 @@
 
     </div>
     <div class="modal-footer">
-      <button class="btn btn-danger btn-sm" id="palette-modal-delete" style="margin-right:auto;display:none;">Delete</button>
+      <button class="btn btn-danger btn-sm" id="palette-modal-delete" style="margin-right:auto; display:none;">Delete</button>
       <button class="btn btn-ghost" id="palette-modal-cancel">Cancel</button>
       <button class="btn btn-primary" id="palette-modal-save">Save Palette</button>
     </div>
   </div>
 </div>
 
-<!-- ── Pocket modal ────────────────────────────────────────────────────────── -->
-<div id="pocket-modal" class="modal-overlay hidden">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>Open from Analogue Pocket</h3>
-      <button class="btn btn-ghost btn-sm" id="pocket-cancel">✕</button>
-    </div>
-    <div class="modal-body"><div id="pocket-save-list"></div></div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="document.getElementById('pocket-cancel').click()">Cancel</button>
-      <button class="btn btn-primary" id="pocket-confirm" disabled>Open</button>
-    </div>
-  </div>
-</div>
-
-<div id="drop-overlay" class="hidden">
-  <div class="drop-msg">Drop .sav file to open</div>
-</div>
-
-<!-- ── Fullscreen presentation overlay ───────────────────────────────────────── -->
-<div id="presentation-overlay" class="hidden">
-  <button id="pres-close" title="Close (Escape)">✕</button>
-  <button id="pres-prev"  class="pres-nav" title="Previous (←)">‹</button>
-  <canvas id="pres-canvas"></canvas>
-  <button id="pres-next"  class="pres-nav" title="Next (→)">›</button>
-  <div id="pres-label"></div>
-</div>
-<div id="toast"></div>
+<!-- Hidden file inputs -->
 <input type="file" id="palette-import-input" accept=".json,.pal,.gbp" multiple style="display:none;">
 <input type="file" id="palette-pal-input" accept=".pal,.gbp" style="display:none;">
 
@@ -469,17 +441,31 @@
   <div id="palette-grid-list"></div>
 </div>
 
+<!-- ── Analogue Pocket modal ────────────────────────────────────────────────── -->
+<div id="pocket-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Open from Analogue Pocket</h3>
+      <button class="btn btn-ghost btn-sm" id="pocket-cancel">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="pocket-save-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="pocket-cancel-2" onclick="document.getElementById('pocket-cancel').click()">Cancel</button>
+      <button class="btn btn-primary" id="pocket-confirm" disabled>Open</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ────────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<!-- ── Scripts ──────────────────────────────────────────────────────────────── -->
 <script src="js/palettes.js"></script>
 <script src="js/palettes-ext.js"></script>
 <script src="js/gbcam.js"></script>
-<script src="js/web-api.js"></script><!-- browser API shim — must come before app.js -->
 <script src="js/app.js"></script>
-<script>
-  // Show compat banner on non-Chrome browsers
-  if (!('showOpenFilePicker' in window)) {
-    document.getElementById('browser-banner').classList.add('visible');
-  }
-</script>
 
 </body>
 </html>

@@ -6,6 +6,158 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
+const APP_VERSION = 'v0.3.0';
+
+// ── Color picker helpers ───────────────────────────────────────────────────
+
+function hexToHsl(hex) {
+  const r = parseInt(hex.slice(1,3), 16) / 255;
+  const g = parseInt(hex.slice(3,5), 16) / 255;
+  const b = parseInt(hex.slice(5,7), 16) / 255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b);
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  return [Math.round(h * 360), Math.round(s * 100), Math.round(l * 100)];
+}
+
+function hslToHex(h, s, l) {
+  h /= 360; s /= 100; l /= 100;
+  let r, g, b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+    r = hue2rgb(p, q, h + 1/3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1/3);
+  }
+  return '#' + [r, g, b].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+}
+
+let _colorPickerPanel = null;
+
+function openColorPicker(anchorEl, initialHex, onChange) {
+  if (_colorPickerPanel) { _colorPickerPanel.remove(); _colorPickerPanel = null; }
+
+  let [h, s, l] = hexToHsl(initialHex || '#888888');
+
+  const panel = document.createElement('div');
+  panel.className = 'color-picker-panel';
+  _colorPickerPanel = panel;
+
+  const preview = document.createElement('div');
+  preview.className = 'cp-preview';
+  preview.style.background = initialHex;
+  panel.appendChild(preview);
+
+  const hexInput = document.createElement('input');
+  hexInput.type = 'text';
+  hexInput.className = 'cp-hex-input';
+  hexInput.value = initialHex.toUpperCase();
+  hexInput.maxLength = 7;
+
+  function update() {
+    const hex = hslToHex(h, s, l);
+    preview.style.background = hex;
+    hexInput.value = hex.toUpperCase();
+    onChange(hex);
+  }
+
+  function makeRow(labelTxt, val, min, max, onSliderChange) {
+    const row = document.createElement('div');
+    row.className = 'cp-slider-row';
+    const lbl = document.createElement('span');
+    lbl.className = 'cp-slider-label';
+    lbl.textContent = labelTxt;
+    const sl = document.createElement('input');
+    sl.type = 'range'; sl.min = min; sl.max = max; sl.step = 1; sl.value = val;
+    const valEl = document.createElement('span');
+    valEl.className = 'cp-slider-val';
+    valEl.textContent = Math.round(val);
+    sl.addEventListener('input', () => {
+      valEl.textContent = sl.value;
+      onSliderChange(parseFloat(sl.value));
+    });
+    row.appendChild(lbl); row.appendChild(sl); row.appendChild(valEl);
+    return row;
+  }
+
+  panel.appendChild(makeRow('H', h, 0, 360, v => { h = v; update(); }));
+  panel.appendChild(makeRow('S', s, 0, 100, v => { s = v; update(); }));
+  panel.appendChild(makeRow('L', l, 0, 100, v => { l = v; update(); }));
+
+  hexInput.addEventListener('change', () => {
+    const v = hexInput.value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+      [h, s, l] = hexToHsl(v);
+      update();
+    }
+  });
+  panel.appendChild(hexInput);
+
+  document.body.appendChild(panel);
+  const rect = anchorEl.getBoundingClientRect();
+  panel.style.left = `${Math.min(rect.left, window.innerWidth - 230)}px`;
+  panel.style.top  = `${Math.min(rect.bottom + 4, window.innerHeight - 250)}px`;
+
+  setTimeout(() => {
+    function closeHandler(e) {
+      if (!panel.contains(e.target) && e.target !== anchorEl) {
+        panel.remove();
+        if (_colorPickerPanel === panel) _colorPickerPanel = null;
+        document.removeEventListener('mousedown', closeHandler);
+      }
+    }
+    document.addEventListener('mousedown', closeHandler);
+  }, 0);
+}
+
+/** Wraps a hidden <input type=color> with a visible swatch button that opens
+ *  the custom picker. Pass the className for the swatch button. */
+function attachColorPickerToInput(input, swatchClass = 'color-swatch-btn') {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = swatchClass;
+  btn.style.background = input.value;
+  input.parentNode.insertBefore(btn, input);
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    openColorPicker(btn, input.value, hex => {
+      btn.style.background = hex;
+      input.value = hex;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  });
+
+  // Keep swatch in sync if input is updated programmatically
+  const origDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  Object.defineProperty(input, '_cpBtn', { value: btn, writable: true });
+  return btn;
+}
+
+// Sync a swatch button to a new value (called when controls are reset/synced)
+function syncColorSwatchBtn(input, hex) {
+  if (input._cpBtn) input._cpBtn.style.background = hex;
+}
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const state = {
@@ -26,7 +178,8 @@ const state = {
     lcd:      { subpixel: 10 },        // 0–20 %
     dot:      { radius: 44 },          // 20–80 % of scale
     glow:     { blur: 110 },           // 50–300 % of scale
-    chroma:   { shift: 75 },           // 25–150 % of scale
+    chroma:   { shift: 75 },           // 25–300 % of scale
+    jitter:   { amount: 40 },          // 5–100 % of scale
     grid:     { opacity: 30 },         // 10–60 %
     vignette: { falloff: 'medium' },   // 'soft'|'medium'|'hard'
     halftone: { radius: 38 },          // 20–60 % of scale
@@ -243,10 +396,10 @@ function syncControlsToEffectiveSettings(index) {
   if (tiVal) tiVal.textContent = `${eff.toneIntensity}%`;
 
   const scEl = document.getElementById('tone-shadow-color');
-  if (scEl)  scEl.value = eff.shadowColor;
+  if (scEl)  { scEl.value = eff.shadowColor; syncColorSwatchBtn(scEl, eff.shadowColor); }
 
   const hcEl = document.getElementById('tone-highlight-color');
-  if (hcEl)  hcEl.value = eff.highlightColor;
+  if (hcEl)  { hcEl.value = eff.highlightColor; syncColorSwatchBtn(hcEl, eff.highlightColor); }
 
   const balEl  = document.getElementById('tone-balance');
   const balVal = document.getElementById('tone-balance-val');
@@ -884,17 +1037,11 @@ function exitGifMode() {
 }
 
 function toggleGifSelection(index, slotEl) {
-  if (state.gifSelection.has(index)) {
-    // Remove — find all occurrences in frame order (allow duplicates in future)
-    state.gifFrameOrder = state.gifFrameOrder.filter(f => f.photoIndex !== index);
-    state.gifSelection.delete(index);
-    slotEl.classList.remove('selected-for-gif');
-    slotEl.removeAttribute('data-gif-frame');
-  } else {
-    state.gifSelection.add(index);
-    state.gifFrameOrder.push({ photoIndex: index, paletteId: null });
-    slotEl.classList.add('selected-for-gif');
-  }
+  // Always add a new frame — duplicates allowed.
+  // Removal is handled via the × button on each chip.
+  state.gifFrameOrder.push({ photoIndex: index, paletteId: null });
+  state.gifSelection.add(index); // set keeps uniqueness for grid highlight
+  slotEl.classList.add('selected-for-gif');
   updateGifCount();
   updateGifFrameNumbers();
   renderGifFrameStrip();
@@ -932,20 +1079,30 @@ function renderGifFrameStrip() {
     num.className = 'gif-chip-num';
     num.textContent = orderIdx + 1;
 
-    // Thumbnail canvas
+    // Thumbnail canvas — rendered with per-photo effective settings
     const canvas = document.createElement('canvas');
     canvas.width  = GIF_THUMB_W;
     canvas.height = GIF_THUMB_H;
     canvas.className = 'gif-chip-canvas';
 
-    // Resolve palette for this frame
-    const pal = frame.paletteId ? PALETTES[frame.paletteId] : state.palette;
+    // Resolve palette: frame override → frame's per-photo palette → global palette
+    const eff = getEffectiveSettings(frame.photoIndex);
+    const pal = frame.paletteId ? PALETTES[frame.paletteId]
+                                : (eff.paletteId ? PALETTES[eff.paletteId] : state.palette);
     if (pal) {
-      // GBCam.renderToCanvas needs an integer scale — render at 1× then scale via drawImage
+      const chipScale = GIF_THUMB_W / GBCam.PHOTO_WIDTH; // ~0.75
+      // Render at native res first
       const tmp = Object.assign(document.createElement('canvas'), {
         width: GBCam.PHOTO_WIDTH, height: GBCam.PHOTO_HEIGHT,
       });
-      GBCam.renderToCanvas(tmp.getContext('2d'), photo.pixels, pal, 1);
+      const tctx = tmp.getContext('2d');
+      GBCam.renderToCanvas(tctx, photo.pixels, pal, 1);
+      applyToneAdjustments(tctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, eff);
+      // Apply filter at native res if one is active
+      if (eff.exportFilter && eff.exportFilter !== 'none') {
+        applyExportFilter(tctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, 1,
+          eff.exportFilter, eff.filterIntensity, eff.filterVariant, eff.filterParams);
+      }
       canvas.getContext('2d').drawImage(tmp, 0, 0, GIF_THUMB_W, GIF_THUMB_H);
     }
 
@@ -1614,36 +1771,48 @@ function openPaletteEditor(existingPalette = null) {
     label.style.cssText = 'font-size:11px; color:var(--text-2); width:82px; flex-shrink:0;';
     label.textContent = SHADE_LABELS[i];
 
+    // Hidden <input type="color"> for value storage + event compatibility
     const picker = document.createElement('input');
     picker.type = 'color';
     picker.value = color.toLowerCase();
     picker.dataset.shade = i;
-    picker.style.cssText = 'width:40px; height:32px; border:none; border-radius:4px; cursor:pointer; background:none; padding:0; flex-shrink:0;';
+    picker.style.display = 'none';
+
+    // Custom swatch button opens inline picker
+    const swatchBtn = document.createElement('button');
+    swatchBtn.type = 'button';
+    swatchBtn.className = 'pal-color-swatch-btn';
+    swatchBtn.style.background = color.toLowerCase();
+    swatchBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      openColorPicker(swatchBtn, picker.value, hex => {
+        picker.value = hex;
+        swatchBtn.style.background = hex;
+        hexInput.value = hex.toUpperCase();
+        updatePalettePreview();
+      });
+    });
 
     const hexInput = document.createElement('input');
     hexInput.type = 'text';
     hexInput.value = color.toUpperCase();
     hexInput.maxLength = 7;
     hexInput.placeholder = '#RRGGBB';
-    hexInput.style.cssText = 'width:80px; padding:4px 6px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:12px; font-family:var(--font-mono); outline:none;';
+    hexInput.style.cssText = 'width:80px; padding:4px 6px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--surface-2); color:var(--text); font-size:12px; font-family:var(--font-mono); outline:none; -webkit-user-select:text; user-select:text;';
 
-    // Sync picker → hex input + preview
-    picker.addEventListener('input', () => {
-      hexInput.value = picker.value.toUpperCase();
-      updatePalettePreview();
-    });
-
-    // Sync hex input → picker + preview (only when valid)
+    // Sync hex input → picker + swatch + preview (only when valid)
     hexInput.addEventListener('input', () => {
       const v = hexInput.value.trim();
       if (/^#[0-9a-fA-F]{6}$/.test(v)) {
         picker.value = v.toLowerCase();
+        swatchBtn.style.background = v.toLowerCase();
         updatePalettePreview();
       }
     });
 
     row.appendChild(label);
     row.appendChild(picker);
+    row.appendChild(swatchBtn);
     row.appendChild(hexInput);
     container.appendChild(row);
   });
@@ -2715,7 +2884,9 @@ function buildFilterParams(filter, displayParams) {
   } else if (filter === 'glow') {
     addSlider('Bloom radius', 'blur', 50, 300, 10, v => `${v}%`);
   } else if (filter === 'chroma') {
-    addSlider('Channel shift', 'shift', 25, 150, 5, v => `${v}%`);
+    addSlider('Channel shift', 'shift', 25, 300, 5, v => `${v}%`);
+  } else if (filter === 'jitter') {
+    addSlider('Jitter amount', 'amount', 5, 100, 5, v => `${v}%`);
   } else if (filter === 'grid') {
     addSlider('Grid opacity', 'opacity', 10, 60, 5, v => `${v}%`);
   } else if (filter === 'vignette') {
@@ -3054,6 +3225,42 @@ function applyExportFilter(ctx, width, height, scale, filter,
 
     ctx.putImageData(dst, 0, 0);
     return; // composited directly; skip the generic end-of-function drawImage
+
+  } else if (filter === 'jitter') {
+    // ── Scanline Jitter ────────────────────────────────────────────────────
+    // Displaces each row of pixels horizontally by a deterministic amount,
+    // grouped by GB tile row for an authentic corrupted-signal look.
+    const jitterPct = ((filterParams.jitter || {}).amount ?? 40) / 100;
+    const maxShift  = Math.max(1, Math.round(s * jitterPct * 3));
+    const orig = ctx.getImageData(0, 0, width, height);
+    const dst  = new ImageData(width, height);
+    const d = orig.data, o = dst.data;
+    const tileH = Math.max(1, s); // pixels per GB pixel row
+
+    for (let y = 0; y < height; y++) {
+      const tileY = Math.floor(y / tileH);
+      // Deterministic hash — same image always gets same jitter pattern
+      const frac  = (Math.sin(tileY * 43758.5453123) * 43758.5453123) % 1;
+      const norm  = frac < 0 ? frac + 1 : frac;
+      const shift = Math.round((norm * 2 - 1) * maxShift);
+      for (let x = 0; x < width; x++) {
+        const sx = Math.min(width - 1, Math.max(0, x + shift));
+        const i  = (y * width + x) * 4;
+        const si = (y * width + sx) * 4;
+        o[i]   = d[si]; o[i+1] = d[si+1]; o[i+2] = d[si+2]; o[i+3] = 255;
+      }
+    }
+
+    const t = Math.min(1, Math.max(0, intensity));
+    if (t < 1) {
+      for (let i = 0; i < o.length; i += 4) {
+        o[i]   = Math.round(d[i]   * (1-t) + o[i]   * t);
+        o[i+1] = Math.round(d[i+1] * (1-t) + o[i+1] * t);
+        o[i+2] = Math.round(d[i+2] * (1-t) + o[i+2] * t);
+      }
+    }
+    ctx.putImageData(dst, 0, 0);
+    return;
   }
 
   // Composite the effect onto the main canvas at the requested intensity
@@ -3544,6 +3751,10 @@ function setupToneControls() {
 
   if (!brightnessEl) return; // not in DOM (shouldn't happen)
 
+  // Attach custom color pickers to shadow / highlight inputs
+  if (shadowColorEl)    attachColorPickerToInput(shadowColorEl);
+  if (highlightColorEl) attachColorPickerToInput(highlightColorEl);
+
   brightnessEl.addEventListener('input', () => {
     setScopedSetting('brightness', parseInt(brightnessEl.value));
     const v = getEffectiveSettings(state.selectedIndex)?.brightness ?? state.brightness;
@@ -3598,8 +3809,8 @@ function setupToneControls() {
     contrastEl.value        = 0;
     intensityEl.value       = 0;
     balanceEl.value         = 0;
-    shadowColorEl.value     = '#0033aa';
-    highlightColorEl.value  = '#ff8800';
+    shadowColorEl.value     = '#0033aa'; syncColorSwatchBtn(shadowColorEl, '#0033aa');
+    highlightColorEl.value  = '#ff8800'; syncColorSwatchBtn(highlightColorEl, '#ff8800');
 
     brightnessVal.textContent = '0';
     contrastVal.textContent   = '0';
@@ -3741,6 +3952,10 @@ function setupCollapsibleSections() {
 }
 
 function init() {
+  // Inject version string
+  const verEl = document.getElementById('app-version');
+  if (verEl) verEl.textContent = APP_VERSION + ' ';
+
   buildPaletteBar();
   wireButtons();
   wireButtonsPaletteEditor();
