@@ -85,34 +85,20 @@
     <!-- Detail / export panel -->
     <div id="detail-panel">
 
-      <div id="detail-empty" style="display:flex;">
+      <!-- No-file placeholder -->
+      <div id="detail-empty">
         <div class="icon">🖼</div>
-        <span>Select a photo to preview and export</span>
+        <span>Load a .sav file to get started</span>
       </div>
 
-      <div id="detail-content">
-        <!-- Preview -->
-        <div id="detail-preview-wrap">
-          <canvas id="detail-canvas"></canvas>
-        </div>
+      <!-- GIF animated preview (shown in GIF mode with frames selected) -->
+      <div id="gif-preview-wrap">
+        <canvas id="gif-preview-canvas"></canvas>
+        <div id="gif-preview-info"></div>
+      </div>
 
-        <!-- Info + transform controls -->
-        <div id="detail-info">
-          <div class="photo-label" id="detail-label">Photo 1</div>
-          <div class="photo-meta" id="detail-meta">128×112px · 2bpp</div>
-          <div id="photo-transforms">
-            <button class="transform-btn" data-action="rotate-ccw" title="Rotate 90° left (Shift+R)">↺</button>
-            <button class="transform-btn" data-action="rotate-cw"  title="Rotate 90° right (R)">↻</button>
-            <button class="transform-btn" data-action="flip-h"     title="Flip horizontal (H)">⇄</button>
-            <button class="transform-btn" data-action="flip-v"     title="Flip vertical (V)">⇅</button>
-            <button class="transform-btn" data-action="reset-transform" title="Reset rotation and flip">⊙</button>
-            <span class="transform-sep"></span>
-            <button class="transform-btn" data-action="fullscreen" title="Fullscreen view (F)">⛶</button>
-          </div>
-        </div>
-
-        <!-- Export controls -->
-        <div id="export-controls">
+      <!-- Export controls (always visible once a file is loaded) -->
+      <div id="export-controls">
 
           <!-- Scale / export size -->
           <div class="ctrl-group">
@@ -242,8 +228,7 @@
 
 
 
-        </div><!-- /export-controls -->
-      </div><!-- /detail-content -->
+      </div><!-- /export-controls -->
     </div><!-- /detail-panel -->
   </div><!-- /main -->
 
@@ -292,6 +277,32 @@
   <canvas id="pres-canvas"></canvas>
   <button id="pres-next"  class="pres-nav" title="Next (→)">›</button>
   <div id="pres-label"></div>
+</div>
+
+<!-- ── Lightbox solo view ──────────────────────────────────────────────────────── -->
+<div id="lightbox-overlay" class="hidden">
+  <button id="lb-close" title="Close (Escape)">✕</button>
+  <button id="lb-prev" class="lb-nav" title="Previous (←)">‹</button>
+  <div id="lb-canvas-wrap">
+    <canvas id="lb-canvas"></canvas>
+  </div>
+  <button id="lb-next" class="lb-nav" title="Next (→)">›</button>
+  <div id="lb-footer">
+    <div id="lb-info">
+      <span id="lb-label">Photo 1</span>
+      <span id="lb-meta">128×112px · 2bpp</span>
+    </div>
+    <div id="lb-transforms">
+      <button class="transform-btn" data-action="rotate-ccw" title="Rotate 90° left (Shift+R)">↺</button>
+      <button class="transform-btn" data-action="rotate-cw"  title="Rotate 90° right (R)">↻</button>
+      <button class="transform-btn" data-action="flip-h"     title="Flip horizontal (H)">⇄</button>
+      <button class="transform-btn" data-action="flip-v"     title="Flip vertical (V)">⇅</button>
+      <button class="transform-btn" data-action="reset-transform" title="Reset">⊙</button>
+      <span class="transform-sep"></span>
+      <button class="transform-btn" data-action="fullscreen" title="Fullscreen (F)">⛶</button>
+    </div>
+    <button id="lb-export" class="btn btn-primary btn-sm">Export This Photo</button>
+  </div>
 </div>
 
 <!-- ── Palette editor modal ──────────────────────────────────────────────────── -->

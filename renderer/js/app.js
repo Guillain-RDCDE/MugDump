@@ -42,6 +42,7 @@ const state = {
   gifDelay: 250,           // ms per frame
   gifLoop: 'infinite',     // 'infinite' | 'once' | 'bounce'
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
+  lightboxOpen: false,     // lightbox overlay visible
   // Tone adjustments
   brightness:      0,      // -100 to +100
   contrast:        0,      // -100 to +100
@@ -60,11 +61,14 @@ const dom = {
   photoGrid:       document.getElementById('photo-grid'),
   gridPanel:       document.getElementById('grid-panel'),
   detailEmpty:     document.getElementById('detail-empty'),
-  detailContent:   document.getElementById('detail-content'),
-  detailCanvas:    document.getElementById('detail-canvas'),
-  detailLabel:     document.getElementById('detail-label'),
-  detailMeta:      document.getElementById('detail-meta'),
   exportControls:  document.getElementById('export-controls'),
+  gifPreviewWrap:  document.getElementById('gif-preview-wrap'),
+  gifPreviewCanvas:document.getElementById('gif-preview-canvas'),
+  gifPreviewInfo:  document.getElementById('gif-preview-info'),
+  lbOverlay:       document.getElementById('lightbox-overlay'),
+  lbCanvas:        document.getElementById('lb-canvas'),
+  lbLabel:         document.getElementById('lb-label'),
+  lbMeta:          document.getElementById('lb-meta'),
   gifToolbar:      document.getElementById('gif-toolbar'),
   gifFrameStrip:   document.getElementById('gif-frame-strip'),
   gifFrameList:    document.getElementById('gif-frame-list'),
@@ -226,6 +230,11 @@ function renderGrid() {
       canvas.height = GBCam.PHOTO_HEIGHT;
       const ctx = canvas.getContext('2d');
       GBCam.renderToCanvas(ctx, photo.pixels, state.palette);
+      if (state.exportFilter !== 'none') {
+        applyExportFilter(ctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, 1,
+          state.exportFilter, state.filterIntensity, state.filterVariant);
+      }
+      applyToneAdjustments(ctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT);
       slot.appendChild(canvas);
 
       // GIF selection (invisible div for event delegation; frame number via data attr)
@@ -264,11 +273,11 @@ function repaintGrid() {
     const index = parseInt(slot.dataset.index);
     repaintGridSlot(index);
   }
-  // Repaint detail panel — restart GIF preview if active, else normal detail
+  // Repaint live views
   if (state.gifMode && state.gifSelection.size > 0) {
     updateGifPreview();
-  } else if (state.selectedIndex !== null) {
-    renderDetail(state.selectedIndex);
+  } else if (state.lightboxOpen && state.selectedIndex !== null) {
+    renderLightbox(state.selectedIndex);
   }
 }
 
@@ -281,9 +290,14 @@ function repaintGridSlot(index) {
   const canvas = slot.querySelector('canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  // Thumbnails are always rendered untransformed at native res for speed;
-  // apply transform indicator via a small rotation badge instead
+  // Thumbnails rendered at native res (CSS handles upscale via image-rendering:pixelated)
   GBCam.renderToCanvas(ctx, photo.pixels, state.palette);
+  // Apply current filter + tone so grid matches the export
+  if (state.exportFilter !== 'none') {
+    applyExportFilter(ctx, canvas.width, canvas.height, 1,
+      state.exportFilter, state.filterIntensity, state.filterVariant);
+  }
+  applyToneAdjustments(ctx, canvas.width, canvas.height);
   // Mark slot with transform badge if any transform applied
   slot.classList.toggle('has-transform', hasTransform(index));
 }
@@ -304,46 +318,83 @@ function selectPhoto(index) {
   if (slot) slot.classList.add('selected');
 
   state.selectedIndex = index;
-  renderDetail(index);
+  openLightbox(index);
 }
 
-// ── Detail panel ─────────────────────────────────────────────────────────────
+// ── Detail / lightbox rendering ───────────────────────────────────────────────
 
+// renderDetail: kept as a compatibility stub — callers expecting a "view update"
+// will now refresh the lightbox if it's open.
 function renderDetail(index) {
-  const photo = state.photos[index];
-  if (!photo || photo.isEmpty) {
-    dom.detailEmpty.style.display = 'flex';
-    dom.detailContent.classList.remove('visible');
-    return;
+  if (state.lightboxOpen && index !== null && index === state.selectedIndex) {
+    renderLightbox(index);
   }
+}
 
-  dom.detailEmpty.style.display = 'none';
-  dom.detailContent.classList.add('visible');
+// ── Lightbox ──────────────────────────────────────────────────────────────────
 
-  // Render preview at 4× with transform applied
-  const PREVIEW_SCALE = 4;
-  const ctx = dom.detailCanvas.getContext('2d');
+function openLightbox(index) {
+  const photo = state.photos[index];
+  if (!photo || photo.isEmpty) return;
+  state.lightboxOpen = true;
+  dom.lbOverlay.classList.remove('hidden');
+  renderLightbox(index);
+}
+
+function closeLightbox() {
+  state.lightboxOpen = false;
+  dom.lbOverlay.classList.add('hidden');
+}
+
+function renderLightbox(index) {
+  const photo = state.photos[index];
+  if (!photo || photo.isEmpty) { closeLightbox(); return; }
+
+  const PREVIEW_SCALE = 8;
+  const ctx = dom.lbCanvas.getContext('2d');
   renderPhotoWithTransform(ctx, photo, state.palette, PREVIEW_SCALE, index);
 
-  // Apply selected effect so the preview matches the export
+  const w = dom.lbCanvas.width, h = dom.lbCanvas.height;
   if (state.exportFilter !== 'none') {
-    applyExportFilter(ctx, dom.detailCanvas.width, dom.detailCanvas.height, PREVIEW_SCALE,
+    applyExportFilter(ctx, w, h, PREVIEW_SCALE,
       state.exportFilter, state.filterIntensity, state.filterVariant);
   }
-  applyToneAdjustments(ctx, dom.detailCanvas.width, dom.detailCanvas.height);
+  applyToneAdjustments(ctx, w, h);
 
-  dom.detailLabel.textContent = `Photo ${index + 1}`;
+  dom.lbLabel.textContent = `Photo ${index + 1}`;
   const t = getTransform(index);
-  const rotLabel = t.rotate ? ` · ${t.rotate}°` : '';
+  const rotLabel  = t.rotate ? ` · ${t.rotate}°` : '';
   const flipLabel = (t.flipH || t.flipV) ? ` · flipped` : '';
-  dom.detailMeta.textContent  = `${GBCam.PHOTO_WIDTH}×${GBCam.PHOTO_HEIGHT}px · 2bpp · slot ${index + 1}/30${rotLabel}${flipLabel}`;
+  dom.lbMeta.textContent = `${GBCam.PHOTO_WIDTH}×${GBCam.PHOTO_HEIGHT}px · 2bpp · slot ${index + 1}/30${rotLabel}${flipLabel}`;
 
-  // Sync transform button active states
-  document.querySelectorAll('#photo-transforms .transform-btn').forEach(btn => {
+  // Sync transform button active states in lightbox footer
+  document.querySelectorAll('#lb-transforms .transform-btn').forEach(btn => {
     const action = btn.dataset.action;
     if (action === 'flip-h') btn.classList.toggle('active', t.flipH);
     if (action === 'flip-v') btn.classList.toggle('active', t.flipV);
   });
+}
+
+function lightboxStep(dir) {
+  if (!state.lightboxOpen) return;
+  const photos = state.photos;
+  let idx = state.selectedIndex ?? 0;
+  let tries = 0;
+  while (tries < 30) {
+    idx = ((idx + dir + photos.length) % photos.length);
+    if (!photos[idx]?.isEmpty) break;
+    tries++;
+  }
+  if (photos[idx]?.isEmpty) return;
+
+  dom.photoGrid.querySelectorAll('.photo-slot').forEach(el => el.classList.remove('selected'));
+  const slot = dom.photoGrid.querySelector(`[data-index="${idx}"]`);
+  if (slot) {
+    slot.classList.add('selected');
+    slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  state.selectedIndex = idx;
+  renderLightbox(idx);
 }
 
 // ── Palette ─────────────────────────────────────────────────────────────────
@@ -527,11 +578,7 @@ function exitGifMode() {
     el.classList.remove('selected-for-gif');
     el.removeAttribute('data-gif-frame');
   });
-  if (state.selectedIndex !== null) renderDetail(state.selectedIndex);
-  else {
-    dom.detailEmpty.style.display = 'flex';
-    dom.detailContent.classList.remove('visible');
-  }
+  if (dom.gifPreviewWrap) dom.gifPreviewWrap.classList.remove('visible');
 }
 
 function toggleGifSelection(index, slotEl) {
@@ -978,8 +1025,7 @@ function wireButtons() {
     intensitySlider.addEventListener('input', () => {
       state.filterIntensity = intensitySlider.value / 100;
       if (intensityVal) intensityVal.textContent = `${intensitySlider.value}%`;
-      if (state.gifMode && state.gifSelection.size > 0) updateGifPreview();
-      else if (state.selectedIndex !== null) renderDetail(state.selectedIndex);
+      repaintGrid();
     });
   }
 
@@ -989,9 +1035,25 @@ function wireButtons() {
       state.filterVariant = btn.dataset.variant;
       document.querySelectorAll('.crt-variant-btn').forEach(b =>
         b.classList.toggle('active', b.dataset.variant === state.filterVariant));
-      if (state.gifMode && state.gifSelection.size > 0) updateGifPreview();
-      else if (state.selectedIndex !== null) renderDetail(state.selectedIndex);
+      repaintGrid();
     });
+  });
+
+  // Lightbox
+  document.getElementById('lb-close').addEventListener('click', closeLightbox);
+  document.getElementById('lb-prev').addEventListener('click',  () => lightboxStep(-1));
+  document.getElementById('lb-next').addEventListener('click',  () => lightboxStep( 1));
+  document.getElementById('lb-export').addEventListener('click', exportSinglePng);
+  dom.lbOverlay.addEventListener('click', e => { if (e.target === dom.lbOverlay) closeLightbox(); });
+
+  document.getElementById('lb-transforms').addEventListener('click', e => {
+    const btn = e.target.closest('.transform-btn');
+    if (!btn || state.selectedIndex === null) return;
+    const action = btn.dataset.action;
+    if (action === 'fullscreen') { openPresentation(state.selectedIndex); return; }
+    applyTransformAction(state.selectedIndex, action);
+    renderLightbox(state.selectedIndex);
+    repaintGridSlot(state.selectedIndex);
   });
 
   // Export buttons
@@ -1012,16 +1074,7 @@ function wireButtons() {
   // Grid header: hide empty
   document.getElementById('btn-hide-empty')?.addEventListener('click', toggleHideEmpty);
 
-  // Photo transform buttons
-  document.getElementById('photo-transforms')?.addEventListener('click', e => {
-    const btn = e.target.closest('.transform-btn');
-    if (!btn || state.selectedIndex === null) return;
-    const action = btn.dataset.action;
-    if (action === 'fullscreen') { openPresentation(state.selectedIndex); return; }
-    applyTransformAction(state.selectedIndex, action);
-    renderDetail(state.selectedIndex);
-    repaintGridSlot(state.selectedIndex);
-  });
+  // (Photo transform buttons are now in the lightbox footer — see #lb-transforms above)
 
   // Presentation overlay
   dom.presClose?.addEventListener('click', closePresentation);
@@ -1862,11 +1915,7 @@ function updateGifPreview() {
   const baseFrames = state.gifFrameOrder;
 
   if (!state.gifMode || baseFrames.length === 0) {
-    if (state.selectedIndex !== null) renderDetail(state.selectedIndex);
-    else {
-      dom.detailEmpty.style.display = 'flex';
-      dom.detailContent.classList.remove('visible');
-    }
+    if (dom.gifPreviewWrap) dom.gifPreviewWrap.classList.remove('visible');
     return;
   }
 
@@ -1877,8 +1926,7 @@ function updateGifPreview() {
     frames = [...baseFrames, ...mid];
   }
 
-  dom.detailEmpty.style.display = 'none';
-  dom.detailContent.classList.add('visible');
+  if (dom.gifPreviewWrap) dom.gifPreviewWrap.classList.add('visible');
 
   const PREVIEW_SCALE = 4;
   let frameIdx = 0;
@@ -1890,20 +1938,22 @@ function updateGifPreview() {
     const photo = state.photos[frameObj.photoIndex];
     if (!photo || photo.isEmpty) { frameIdx++; return; }
 
-    dom.detailCanvas.width  = GBCam.PHOTO_WIDTH  * PREVIEW_SCALE;
-    dom.detailCanvas.height = GBCam.PHOTO_HEIGHT * PREVIEW_SCALE;
-    const frameCtx = dom.detailCanvas.getContext('2d');
+    dom.gifPreviewCanvas.width  = GBCam.PHOTO_WIDTH  * PREVIEW_SCALE;
+    dom.gifPreviewCanvas.height = GBCam.PHOTO_HEIGHT * PREVIEW_SCALE;
+    const frameCtx = dom.gifPreviewCanvas.getContext('2d');
     const pal = frameObj.paletteId ? PALETTES[frameObj.paletteId] : state.palette;
     GBCam.renderToCanvas(frameCtx, photo.pixels, pal, PREVIEW_SCALE);
     if (state.exportFilter !== 'none') {
-      applyExportFilter(frameCtx, dom.detailCanvas.width, dom.detailCanvas.height, PREVIEW_SCALE,
+      applyExportFilter(frameCtx, dom.gifPreviewCanvas.width, dom.gifPreviewCanvas.height, PREVIEW_SCALE,
         state.exportFilter, state.filterIntensity, state.filterVariant);
     }
-    applyToneAdjustments(frameCtx, dom.detailCanvas.width, dom.detailCanvas.height);
+    applyToneAdjustments(frameCtx, dom.gifPreviewCanvas.width, dom.gifPreviewCanvas.height);
 
-    dom.detailLabel.textContent = 'GIF Preview';
     const palLabel = frameObj.paletteId ? ` · ${pal?.name}` : '';
-    dom.detailMeta.textContent  = `Frame ${n + 1}/${frames.length} · Photo ${frameObj.photoIndex + 1}${palLabel}${loopLabel}`;
+    if (dom.gifPreviewInfo) {
+      dom.gifPreviewInfo.textContent =
+        `Frame ${n + 1}/${frames.length} · Photo ${frameObj.photoIndex + 1}${palLabel}${loopLabel}`;
+    }
     frameIdx++;
   }
 
@@ -2157,9 +2207,8 @@ function setExportFilter(filter) {
   if (variantEl)  variantEl.style.display  = (filter === 'crt') ? '' : 'none';
   // Build per-filter granular controls
   buildFilterParams(filter);
-  // Re-render the live preview so the effect is visible immediately
-  if (state.gifMode && state.gifSelection.size > 0) updateGifPreview();
-  else if (state.selectedIndex !== null) renderDetail(state.selectedIndex);
+  // Repaint grid thumbnails + live views
+  repaintGrid();
 }
 
 /** Injects per-filter granular controls into #filter-params */
@@ -2171,10 +2220,7 @@ function buildFilterParams(filter) {
 
   const p = state.filterParams[filter] || {};
 
-  function repaint() {
-    if (state.gifMode && state.gifSelection.size > 0) updateGifPreview();
-    else if (state.selectedIndex !== null) renderDetail(state.selectedIndex);
-  }
+  function repaint() { repaintGrid(); }
 
   function addSlider(label, key, min, max, step, valFmt) {
     const wrap = document.createElement('div');
@@ -2874,17 +2920,18 @@ function setupKeyboard() {
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-    // Escape — close things
+    // Escape — close things (lightbox first, then others)
     if (e.key === 'Escape') {
       if (state.presentationMode)  { closePresentation(); return; }
+      if (state.lightboxOpen)      { closeLightbox(); return; }
       if (document.querySelector('#palette-grid-modal:not(.hidden)')) {
         document.getElementById('palette-grid-close')?.click(); return;
       }
       if (state.gifMode) { exitGifMode(); return; }
-      selectPhoto(null); return;
+      return;
     }
 
-    // Fullscreen
+    // Fullscreen (F)
     if (e.key === 'f' || e.key === 'F') {
       if (state.presentationMode) { closePresentation(); return; }
       if (state.selectedIndex !== null) { openPresentation(state.selectedIndex); return; }
@@ -2897,10 +2944,16 @@ function setupKeyboard() {
       return;
     }
 
+    // Lightbox arrow navigation
+    if (state.lightboxOpen) {
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); lightboxStep(-1); return; }
+      if (e.key === 'ArrowRight') { e.preventDefault(); lightboxStep( 1); return; }
+    }
+
     // Photo navigation (only when a file is loaded)
     if (state.photos.length === 0) return;
 
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    if (!state.lightboxOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       e.preventDefault();
       const filled = state.photos.map((p, i) => i).filter(i => !state.photos[i].isEmpty);
       if (filled.length === 0) return;
@@ -2913,20 +2966,17 @@ function setupKeyboard() {
         next = idx === filled.length - 1 ? filled[0] : filled[idx + 1];
       }
       selectPhoto(next);
-      // Scroll thumbnail into view
       dom.photoGrid.querySelector(`[data-index="${next}"]`)
         ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       return;
     }
 
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    if (!state.lightboxOpen && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
-      // Jump a row's worth of photos
       const all  = state.photos.map((p, i) => i).filter(i => !state.photos[i].isEmpty);
       if (all.length === 0) return;
       const cur  = state.selectedIndex ?? all[0];
       const curPos = all.indexOf(cur);
-      // Estimate row width from grid column count
       const cols = Math.max(1, Math.round(dom.photoGrid.offsetWidth /
         (dom.photoGrid.querySelector('.photo-slot')?.offsetWidth || 140)));
       const step = e.key === 'ArrowUp' ? -cols : cols;
@@ -2954,19 +3004,17 @@ function setupKeyboard() {
     const photo = state.photos[state.selectedIndex];
     if (!photo || photo.isEmpty) return;
 
-    if (e.key === 'r' && !e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-cw');  renderDetail(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
-    if (e.key === 'r' &&  e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-ccw'); renderDetail(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
-    if (e.key === 'h')                { applyTransformAction(state.selectedIndex, 'flip-h');      renderDetail(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
-    if (e.key === 'v')                { applyTransformAction(state.selectedIndex, 'flip-v');      renderDetail(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
+    if (e.key === 'r' && !e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-cw');  renderLightbox(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
+    if (e.key === 'r' &&  e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-ccw'); renderLightbox(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
+    if (e.key === 'h')                { applyTransformAction(state.selectedIndex, 'flip-h');      renderLightbox(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
+    if (e.key === 'v')                { applyTransformAction(state.selectedIndex, 'flip-v');      renderLightbox(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
   });
 }
 
 // ── Tone controls wiring ─────────────────────────────────────────────────────
 
 function setupToneControls() {
-  function redrawDetail() {
-    if (state.selectedIndex !== null) renderDetail(state.selectedIndex);
-  }
+  function redrawDetail() { repaintGrid(); }
 
   const brightnessEl   = document.getElementById('tone-brightness');
   const brightnessVal  = document.getElementById('tone-brightness-val');
