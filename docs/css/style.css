@@ -965,70 +965,72 @@ input[type="range"] {
   gap: 3px;
 }
 
-/* Favourite palette buttons */
+/* Favourite palette buttons — colour-only chips, no text */
 .fav-pal-btn {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  align-items: stretch;
+  gap: 0;
+  padding: 2px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   background: var(--surface-2);
-  color: var(--text);
-  font-size: 11px;
-  font-weight: 600;
   cursor: pointer;
   flex-shrink: 0;
-  white-space: nowrap;
-  transition: border-color 0.12s, background 0.12s, color 0.12s;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
-.fav-pal-btn:hover {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-  color: var(--accent);
-}
+.fav-pal-btn:hover { border-color: var(--accent); }
 .fav-pal-btn.active {
   border-color: var(--accent);
-  background: var(--accent);
-  color: #0f0f11;
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
-/* Swatch block inside fav button */
+/* Swatch block inside fav button — chunky tall bars */
 .fav-pal-swatch {
   display: flex;
-  gap: 2px;
-  align-items: center;
-  flex-shrink: 0;
+  gap: 0;
+  border-radius: 2px;
+  overflow: hidden;
 }
 .fav-pal-swatch span {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
+  width: 11px;
+  height: 20px;
   display: block;
 }
 
-.fav-pal-label {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* Name hidden — shown as title tooltip only */
+.fav-pal-label { display: none; }
 
-/* Unfav star — appears on hover, dimmed when inactive */
+/* Remove overlay — shown on hover as a dimmed ×  */
 .fav-pal-star {
-  background: none;
+  position: absolute;
+  inset: 0;
+  background: transparent;
   border: none;
-  padding: 0 0 0 4px;
-  font-size: 12px;
-  line-height: 1;
-  color: var(--accent);
+  color: transparent;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   opacity: 0;
-  flex-shrink: 0;
-  transition: opacity 0.12s, color 0.12s;
+  transition: opacity 0.12s, background 0.12s, color 0.12s;
+  z-index: 2;
+  padding: 0;
+  border-radius: 0;
 }
-.fav-pal-btn:hover .fav-pal-star { opacity: 0.55; }
-.fav-pal-star:hover { opacity: 1 !important; color: var(--danger); }
+.fav-pal-btn:hover .fav-pal-star {
+  opacity: 1;
+  background: rgba(0,0,0,0.5);
+  color: rgba(255,255,255,0.85);
+}
+.fav-pal-star:hover {
+  background: rgba(180, 30, 30, 0.88) !important;
+  color: #fff !important;
+  opacity: 1 !important;
+}
 
 /* Star button in picker dropdown */
 .pal-item-star {
@@ -1072,21 +1074,84 @@ input[type="range"] {
 .pgrid-star.starred { color: var(--accent); opacity: 1; }
 .pgrid-star:hover { color: var(--accent); opacity: 1; }
 
-/* Browse palette grid button — accent-outlined, matches fav button style */
+/* Browse palette grid button — accent-outlined with colourful mini-grid icon */
 #btn-palette-grid {
   font-size: 11px;
   font-weight: 600;
-  padding: 4px 10px;
+  padding: 3px 8px 3px 6px;
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-dim);
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 #btn-palette-grid:hover {
   background: var(--accent);
   color: #0f0f11;
   opacity: 1;
 }
+#btn-palette-grid .pgrid-icon {
+  flex-shrink: 0;
+  display: block;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* ── Current palette pin (top of picker dropdown) ─────────────────────────── */
+
+#pal-current-pin {
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.pal-pin-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-3);
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.pal-pin-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3, var(--surface-2));
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.pal-pin-item:hover { background: var(--accent-dim); }
+
+.pal-pin-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.pal-pin-star {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-3);
+  padding: 0 2px;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: color 0.12s, transform 0.1s;
+}
+.pal-pin-star.starred { color: var(--accent); }
+.pal-pin-star:hover { color: var(--accent); transform: scale(1.2); }
 
 /* ── Palette visual grid overlay ──────────────────────────────────────────── */
 
