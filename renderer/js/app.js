@@ -236,12 +236,8 @@ function renderGrid() {
       canvas.height = GBCam.PHOTO_HEIGHT;
       const ctx = canvas.getContext('2d');
       GBCam.renderToCanvas(ctx, photo.pixels, state.palette);
-      if (state.exportFilter !== 'none') {
-        // Use effective scale=2 min: at native res (scale=1) structural
-        // filters like CRT would darken every row. s=2 gives alternating rows.
-        applyExportFilter(ctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, 2,
-          state.exportFilter, state.filterIntensity, state.filterVariant);
-      }
+      // Filters not applied to thumbnails — too destructive at 128×112px.
+      // Tone adjustments are lightweight and fine at native res.
       applyToneAdjustments(ctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT);
       slot.appendChild(canvas);
 
@@ -302,14 +298,9 @@ function repaintGridSlot(index) {
   const canvas = slot.querySelector('canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  // Thumbnails rendered at native res (CSS handles upscale via image-rendering:pixelated)
+  // Thumbnails rendered at native res (CSS handles upscale via image-rendering:pixelated).
+  // Filters not applied to thumbnails — destructive at 128×112px. Tone is fine.
   GBCam.renderToCanvas(ctx, photo.pixels, state.palette);
-  // Apply current filter + tone so grid matches the export.
-  // Use effective scale=2 min — at native res s=1 would darken every row.
-  if (state.exportFilter !== 'none') {
-    applyExportFilter(ctx, canvas.width, canvas.height, 2,
-      state.exportFilter, state.filterIntensity, state.filterVariant);
-  }
   applyToneAdjustments(ctx, canvas.width, canvas.height);
   // Mark slot with transform badge if any transform applied
   slot.classList.toggle('has-transform', hasTransform(index));
@@ -1832,9 +1823,11 @@ function buildPalettePickerUI() {
     if (wrap && !wrap.contains(e.target)) closePalettePicker();
   });
 
-  // Close on Escape — also exits GIF mode / clears selections
+  // Close on Escape — also exits GIF mode / solo mode / clears selections
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      if (state.lightboxOpen) { closeLightbox(); return; }
+      if (state.viewMode === 'solo') { enterGridMode(); return; }
       if (state.gifMode) {
         // Exit GIF mode and reset format buttons back to PNG
         setExportFormat('png');
@@ -2161,17 +2154,6 @@ function renderFavPalettes() {
       setPalette(id);
       renderFavPalettes(); // refresh active state
     });
-
-    // Remove overlay — click the × to unfav
-    const starBtn = document.createElement('button');
-    starBtn.className = 'fav-pal-star';
-    starBtn.textContent = '×';
-    starBtn.title = 'Remove from favourites';
-    starBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      toggleFavPalette(id);
-    });
-    btn.appendChild(starBtn);
 
     container.appendChild(btn);
   }
@@ -3141,7 +3123,7 @@ function setupKeyboard() {
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
-    // Escape — close things (lightbox first, then others)
+    // Escape — close things (outermost layer first)
     if (e.key === 'Escape') {
       if (state.presentationMode)  { closePresentation(); return; }
       if (state.lightboxOpen)      { closeLightbox(); return; }
@@ -3149,6 +3131,7 @@ function setupKeyboard() {
         document.getElementById('palette-grid-close')?.click(); return;
       }
       if (state.gifMode) { exitGifMode(); return; }
+      if (state.viewMode === 'solo') { enterGridMode(); return; }
       return;
     }
 
@@ -3234,7 +3217,8 @@ function setupKeyboard() {
     if (!photo || photo.isEmpty) return;
 
     if (e.key === 'r' && !e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-cw');  _repaintAfterTransform(state.selectedIndex); }
-    if (e.key === 'r' &&  e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-ccw'); _repaintAfterTransform(state.selectedIndex); }
+    if (e.key === 'l')                { applyTransformAction(state.selectedIndex, 'rotate-ccw'); _repaintAfterTransform(state.selectedIndex); }
+    if (e.key === 'r' &&  e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-ccw'); _repaintAfterTransform(state.selectedIndex); } // kept for compat
     if (e.key === 'h')                { applyTransformAction(state.selectedIndex, 'flip-h');      _repaintAfterTransform(state.selectedIndex); }
     if (e.key === 'v')                { applyTransformAction(state.selectedIndex, 'flip-v');      _repaintAfterTransform(state.selectedIndex); }
   });
