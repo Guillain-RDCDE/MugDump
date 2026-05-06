@@ -43,6 +43,7 @@ const state = {
   gifLoop: 'infinite',     // 'infinite' | 'once' | 'bounce'
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
   lightboxOpen: false,     // lightbox overlay visible
+  viewMode: 'grid',        // 'grid' | 'solo'
   // Tone adjustments
   brightness:      0,      // -100 to +100
   contrast:        0,      // -100 to +100
@@ -69,6 +70,11 @@ const dom = {
   lbCanvas:        document.getElementById('lb-canvas'),
   lbLabel:         document.getElementById('lb-label'),
   lbMeta:          document.getElementById('lb-meta'),
+  gridPanel:       document.getElementById('grid-panel'),
+  soloView:        document.getElementById('solo-view'),
+  soloCanvas:      document.getElementById('solo-canvas'),
+  soloLabel:       document.getElementById('solo-label'),
+  soloMeta:        document.getElementById('solo-meta'),
   gifToolbar:      document.getElementById('gif-toolbar'),
   gifFrameStrip:   document.getElementById('gif-frame-strip'),
   gifFrameList:    document.getElementById('gif-frame-list'),
@@ -231,7 +237,9 @@ function renderGrid() {
       const ctx = canvas.getContext('2d');
       GBCam.renderToCanvas(ctx, photo.pixels, state.palette);
       if (state.exportFilter !== 'none') {
-        applyExportFilter(ctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, 1,
+        // Use effective scale=2 min: at native res (scale=1) structural
+        // filters like CRT would darken every row. s=2 gives alternating rows.
+        applyExportFilter(ctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, 2,
           state.exportFilter, state.filterIntensity, state.filterVariant);
       }
       applyToneAdjustments(ctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT);
@@ -266,7 +274,7 @@ function renderGrid() {
   updateGifFrameNumbers();
 }
 
-// Re-render all canvases when palette changes (without rebuilding the DOM)
+// Re-render all canvases when palette/filter/tone changes (without rebuilding the DOM)
 function repaintGrid() {
   const slots = dom.photoGrid.querySelectorAll('.photo-slot:not(.empty)');
   for (const slot of slots) {
@@ -276,7 +284,11 @@ function repaintGrid() {
   // Repaint live views
   if (state.gifMode && state.gifSelection.size > 0) {
     updateGifPreview();
-  } else if (state.lightboxOpen && state.selectedIndex !== null) {
+  }
+  if (state.viewMode === 'solo' && state.selectedIndex !== null) {
+    renderSoloView(state.selectedIndex);
+  }
+  if (state.lightboxOpen && state.selectedIndex !== null) {
     renderLightbox(state.selectedIndex);
   }
 }
@@ -292,9 +304,10 @@ function repaintGridSlot(index) {
   const ctx = canvas.getContext('2d');
   // Thumbnails rendered at native res (CSS handles upscale via image-rendering:pixelated)
   GBCam.renderToCanvas(ctx, photo.pixels, state.palette);
-  // Apply current filter + tone so grid matches the export
+  // Apply current filter + tone so grid matches the export.
+  // Use effective scale=2 min — at native res s=1 would darken every row.
   if (state.exportFilter !== 'none') {
-    applyExportFilter(ctx, canvas.width, canvas.height, 1,
+    applyExportFilter(ctx, canvas.width, canvas.height, 2,
       state.exportFilter, state.filterIntensity, state.filterVariant);
   }
   applyToneAdjustments(ctx, canvas.width, canvas.height);
@@ -318,7 +331,11 @@ function selectPhoto(index) {
   if (slot) slot.classList.add('selected');
 
   state.selectedIndex = index;
-  openLightbox(index);
+
+  if (state.viewMode === 'solo') {
+    renderSoloView(index);
+  }
+  // Lightbox no longer auto-opens on grid click — use F key or the ⛶ button
 }
 
 // ── Detail / lightbox rendering ───────────────────────────────────────────────
@@ -329,6 +346,94 @@ function renderDetail(index) {
   if (state.lightboxOpen && index !== null && index === state.selectedIndex) {
     renderLightbox(index);
   }
+}
+
+// ── Solo view ─────────────────────────────────────────────────────────────────
+
+function enterSoloMode() {
+  state.viewMode = 'solo';
+  dom.gridPanel.classList.add('solo-mode');
+  document.getElementById('btn-view-grid')?.classList.remove('active');
+  document.getElementById('btn-view-solo')?.classList.add('active');
+
+  // Auto-select first non-empty photo if nothing selected
+  if (state.selectedIndex === null) {
+    const first = state.photos.findIndex(p => !p.isEmpty);
+    if (first >= 0) {
+      state.selectedIndex = first;
+      dom.photoGrid.querySelector(`[data-index="${first}"]`)?.classList.add('selected');
+    }
+  }
+  if (state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+}
+
+function enterGridMode() {
+  state.viewMode = 'grid';
+  dom.gridPanel.classList.remove('solo-mode');
+  document.getElementById('btn-view-grid')?.classList.add('active');
+  document.getElementById('btn-view-solo')?.classList.remove('active');
+  // Scroll selected photo into view
+  if (state.selectedIndex !== null) {
+    dom.photoGrid.querySelector(`[data-index="${state.selectedIndex}"]`)
+      ?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+function renderSoloView(index) {
+  const photo = state.photos[index];
+  if (!photo || photo.isEmpty) return;
+
+  const wrap = dom.soloCanvas?.parentElement;
+  if (!wrap || !dom.soloCanvas) return;
+
+  // Calculate largest integer scale that fits the available canvas area
+  const availW = wrap.clientWidth  - 8;  // minor padding
+  const availH = wrap.clientHeight - 8;
+  const scaleW = Math.max(1, Math.floor(availW / GBCam.PHOTO_WIDTH));
+  const scaleH = Math.max(1, Math.floor(availH / GBCam.PHOTO_HEIGHT));
+  const SOLO_SCALE = Math.max(1, Math.min(scaleW, scaleH));
+
+  const ctx = dom.soloCanvas.getContext('2d');
+  renderPhotoWithTransform(ctx, photo, state.palette, SOLO_SCALE, index);
+
+  const w = dom.soloCanvas.width, h = dom.soloCanvas.height;
+  if (state.exportFilter !== 'none') {
+    applyExportFilter(ctx, w, h, SOLO_SCALE,
+      state.exportFilter, state.filterIntensity, state.filterVariant);
+  }
+  applyToneAdjustments(ctx, w, h);
+
+  // Update info strip
+  if (dom.soloLabel) dom.soloLabel.textContent = `Photo ${index + 1}`;
+  if (dom.soloMeta) {
+    const t = getTransform(index);
+    const rotLabel  = t.rotate ? ` · ${t.rotate}°` : '';
+    const flipLabel = (t.flipH || t.flipV) ? ` · flipped` : '';
+    dom.soloMeta.textContent = `${GBCam.PHOTO_WIDTH}×${GBCam.PHOTO_HEIGHT}px · slot ${index + 1}/30${rotLabel}${flipLabel}`;
+  }
+  // Sync transform button active states
+  document.querySelectorAll('#solo-transforms .transform-btn').forEach(btn => {
+    const t2 = getTransform(index);
+    if (btn.dataset.action === 'flip-h') btn.classList.toggle('active', t2.flipH);
+    if (btn.dataset.action === 'flip-v') btn.classList.toggle('active', t2.flipV);
+  });
+}
+
+function soloStep(dir) {
+  const photos = state.photos;
+  let idx = state.selectedIndex ?? 0;
+  let tries = 0;
+  while (tries < 30) {
+    idx = ((idx + dir + photos.length) % photos.length);
+    if (!photos[idx]?.isEmpty) break;
+    tries++;
+  }
+  if (photos[idx]?.isEmpty) return;
+
+  dom.photoGrid.querySelectorAll('.photo-slot').forEach(el => el.classList.remove('selected'));
+  dom.photoGrid.querySelector(`[data-index="${idx}"]`)?.classList.add('selected');
+  state.selectedIndex = idx;
+  renderSoloView(idx);
 }
 
 // ── Lightbox ──────────────────────────────────────────────────────────────────
@@ -1053,8 +1158,23 @@ function wireButtons() {
     const action = btn.dataset.action;
     if (action === 'fullscreen') { openPresentation(state.selectedIndex); return; }
     applyTransformAction(state.selectedIndex, action);
-    renderLightbox(state.selectedIndex);
-    repaintGridSlot(state.selectedIndex);
+    _repaintAfterTransform(state.selectedIndex);
+  });
+
+  // View mode toggle (Grid / Solo)
+  document.getElementById('btn-view-grid')?.addEventListener('click', enterGridMode);
+  document.getElementById('btn-view-solo')?.addEventListener('click', enterSoloMode);
+
+  // Solo navigation + transforms
+  document.getElementById('solo-prev')?.addEventListener('click', () => soloStep(-1));
+  document.getElementById('solo-next')?.addEventListener('click', () => soloStep( 1));
+  document.getElementById('solo-transforms')?.addEventListener('click', e => {
+    const btn = e.target.closest('.transform-btn');
+    if (!btn || state.selectedIndex === null) return;
+    const action = btn.dataset.action;
+    if (action === 'fullscreen') { openPresentation(state.selectedIndex); return; }
+    applyTransformAction(state.selectedIndex, action);
+    _repaintAfterTransform(state.selectedIndex);
   });
 
   // Export buttons
@@ -3006,6 +3126,13 @@ function duplicateGifFrame(orderIdx) {
   updateGifPreview();
 }
 
+// Repaint all views after a transform action
+function _repaintAfterTransform(index) {
+  repaintGridSlot(index);
+  if (state.viewMode === 'solo') renderSoloView(index);
+  if (state.lightboxOpen) renderLightbox(index);
+}
+
 // ── Keyboard navigation ────────────────────────────────────────────────────────
 
 function setupKeyboard() {
@@ -3044,10 +3171,18 @@ function setupKeyboard() {
       if (e.key === 'ArrowRight') { e.preventDefault(); lightboxStep( 1); return; }
     }
 
+    // Solo view arrow navigation
+    if (state.viewMode === 'solo' && !state.lightboxOpen) {
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); soloStep(-1); return; }
+      if (e.key === 'ArrowRight') { e.preventDefault(); soloStep( 1); return; }
+      if (e.key === 'ArrowUp')    { e.preventDefault(); soloStep(-1); return; }
+      if (e.key === 'ArrowDown')  { e.preventDefault(); soloStep( 1); return; }
+    }
+
     // Photo navigation (only when a file is loaded)
     if (state.photos.length === 0) return;
 
-    if (!state.lightboxOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    if (!state.lightboxOpen && state.viewMode === 'grid' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
       e.preventDefault();
       const filled = state.photos.map((p, i) => i).filter(i => !state.photos[i].isEmpty);
       if (filled.length === 0) return;
@@ -3065,7 +3200,7 @@ function setupKeyboard() {
       return;
     }
 
-    if (!state.lightboxOpen && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    if (!state.lightboxOpen && state.viewMode === 'grid' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
       const all  = state.photos.map((p, i) => i).filter(i => !state.photos[i].isEmpty);
       if (all.length === 0) return;
@@ -3098,10 +3233,10 @@ function setupKeyboard() {
     const photo = state.photos[state.selectedIndex];
     if (!photo || photo.isEmpty) return;
 
-    if (e.key === 'r' && !e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-cw');  renderLightbox(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
-    if (e.key === 'r' &&  e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-ccw'); renderLightbox(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
-    if (e.key === 'h')                { applyTransformAction(state.selectedIndex, 'flip-h');      renderLightbox(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
-    if (e.key === 'v')                { applyTransformAction(state.selectedIndex, 'flip-v');      renderLightbox(state.selectedIndex); repaintGridSlot(state.selectedIndex); }
+    if (e.key === 'r' && !e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-cw');  _repaintAfterTransform(state.selectedIndex); }
+    if (e.key === 'r' &&  e.shiftKey) { applyTransformAction(state.selectedIndex, 'rotate-ccw'); _repaintAfterTransform(state.selectedIndex); }
+    if (e.key === 'h')                { applyTransformAction(state.selectedIndex, 'flip-h');      _repaintAfterTransform(state.selectedIndex); }
+    if (e.key === 'v')                { applyTransformAction(state.selectedIndex, 'flip-v');      _repaintAfterTransform(state.selectedIndex); }
   });
 }
 
