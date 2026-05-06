@@ -44,6 +44,8 @@ const state = {
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
   lightboxOpen: false,     // lightbox overlay visible
   viewMode: 'grid',        // 'grid' | 'solo'
+  applyScope: 'all',       // 'all' | 'photo' — whether controls write to global or this photo
+  photoSettings: {},       // { [photoIndex]: { paletteId?, exportFilter?, filterIntensity?, filterVariant?, filterParams?, brightness?, contrast?, toneIntensity?, shadowColor?, highlightColor?, toneBalance? } }
   // Tone adjustments
   brightness:      0,      // -100 to +100
   contrast:        0,      // -100 to +100
@@ -107,6 +109,155 @@ function showToast(msg) {
   toastTimer = setTimeout(() => dom.toast.classList.remove('visible'), 2500);
 }
 
+// ── Per-photo settings helpers ─────────────────────────────────────────────
+
+/** Returns a merged settings object for rendering photo at `index`.
+ *  Per-photo overrides take precedence over global state. */
+function getEffectiveSettings(index) {
+  const ps = state.photoSettings[index];
+  if (!ps) {
+    return {
+      palette:        state.palette,
+      exportFilter:   state.exportFilter,
+      filterIntensity:state.filterIntensity,
+      filterVariant:  state.filterVariant,
+      filterParams:   state.filterParams,
+      brightness:     state.brightness,
+      contrast:       state.contrast,
+      toneIntensity:  state.toneIntensity,
+      shadowColor:    state.shadowColor,
+      highlightColor: state.highlightColor,
+      toneBalance:    state.toneBalance,
+    };
+  }
+  return {
+    palette:        ps.paletteId ? (PALETTES[ps.paletteId] || state.palette) : state.palette,
+    exportFilter:   ps.exportFilter   ?? state.exportFilter,
+    filterIntensity:ps.filterIntensity ?? state.filterIntensity,
+    filterVariant:  ps.filterVariant  ?? state.filterVariant,
+    filterParams:   ps.filterParams   ?? state.filterParams,
+    brightness:     ps.brightness     ?? state.brightness,
+    contrast:       ps.contrast       ?? state.contrast,
+    toneIntensity:  ps.toneIntensity  ?? state.toneIntensity,
+    shadowColor:    ps.shadowColor    ?? state.shadowColor,
+    highlightColor: ps.highlightColor ?? state.highlightColor,
+    toneBalance:    ps.toneBalance    ?? state.toneBalance,
+  };
+}
+
+/** Write a setting to the per-photo override or global state, depending on scope. */
+function setScopedSetting(key, value) {
+  if (state.applyScope === 'photo' && state.selectedIndex !== null) {
+    if (!state.photoSettings[state.selectedIndex]) state.photoSettings[state.selectedIndex] = {};
+    state.photoSettings[state.selectedIndex][key] = value;
+  } else {
+    state[key] = value;
+  }
+}
+
+/** Returns the filterParams object that event handlers should mutate for the current scope/photo. */
+function getWritableFilterParams(filter) {
+  if (state.applyScope === 'photo' && state.selectedIndex !== null) {
+    const idx = state.selectedIndex;
+    if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+    if (!state.photoSettings[idx].filterParams) {
+      // inherit a deep copy of current global params so defaults are preserved
+      state.photoSettings[idx].filterParams = JSON.parse(JSON.stringify(state.filterParams));
+    }
+    const fp = state.photoSettings[idx].filterParams;
+    if (!fp[filter]) fp[filter] = {};
+    return fp[filter];
+  }
+  if (!state.filterParams[filter]) state.filterParams[filter] = {};
+  return state.filterParams[filter];
+}
+
+/** True when photo at `index` has any per-photo setting override. */
+function hasPhotoOverride(index) {
+  const ps = state.photoSettings[index];
+  if (!ps) return false;
+  return Object.keys(ps).some(k => ps[k] !== undefined && (k !== 'filterParams' || Object.keys(ps[k]).length > 0));
+}
+
+/** Remove all per-photo overrides for `index`. */
+function clearPhotoOverride(index) {
+  delete state.photoSettings[index];
+}
+
+/** Returns the palette id that should be shown as "active" in the picker, given current scope. */
+function getDisplayPaletteId() {
+  if (state.applyScope === 'photo' && state.selectedIndex !== null) {
+    return getEffectiveSettings(state.selectedIndex).palette?.id || state.palette.id;
+  }
+  return state.palette.id;
+}
+
+/** Sync all right-panel controls to reflect the effective settings for `index`.
+ *  Called when scope='photo' and the selected photo changes, or scope toggles. */
+function syncControlsToEffectiveSettings(index) {
+  if (index === null || index === undefined) return;
+  const eff = getEffectiveSettings(index);
+
+  // Palette picker button
+  updatePalettePickerBtn(eff.palette);
+  // Picker list active state
+  const effPalId = eff.palette?.id;
+  document.querySelectorAll('.pal-item').forEach(item => {
+    item.classList.toggle('active', item.dataset.palette === effPalId);
+  });
+  updateCurrentPalettePin();
+
+  // Filter buttons
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === eff.exportFilter);
+  });
+
+  // Intensity slider
+  const intSlider = document.getElementById('filter-intensity');
+  const intVal    = document.getElementById('filter-intensity-val');
+  if (intSlider) intSlider.value = Math.round(eff.filterIntensity * 100);
+  if (intVal)    intVal.textContent = `${Math.round(eff.filterIntensity * 100)}%`;
+
+  // CRT variant buttons
+  document.querySelectorAll('.crt-variant-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.variant === eff.filterVariant);
+  });
+
+  // Rebuild filter param UI (reads from getWritableFilterParams in current scope)
+  buildFilterParams(eff.exportFilter);
+
+  // Tone controls
+  const bEl  = document.getElementById('tone-brightness');
+  const bVal = document.getElementById('tone-brightness-val');
+  if (bEl)  bEl.value = eff.brightness;
+  if (bVal) bVal.textContent = eff.brightness > 0 ? `+${eff.brightness}` : String(eff.brightness);
+
+  const cEl  = document.getElementById('tone-contrast');
+  const cVal = document.getElementById('tone-contrast-val');
+  if (cEl)  cEl.value = eff.contrast;
+  if (cVal) cVal.textContent = eff.contrast > 0 ? `+${eff.contrast}` : String(eff.contrast);
+
+  const tiEl  = document.getElementById('tone-intensity');
+  const tiVal = document.getElementById('tone-intensity-val');
+  if (tiEl)  tiEl.value = eff.toneIntensity;
+  if (tiVal) tiVal.textContent = `${eff.toneIntensity}%`;
+
+  const scEl = document.getElementById('tone-shadow-color');
+  if (scEl)  scEl.value = eff.shadowColor;
+
+  const hcEl = document.getElementById('tone-highlight-color');
+  if (hcEl)  hcEl.value = eff.highlightColor;
+
+  const balEl  = document.getElementById('tone-balance');
+  const balVal = document.getElementById('tone-balance-val');
+  if (balEl)  balEl.value = eff.toneBalance;
+  if (balVal) balVal.textContent = eff.toneBalance > 0 ? `+${eff.toneBalance}` : String(eff.toneBalance);
+
+  // Scope reset button visibility
+  const resetScopeBtn = document.getElementById('btn-scope-reset');
+  if (resetScopeBtn) resetScopeBtn.classList.toggle('hidden', !hasPhotoOverride(index));
+}
+
 // ── Status bar ─────────────────────────────────────────────────────────────
 
 function setStatus(text, active = false) {
@@ -134,6 +285,7 @@ async function loadSavFile(result) {
   state.gifMode = false;
   state.gifSelection.clear();
   state.photoTransforms = {}; // reset transforms on new file load
+  state.photoSettings   = {}; // reset per-photo overrides on new file load
   if (filePath) saveLastSavPath(filePath);
 
   renderGrid();
@@ -235,10 +387,11 @@ function renderGrid() {
       canvas.width  = GBCam.PHOTO_WIDTH;
       canvas.height = GBCam.PHOTO_HEIGHT;
       const ctx = canvas.getContext('2d');
-      GBCam.renderToCanvas(ctx, photo.pixels, state.palette);
+      const effThumb = getEffectiveSettings(photo.index);
+      GBCam.renderToCanvas(ctx, photo.pixels, effThumb.palette);
       // Filters not applied to thumbnails — too destructive at 128×112px.
       // Tone adjustments are lightweight and fine at native res.
-      applyToneAdjustments(ctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT);
+      applyToneAdjustments(ctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, effThumb);
       slot.appendChild(canvas);
 
       // GIF selection (invisible div for event delegation; frame number via data attr)
@@ -300,10 +453,12 @@ function repaintGridSlot(index) {
   const ctx = canvas.getContext('2d');
   // Thumbnails rendered at native res (CSS handles upscale via image-rendering:pixelated).
   // Filters not applied to thumbnails — destructive at 128×112px. Tone is fine.
-  GBCam.renderToCanvas(ctx, photo.pixels, state.palette);
-  applyToneAdjustments(ctx, canvas.width, canvas.height);
-  // Mark slot with transform badge if any transform applied
-  slot.classList.toggle('has-transform', hasTransform(index));
+  const eff = getEffectiveSettings(index);
+  GBCam.renderToCanvas(ctx, photo.pixels, eff.palette);
+  applyToneAdjustments(ctx, canvas.width, canvas.height, eff);
+  // Slot badges
+  slot.classList.toggle('has-transform',      hasTransform(index));
+  slot.classList.toggle('has-photo-settings', hasPhotoOverride(index));
 }
 
 // ── Photo selection ─────────────────────────────────────────────────────────
@@ -325,6 +480,11 @@ function selectPhoto(index) {
 
   if (state.viewMode === 'solo') {
     renderSoloView(index);
+  }
+
+  // Sync right-panel controls to show effective settings for this photo
+  if (state.applyScope === 'photo') {
+    syncControlsToEffectiveSettings(index);
   }
   // Lightbox no longer auto-opens on grid click — use F key or the ⛶ button
 }
@@ -385,14 +545,15 @@ function renderSoloView(index) {
   const SOLO_SCALE = Math.max(1, Math.min(scaleW, scaleH));
 
   const ctx = dom.soloCanvas.getContext('2d');
-  renderPhotoWithTransform(ctx, photo, state.palette, SOLO_SCALE, index);
+  const effSolo = getEffectiveSettings(index);
+  renderPhotoWithTransform(ctx, photo, effSolo.palette, SOLO_SCALE, index);
 
   const w = dom.soloCanvas.width, h = dom.soloCanvas.height;
-  if (state.exportFilter !== 'none') {
+  if (effSolo.exportFilter !== 'none') {
     applyExportFilter(ctx, w, h, SOLO_SCALE,
-      state.exportFilter, state.filterIntensity, state.filterVariant);
+      effSolo.exportFilter, effSolo.filterIntensity, effSolo.filterVariant, effSolo.filterParams);
   }
-  applyToneAdjustments(ctx, w, h);
+  applyToneAdjustments(ctx, w, h, effSolo);
 
   // Update info strip
   if (dom.soloLabel) dom.soloLabel.textContent = `Photo ${index + 1}`;
@@ -448,14 +609,15 @@ function renderLightbox(index) {
 
   const PREVIEW_SCALE = 8;
   const ctx = dom.lbCanvas.getContext('2d');
-  renderPhotoWithTransform(ctx, photo, state.palette, PREVIEW_SCALE, index);
+  const effLb = getEffectiveSettings(index);
+  renderPhotoWithTransform(ctx, photo, effLb.palette, PREVIEW_SCALE, index);
 
   const w = dom.lbCanvas.width, h = dom.lbCanvas.height;
-  if (state.exportFilter !== 'none') {
+  if (effLb.exportFilter !== 'none') {
     applyExportFilter(ctx, w, h, PREVIEW_SCALE,
-      state.exportFilter, state.filterIntensity, state.filterVariant);
+      effLb.exportFilter, effLb.filterIntensity, effLb.filterVariant, effLb.filterParams);
   }
-  applyToneAdjustments(ctx, w, h);
+  applyToneAdjustments(ctx, w, h, effLb);
 
   dom.lbLabel.textContent = `Photo ${index + 1}`;
   const t = getTransform(index);
@@ -496,22 +658,28 @@ function lightboxStep(dir) {
 // ── Palette ─────────────────────────────────────────────────────────────────
 
 function setPalette(id) {
-  state.palette = PALETTES[id];
+  if (state.applyScope === 'photo' && state.selectedIndex !== null) {
+    if (!state.photoSettings[state.selectedIndex]) state.photoSettings[state.selectedIndex] = {};
+    state.photoSettings[state.selectedIndex].paletteId = id;
+  } else {
+    state.palette = PALETTES[id];
+  }
   addRecentPalette(id);
-  updatePalettePickerBtn();
+  const displayId = getDisplayPaletteId();
+  updatePalettePickerBtn(PALETTES[displayId] || state.palette);
   renderFavPalettes();
   // Update active highlight in dropdown list
   document.querySelectorAll('.pal-item').forEach(item => {
-    item.classList.toggle('active', item.dataset.palette === id);
-    if (item.dataset.palette === id) {
+    item.classList.toggle('active', item.dataset.palette === displayId);
+    if (item.dataset.palette === displayId) {
       item.querySelector('.pal-item-name').style.color = '';
     }
   });
   repaintGrid();
 }
 
-function updatePalettePickerBtn() {
-  const pal    = state.palette;
+function updatePalettePickerBtn(pal) {
+  pal = pal || state.palette;
   const swatch = document.getElementById('palette-picker-swatch');
   const nameEl = document.getElementById('palette-picker-name');
 
@@ -602,18 +770,18 @@ async function exportSinglePng() {
 
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
-  // renderPhotoWithTransform sets canvas.width/height including rotation
-  renderPhotoWithTransform(ctx, photo, state.palette, scale, index);
+  const effExp = getEffectiveSettings(index);
+  renderPhotoWithTransform(ctx, photo, effExp.palette, scale, index);
 
   const { width, height } = { width: canvas.width, height: canvas.height };
   applyExportFilter(ctx, width, height, scale,
-    state.exportFilter, state.filterIntensity, state.filterVariant);
-  applyToneAdjustments(ctx, width, height);
+    effExp.exportFilter, effExp.filterIntensity, effExp.filterVariant, effExp.filterParams);
+  applyToneAdjustments(ctx, width, height, effExp);
 
   const dataUrl = canvas.toDataURL('image/png');
-  const filterTag = state.exportFilter !== 'none' ? `_${state.exportFilter}` : '';
+  const filterTag = effExp.exportFilter !== 'none' ? `_${effExp.exportFilter}` : '';
   const scaleTag = state.exportScale === 'custom' ? `${width}px` : `${state.exportScale}x`;
-  const defaultName = `gbcam_${String(index + 1).padStart(2, '0')}_${state.palette.id}_${scaleTag}${filterTag}.png`;
+  const defaultName = `gbcam_${String(index + 1).padStart(2, '0')}_${effExp.palette.id}_${scaleTag}${filterTag}.png`;
 
   const saved = await window.api.savePng(dataUrl, defaultName);
   if (saved) showToast(`Saved: ${typeof saved === 'string' ? saved.split('/').pop() : saved}`);
@@ -635,12 +803,14 @@ async function exportBatchPng() {
   for (const photo of photos) {
     const canvas = document.createElement('canvas');
     const ctx    = canvas.getContext('2d');
-    renderPhotoWithTransform(ctx, photo, state.palette, batchScale, photo.index);
+    const effBatch = getEffectiveSettings(photo.index);
+    renderPhotoWithTransform(ctx, photo, effBatch.palette, batchScale, photo.index);
     applyExportFilter(ctx, canvas.width, canvas.height, batchScale,
-      state.exportFilter, state.filterIntensity, state.filterVariant);
-    applyToneAdjustments(ctx, canvas.width, canvas.height);
+      effBatch.exportFilter, effBatch.filterIntensity, effBatch.filterVariant, effBatch.filterParams);
+    applyToneAdjustments(ctx, canvas.width, canvas.height, effBatch);
     const dataUrl = canvas.toDataURL('image/png');
-    const name = `gbcam_${String(photo.index + 1).padStart(2, '0')}_${state.palette.id}_${scaleTag}${filterTag}.png`;
+    const phFilterTag = effBatch.exportFilter !== 'none' ? `_${effBatch.exportFilter}` : '';
+    const name = `gbcam_${String(photo.index + 1).padStart(2, '0')}_${effBatch.palette.id}_${scaleTag}${phFilterTag}.png`;
     batch.push({ dataUrl, name });
   }
 
@@ -1120,7 +1290,7 @@ function wireButtons() {
   const intensityVal    = document.getElementById('filter-intensity-val');
   if (intensitySlider) {
     intensitySlider.addEventListener('input', () => {
-      state.filterIntensity = intensitySlider.value / 100;
+      setScopedSetting('filterIntensity', intensitySlider.value / 100);
       if (intensityVal) intensityVal.textContent = `${intensitySlider.value}%`;
       repaintGrid();
     });
@@ -1129,9 +1299,9 @@ function wireButtons() {
   // CRT scanline variant buttons
   document.querySelectorAll('.crt-variant-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      state.filterVariant = btn.dataset.variant;
+      setScopedSetting('filterVariant', btn.dataset.variant);
       document.querySelectorAll('.crt-variant-btn').forEach(b =>
-        b.classList.toggle('active', b.dataset.variant === state.filterVariant));
+        b.classList.toggle('active', b.dataset.variant === btn.dataset.variant));
       repaintGrid();
     });
   });
@@ -1173,6 +1343,38 @@ function wireButtons() {
   document.getElementById('btn-export-all').addEventListener('click', exportBatchPng);
   document.getElementById('btn-export-gif').addEventListener('click', exportGif);
   document.getElementById('btn-contact-sheet')?.addEventListener('click', exportContactSheet);
+
+  // Scope toggle (All Photos / This Photo)
+  document.getElementById('btn-scope-all')?.addEventListener('click', () => {
+    state.applyScope = 'all';
+    document.getElementById('btn-scope-all')?.classList.add('active');
+    document.getElementById('btn-scope-photo')?.classList.remove('active');
+    document.getElementById('btn-scope-reset')?.classList.add('hidden');
+    // Restore right-panel controls to global state
+    updatePalettePickerBtn();
+    const globalId = state.palette.id;
+    document.querySelectorAll('.pal-item').forEach(item =>
+      item.classList.toggle('active', item.dataset.palette === globalId));
+    updateCurrentPalettePin();
+  });
+  document.getElementById('btn-scope-photo')?.addEventListener('click', () => {
+    state.applyScope = 'photo';
+    document.getElementById('btn-scope-photo')?.classList.add('active');
+    document.getElementById('btn-scope-all')?.classList.remove('active');
+    if (state.selectedIndex !== null) {
+      syncControlsToEffectiveSettings(state.selectedIndex);
+    }
+  });
+  document.getElementById('btn-scope-reset')?.addEventListener('click', () => {
+    if (state.selectedIndex === null) return;
+    clearPhotoOverride(state.selectedIndex);
+    repaintGridSlot(state.selectedIndex);
+    if (state.viewMode === 'solo') renderSoloView(state.selectedIndex);
+    if (state.lightboxOpen) renderLightbox(state.selectedIndex);
+    syncControlsToEffectiveSettings(state.selectedIndex);
+    document.getElementById('btn-scope-reset')?.classList.add('hidden');
+    showToast('Per-photo settings cleared');
+  });
 
   // Tone controls
   setupToneControls();
@@ -2056,13 +2258,14 @@ function updateGifPreview() {
     dom.gifPreviewCanvas.width  = GBCam.PHOTO_WIDTH  * PREVIEW_SCALE;
     dom.gifPreviewCanvas.height = GBCam.PHOTO_HEIGHT * PREVIEW_SCALE;
     const frameCtx = dom.gifPreviewCanvas.getContext('2d');
-    const pal = frameObj.paletteId ? PALETTES[frameObj.paletteId] : state.palette;
+    const effGif = getEffectiveSettings(frameObj.photoIndex);
+    const pal = frameObj.paletteId ? PALETTES[frameObj.paletteId] : effGif.palette;
     GBCam.renderToCanvas(frameCtx, photo.pixels, pal, PREVIEW_SCALE);
-    if (state.exportFilter !== 'none') {
+    if (effGif.exportFilter !== 'none') {
       applyExportFilter(frameCtx, dom.gifPreviewCanvas.width, dom.gifPreviewCanvas.height, PREVIEW_SCALE,
-        state.exportFilter, state.filterIntensity, state.filterVariant);
+        effGif.exportFilter, effGif.filterIntensity, effGif.filterVariant, effGif.filterParams);
     }
-    applyToneAdjustments(frameCtx, dom.gifPreviewCanvas.width, dom.gifPreviewCanvas.height);
+    applyToneAdjustments(frameCtx, dom.gifPreviewCanvas.width, dom.gifPreviewCanvas.height, effGif);
 
     const palLabel = frameObj.paletteId ? ` · ${pal?.name}` : '';
     if (dom.gifPreviewInfo) {
@@ -2392,7 +2595,7 @@ function filterPaletteGrid(query) {
 // ── Export filters / effects ───────────────────────────────────────────────
 
 function setExportFilter(filter) {
-  state.exportFilter = filter;
+  setScopedSetting('exportFilter', filter);
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.filter === filter);
   });
@@ -2414,7 +2617,7 @@ function buildFilterParams(filter) {
   container.innerHTML = '';
   if (!filter || filter === 'none') return;
 
-  const p = state.filterParams[filter] || {};
+  const p = getWritableFilterParams(filter);
 
   function repaint() { repaintGrid(); }
 
@@ -2492,8 +2695,9 @@ function buildFilterParams(filter) {
  */
 // ── Tone adjustments (brightness / contrast / split toning) ─────────────────
 
-function applyToneAdjustments(ctx, width, height) {
-  const { brightness, contrast, toneIntensity, shadowColor, highlightColor, toneBalance } = state;
+function applyToneAdjustments(ctx, width, height, settings) {
+  const s = settings || state;
+  const { brightness, contrast, toneIntensity, shadowColor, highlightColor, toneBalance } = s;
   if (brightness === 0 && contrast === 0 && toneIntensity === 0) return;
 
   const imageData = ctx.getImageData(0, 0, width, height);
@@ -2548,7 +2752,8 @@ function applyToneAdjustments(ctx, width, height) {
 }
 
 function applyExportFilter(ctx, width, height, scale, filter,
-                           intensity = 1.0, variant = 'medium') {
+                           intensity = 1.0, variant = 'medium', filterParams) {
+  filterParams = filterParams || state.filterParams;
   if (!filter || filter === 'none') return;
   if (intensity <= 0) return;
 
@@ -2582,7 +2787,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
     // Phosphor tint per filterParams.crt.phosphor
     if (s >= 4 && cfg.tintA > 0) {
-      const ph = (state.filterParams.crt || {}).phosphor ?? 'green';
+      const ph = (filterParams.crt || {}).phosphor ?? 'green';
       const tintColor = ph === 'amber' ? `rgba(255,180,0,${cfg.tintA})` : ph === 'green' ? `rgba(0,255,60,${cfg.tintA})` : null;
       if (tintColor) {
         for (let y = 0; y < height; y += s * 2) {
@@ -2593,7 +2798,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
 
   } else if (filter === 'lcd') {
-    const spStr = ((state.filterParams.lcd || {}).subpixel ?? 10) / 100;
+    const spStr = ((filterParams.lcd || {}).subpixel ?? 10) / 100;
     // Row gaps
     for (let y = s - 1; y < height; y += s) {
       ec.fillStyle = 'rgba(0,0,0,0.38)';
@@ -2618,7 +2823,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
 
   } else if (filter === 'grid') {
-    const gridOpacity = ((state.filterParams.grid || {}).opacity ?? 30) / 100;
+    const gridOpacity = ((filterParams.grid || {}).opacity ?? 30) / 100;
     if (s >= 3) {
       ec.strokeStyle = `rgba(0,0,0,${gridOpacity})`;
       ec.lineWidth = 1;
@@ -2631,7 +2836,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
 
   } else if (filter === 'vignette') {
-    const falloff = (state.filterParams.vignette || {}).falloff ?? 'medium';
+    const falloff = (filterParams.vignette || {}).falloff ?? 'medium';
     const cx = width / 2, cy = height / 2;
     const innerMult = { soft: 0.40, medium: 0.28, hard: 0.10 }[falloff] ?? 0.28;
     const outerMult = { soft: 0.95, medium: 0.82, hard: 0.65 }[falloff] ?? 0.82;
@@ -2646,7 +2851,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     ec.fillRect(0, 0, width, height);
 
   } else if (filter === 'halftone') {
-    const htRad = ((state.filterParams.halftone || {}).radius ?? 38) / 100;
+    const htRad = ((filterParams.halftone || {}).radius ?? 38) / 100;
     const r = Math.max(1, Math.round(s * htRad));
     ec.fillStyle = 'rgba(0,0,0,0.35)';
     for (let y = Math.round(s * 0.5); y < height; y += s) {
@@ -2658,7 +2863,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
 
   } else if (filter === 'border') {
-    const thk = (state.filterParams.border || {}).thickness ?? 'medium';
+    const thk = (filterParams.border || {}).thickness ?? 'medium';
     const thkMult = { thin: 0.040, medium: 0.058, thick: 0.085 }[thk] ?? 0.058;
     const bw   = Math.max(8, Math.round(Math.min(width, height) * thkMult));
     const bwTB = Math.round(bw * 1.35);
@@ -2708,7 +2913,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     ec.fillRect(0, 0, width, height);
     // Punch circular holes so the underlying pixel colours show through
     ec.globalCompositeOperation = 'destination-out';
-    const dotRadPct = ((state.filterParams.dot || {}).radius ?? 44) / 100;
+    const dotRadPct = ((filterParams.dot || {}).radius ?? 44) / 100;
     const dotR = Math.max(1, Math.round(s * dotRadPct));
     for (let py = 0; py < GBCam.PHOTO_HEIGHT; py++) {
       for (let px = 0; px < GBCam.PHOTO_WIDTH; px++) {
@@ -2725,7 +2930,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     // ── Phosphor Glow ──────────────────────────────────────────────────────
     // Classic phosphor bloom: composite a blurred copy of the source onto
     // the canvas with 'screen' blend mode. Bright pixels bloom outward.
-    const glowBlurPct = ((state.filterParams.glow || {}).blur ?? 110) / 100;
+    const glowBlurPct = ((filterParams.glow || {}).blur ?? 110) / 100;
     const blurPx  = Math.max(2, Math.round(s * glowBlurPct));
     const bloom   = Object.assign(document.createElement('canvas'), { width, height });
     const bc      = bloom.getContext('2d');
@@ -2744,7 +2949,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     // ── Chromatic Aberration ───────────────────────────────────────────────
     // Shift the R channel rightward and the B channel leftward by ~1 GB
     // pixel width, keeping G in place.  Produces that colour-fringing look.
-    const chromaShiftPct = ((state.filterParams.chroma || {}).shift ?? 75) / 100;
+    const chromaShiftPct = ((filterParams.chroma || {}).shift ?? 75) / 100;
     const shift = Math.max(1, Math.round(s * chromaShiftPct));
     const orig  = ctx.getImageData(0, 0, width, height);
     const dst   = new ImageData(width, height);
@@ -2820,8 +3025,17 @@ function buildProjectJson() {
       exportFilter:    state.exportFilter,
       filterIntensity: state.filterIntensity,
       filterVariant:   state.filterVariant,
+      filterParams:    state.filterParams,
+      brightness:      state.brightness,
+      contrast:        state.contrast,
+      toneIntensity:   state.toneIntensity,
+      shadowColor:     state.shadowColor,
+      highlightColor:  state.highlightColor,
+      toneBalance:     state.toneBalance,
       gifDelay:        state.gifDelay,
       gifLoop:         state.gifLoop,
+      photoSettings:   state.photoSettings,
+      photoTransforms: state.photoTransforms,
       customPalettes:  loadCustomPalettes(),
       recentPalettes:  loadRecentPalettes(),
       favPalettes:     loadFavPalettes(),
@@ -2883,6 +3097,13 @@ async function openProject() {
     if (dom.gifDelayVal) dom.gifDelayVal.textContent = `${s.gifDelay}ms`;
   }
   if (s.gifLoop) setGifLoop(s.gifLoop);
+  if (s.photoSettings && typeof s.photoSettings === 'object') {
+    // Restore with integer-keyed entries (JSON keys are strings, convert back)
+    state.photoSettings = {};
+    for (const [k, v] of Object.entries(s.photoSettings)) {
+      state.photoSettings[parseInt(k)] = v;
+    }
+  }
 
   // Merge incoming custom palettes without overwriting existing ones
   if (Array.isArray(s.customPalettes) && s.customPalettes.length > 0) {
@@ -3244,46 +3465,54 @@ function setupToneControls() {
   if (!brightnessEl) return; // not in DOM (shouldn't happen)
 
   brightnessEl.addEventListener('input', () => {
-    state.brightness = parseInt(brightnessEl.value);
-    brightnessVal.textContent = state.brightness > 0 ? `+${state.brightness}` : String(state.brightness);
+    setScopedSetting('brightness', parseInt(brightnessEl.value));
+    const v = getEffectiveSettings(state.selectedIndex)?.brightness ?? state.brightness;
+    brightnessVal.textContent = v > 0 ? `+${v}` : String(v);
     redrawDetail();
   });
 
   contrastEl.addEventListener('input', () => {
-    state.contrast = parseInt(contrastEl.value);
-    contrastVal.textContent = state.contrast > 0 ? `+${state.contrast}` : String(state.contrast);
+    setScopedSetting('contrast', parseInt(contrastEl.value));
+    const v = getEffectiveSettings(state.selectedIndex)?.contrast ?? state.contrast;
+    contrastVal.textContent = v > 0 ? `+${v}` : String(v);
     redrawDetail();
   });
 
   intensityEl.addEventListener('input', () => {
-    state.toneIntensity = parseInt(intensityEl.value);
-    intensityVal.textContent = `${state.toneIntensity}%`;
+    setScopedSetting('toneIntensity', parseInt(intensityEl.value));
+    const v = getEffectiveSettings(state.selectedIndex)?.toneIntensity ?? state.toneIntensity;
+    intensityVal.textContent = `${v}%`;
     redrawDetail();
   });
 
   shadowColorEl.addEventListener('input', () => {
-    state.shadowColor = shadowColorEl.value;
-    if (state.toneIntensity > 0) redrawDetail();
+    setScopedSetting('shadowColor', shadowColorEl.value);
+    const eff = getEffectiveSettings(state.selectedIndex);
+    if ((eff?.toneIntensity ?? state.toneIntensity) > 0) redrawDetail();
   });
 
   highlightColorEl.addEventListener('input', () => {
-    state.highlightColor = highlightColorEl.value;
-    if (state.toneIntensity > 0) redrawDetail();
+    setScopedSetting('highlightColor', highlightColorEl.value);
+    const eff = getEffectiveSettings(state.selectedIndex);
+    if ((eff?.toneIntensity ?? state.toneIntensity) > 0) redrawDetail();
   });
 
   balanceEl.addEventListener('input', () => {
-    state.toneBalance = parseInt(balanceEl.value);
-    balanceVal.textContent = state.toneBalance > 0 ? `+${state.toneBalance}` : String(state.toneBalance);
-    if (state.toneIntensity > 0) redrawDetail();
+    setScopedSetting('toneBalance', parseInt(balanceEl.value));
+    const v = getEffectiveSettings(state.selectedIndex)?.toneBalance ?? state.toneBalance;
+    balanceVal.textContent = v > 0 ? `+${v}` : String(v);
+    const eff = getEffectiveSettings(state.selectedIndex);
+    if ((eff?.toneIntensity ?? state.toneIntensity) > 0) redrawDetail();
   });
 
   resetBtn?.addEventListener('click', () => {
-    state.brightness    = 0;
-    state.contrast      = 0;
-    state.toneIntensity = 0;
-    state.toneBalance   = 0;
-    state.shadowColor      = '#0033aa';
-    state.highlightColor   = '#ff8800';
+    // Reset tone to defaults for the current scope target
+    setScopedSetting('brightness',    0);
+    setScopedSetting('contrast',      0);
+    setScopedSetting('toneIntensity', 0);
+    setScopedSetting('toneBalance',   0);
+    setScopedSetting('shadowColor',   '#0033aa');
+    setScopedSetting('highlightColor','#ff8800');
 
     brightnessEl.value      = 0;
     contrastEl.value        = 0;

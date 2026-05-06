@@ -159,6 +159,15 @@
       <!-- Export controls (always visible once a file is loaded) -->
       <div id="export-controls">
 
+          <!-- Scope toggle: apply changes to All Photos or This Photo only -->
+          <div class="ctrl-group scope-group">
+            <div class="view-seg scope-seg">
+              <button id="btn-scope-all"   class="seg-btn active" title="Apply changes to all photos">⊞ All Photos</button>
+              <button id="btn-scope-photo" class="seg-btn"        title="Apply changes to this photo only">⊙ This Photo</button>
+            </div>
+            <button id="btn-scope-reset" class="btn btn-ghost btn-sm hidden" title="Clear per-photo overrides for this photo">Reset ↺</button>
+          </div>
+
           <div class="ctrl-group">
             <div class="ctrl-label">Export size</div>
             <div class="seg-control" id="scale-control">
