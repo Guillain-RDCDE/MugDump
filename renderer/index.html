@@ -128,20 +128,15 @@
         <span>Load a .sav file to get started</span>
       </div>
 
-      <!-- GIF animated preview (shown in GIF mode with frames selected) -->
-      <div id="gif-preview-wrap">
-        <canvas id="gif-preview-canvas"></canvas>
-        <div id="gif-preview-info"></div>
-      </div>
-
       <!-- Export controls (always visible once a file is loaded) -->
       <div id="export-controls">
 
-          <!-- Sidebar preview -->
+          <!-- Unified preview — single photo or animated GIF frames -->
           <div class="ctrl-group" id="preview-group">
             <div class="ctrl-label">Preview</div>
             <div id="sidebar-preview-wrap">
               <canvas id="sidebar-preview-canvas" width="256" height="224"></canvas>
+              <div id="gif-preview-info" style="display:none;"></div>
               <span id="sidebar-preview-empty" class="detail-hint">Select a photo</span>
             </div>
           </div>
@@ -236,22 +231,64 @@
 
           <!-- Effects / filters -->
           <div class="ctrl-group">
-            <div class="ctrl-label">Effects &amp; Filters</div>
-            <div class="filter-seg">
-              <button class="filter-btn" data-filter="crt">CRT</button>
-              <button class="filter-btn" data-filter="lcd">LCD</button>
-              <button class="filter-btn" data-filter="dot">Dot Matrix</button>
-              <button class="filter-btn" data-filter="glow">Phosphor Glow</button>
-              <button class="filter-btn" data-filter="chroma">Chroma</button>
-              <button class="filter-btn" data-filter="grid">Pixel Grid</button>
-              <button class="filter-btn" data-filter="vignette">Vignette</button>
-              <button class="filter-btn" data-filter="halftone">Halftone</button>
-              <button class="filter-btn" data-filter="jitter">Jitter</button>
+            <div class="ctrl-header-row">
+              <div class="ctrl-label">Effects &amp; Filters</div>
+              <div class="ctrl-header-actions">
+                <button id="btn-copy-effects" class="btn btn-ghost btn-xs" title="Copy current effects">Copy</button>
+                <button id="btn-paste-effects" class="btn btn-ghost btn-xs" title="Paste effects to selected photos" disabled>Paste</button>
+              </div>
             </div>
-            <!-- Filter stack — active filters shown here -->
-            <div id="filter-stack" style="display:none;"></div>
 
-            <!-- Filter settings — shown when any filter is active -->
+            <!-- Checkbox filter list -->
+            <div class="filter-list">
+              <div class="filter-row" data-filter="crt">
+                <input type="checkbox" class="filter-check" id="filter-check-crt" data-filter="crt">
+                <label for="filter-check-crt" class="filter-name">CRT Scanlines</label>
+                <button class="filter-settings-btn" data-filter="crt" title="Settings">⚙</button>
+              </div>
+              <div class="filter-row" data-filter="lcd">
+                <input type="checkbox" class="filter-check" id="filter-check-lcd" data-filter="lcd">
+                <label for="filter-check-lcd" class="filter-name">LCD</label>
+                <button class="filter-settings-btn" data-filter="lcd" title="Settings">⚙</button>
+              </div>
+              <div class="filter-row" data-filter="dot">
+                <input type="checkbox" class="filter-check" id="filter-check-dot" data-filter="dot">
+                <label for="filter-check-dot" class="filter-name">Dot Matrix</label>
+                <button class="filter-settings-btn" data-filter="dot" title="Settings">⚙</button>
+              </div>
+              <div class="filter-row" data-filter="glow">
+                <input type="checkbox" class="filter-check" id="filter-check-glow" data-filter="glow">
+                <label for="filter-check-glow" class="filter-name">Phosphor Glow</label>
+                <button class="filter-settings-btn" data-filter="glow" title="Settings">⚙</button>
+              </div>
+              <div class="filter-row" data-filter="chroma">
+                <input type="checkbox" class="filter-check" id="filter-check-chroma" data-filter="chroma">
+                <label for="filter-check-chroma" class="filter-name">Chromatic Aberration</label>
+                <button class="filter-settings-btn" data-filter="chroma" title="Settings">⚙</button>
+              </div>
+              <div class="filter-row" data-filter="grid">
+                <input type="checkbox" class="filter-check" id="filter-check-grid" data-filter="grid">
+                <label for="filter-check-grid" class="filter-name">Pixel Grid</label>
+                <button class="filter-settings-btn" data-filter="grid" title="Settings">⚙</button>
+              </div>
+              <div class="filter-row" data-filter="vignette">
+                <input type="checkbox" class="filter-check" id="filter-check-vignette" data-filter="vignette">
+                <label for="filter-check-vignette" class="filter-name">Vignette</label>
+                <button class="filter-settings-btn" data-filter="vignette" title="Settings">⚙</button>
+              </div>
+              <div class="filter-row" data-filter="halftone">
+                <input type="checkbox" class="filter-check" id="filter-check-halftone" data-filter="halftone">
+                <label for="filter-check-halftone" class="filter-name">Halftone</label>
+                <button class="filter-settings-btn" data-filter="halftone" title="Settings">⚙</button>
+              </div>
+              <div class="filter-row" data-filter="jitter">
+                <input type="checkbox" class="filter-check" id="filter-check-jitter" data-filter="jitter">
+                <label for="filter-check-jitter" class="filter-name">Scanline Jitter</label>
+                <button class="filter-settings-btn" data-filter="jitter" title="Settings">⚙</button>
+              </div>
+            </div>
+
+            <!-- Filter settings panel — shown when a filter is focused -->
             <div id="filter-settings" style="display:none;">
               <div class="range-wrap" style="margin-top:8px;">
                 <div class="range-header">
@@ -271,6 +308,15 @@
                   <button class="seg-btn crt-variant-btn" data-variant="wide">Wide</button>
                 </div>
               </div>
+            </div>
+
+            <!-- Presets -->
+            <div class="preset-section">
+              <div class="preset-header">
+                <span class="ctrl-label" style="font-size:11px; color:var(--text-3);">Presets</span>
+                <button id="btn-save-preset" class="btn btn-ghost btn-xs">Save…</button>
+              </div>
+              <div id="preset-list"></div>
             </div>
           </div>
 

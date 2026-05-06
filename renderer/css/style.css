@@ -2280,3 +2280,140 @@ input[type="range"] {
   flex-shrink: 0;
   margin-left: auto;
 }
+
+/* ── Filter checkbox list ────────────────────────────────────────────────── */
+
+.ctrl-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.ctrl-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 6px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: background 0.1s, border-color 0.1s;
+}
+.filter-row:hover {
+  background: var(--surface-2);
+}
+.filter-row-active {
+  background: var(--accent-dim);
+  border-color: var(--border);
+}
+.filter-row-focused {
+  border-color: var(--accent) !important;
+}
+
+.filter-check {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.filter-name {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+}
+.filter-row-active .filter-name {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.filter-settings-btn {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  transition: color 0.1s, background 0.1s;
+}
+.filter-settings-btn:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.filter-row-focused .filter-settings-btn {
+  color: var(--accent);
+}
+
+/* ── Presets ─────────────────────────────────────────────────────────────── */
+
+.preset-section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.preset-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+#preset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 16px;
+}
+.preset-chip {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px 2px 10px;
+  cursor: pointer;
+  transition: border-color 0.1s;
+}
+.preset-chip:hover {
+  border-color: var(--accent);
+}
+.preset-chip-name {
+  font-size: 11px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.preset-chip-rm {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.preset-chip-rm:hover { color: var(--text); }
+
+/* ── gif-preview-info inside preview wrap ───────────────────────────────── */
+#gif-preview-info {
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+  padding: 3px 0 0;
+  font-family: var(--font-mono);
+}
