@@ -1,0 +1,53 @@
+{
+  "name": "dmg-darkroom",
+  "version": "0.1.0",
+  "description": "DMG DarkRoom — Game Boy Camera companion app. Load .sav files, manage photos, export with proper palettes.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "dependencies": {
+    "omggif": "^1.0.10"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.clickysteve.dmgdarkroom",
+    "productName": "DMG DarkRoom",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "renderer/**/*",
+      "build/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.photography",
+      "icon": "build/icon.icns",
+      "identity": "Developer ID Application: Stephen McLeod Blythe (2N9AC8M66C)",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "target": [
+        { "target": "dmg", "arch": ["arm64", "x86_64"] }
+      ]
+    },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "linux": {
+      "target": [{ "target": "AppImage", "arch": ["x64"] }]
+    },
+    "dmg": {
+      "title": "DMG DarkRoom",
+      "background": "build/dmg-background.png",
+      "window": { "width": 540, "height": 380 }
+    }
+  }
+}

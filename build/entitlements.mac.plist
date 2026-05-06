@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Required for Electron apps with hardened runtime -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <!-- Read access to SD card / volumes -->
+  <key>com.apple.security.files.user-selected.read-only</key>
+  <true/>
+  <!-- Write access (for export) -->
+  <key>com.apple.security.files.user-selected.read-write</key>
+  <true/>
+  <!-- Allow reading removable volumes (SD card) -->
+  <key>com.apple.security.files.all</key>
+  <true/>
+</dict>
+</plist>
