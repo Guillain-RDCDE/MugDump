@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.7.1';
+const APP_VERSION = 'v0.7.2';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -209,6 +209,7 @@ const state = {
   toneBalance:     0,      // -100 (more shadow) to +100 (more highlight)
   selectedPhotos:     new Set(), // indices of currently selected photos (multi)
   lastSelectedIndex:  null,      // last clicked photo index, for shift-range
+  focusedFilter:      null,      // which filter's param panel is open
 };
 
 
@@ -342,6 +343,66 @@ function hasPhotoOverride(index) {
 /** Remove all per-photo overrides for `index`. */
 function clearPhotoOverride(index) {
   delete state.photoSettings[index];
+}
+
+/** Deselect all photos and clear visual state. */
+function deselectAll() {
+  state.selectedPhotos.clear();
+  state.selectedIndex = null;
+  state.lastSelectedIndex = null;
+  dom.photoGrid.querySelectorAll('.photo-slot').forEach(el => {
+    el.classList.remove('selected', 'multi-selected');
+  });
+  updateSidebarPreview();
+}
+
+/** Reset ALL edits — per-photo settings, transforms, global tone, and active filters. */
+function resetAllEdits() {
+  const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
+  if (targets) {
+    // Reset only selected photos
+    for (const idx of targets) {
+      delete state.photoSettings[idx];
+      delete state.photoTransforms[idx];
+      repaintGridSlot(idx);
+    }
+    if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+    if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+    if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
+    showToast(`Reset ${targets.length} photo${targets.length > 1 ? 's' : ''}`);
+  } else {
+    // Nothing selected — reset everything global
+    state.photoSettings   = {};
+    state.photoTransforms = {};
+    state.brightness      = 0;
+    state.contrast        = 0;
+    state.toneIntensity   = 0;
+    state.shadowColor     = '#0033aa';
+    state.highlightColor  = '#ff8800';
+    state.toneBalance     = 0;
+    state.filterParams    = {
+      crt:      { phosphor: 'green', curve: 'none' },
+      lcd:      { subpixel: 10 },
+      dot:      { radius: 44 },
+      glow:     { blur: 110 },
+      chroma:   { shift: 75 },
+      jitter:   { amount: 40 },
+      grid:     { opacity: 30 },
+      vignette: { falloff: 'medium' },
+      halftone: { radius: 38 },
+      border:   { thickness: 'medium' },
+    };
+    state.activeFilters.clear();
+    state.focusedFilter = null;
+    state.palette = PALETTES.dmg;
+    updateFilterUI();
+    _refreshFilterParamPanel();
+    updatePalettePickerBtn(state.palette);
+    repaintGrid();
+    if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
+    showToast('All edits reset');
+  }
+  updateSidebarPreview();
 }
 
 /** Returns the palette id that should be shown as "active" in the picker. */
@@ -1569,6 +1630,17 @@ function wireButtons() {
     if (!btn || state.selectedIndex === null) return;
     const action = btn.dataset.action;
     if (action === 'fullscreen') { openPresentation(state.selectedIndex); return; }
+    if (action === 'reset-transform') {
+      // Reset ALL edits for this photo — transform + per-photo settings
+      const idx = state.selectedIndex;
+      delete state.photoTransforms[idx];
+      delete state.photoSettings[idx];
+      _repaintAfterTransform(idx);
+      syncControlsToEffectiveSettings(idx);
+      updateSidebarPreview();
+      showToast('Photo reset');
+      return;
+    }
     applyTransformAction(state.selectedIndex, action);
     _repaintAfterTransform(state.selectedIndex);
   });
@@ -1578,6 +1650,9 @@ function wireButtons() {
   document.getElementById('btn-export-all').addEventListener('click', exportBatchPng);
   document.getElementById('btn-export-gif').addEventListener('click', exportGif);
   document.getElementById('btn-contact-sheet')?.addEventListener('click', exportContactSheet);
+
+  // Reset All button
+  document.getElementById('btn-reset-all')?.addEventListener('click', resetAllEdits);
 
   // Select All button
   document.getElementById('btn-select-all')?.addEventListener('click', () => {
@@ -3640,6 +3715,13 @@ function setupKeyboard() {
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+    // Cmd/Ctrl+A — Select All
+    if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+      e.preventDefault();
+      document.getElementById('btn-select-all')?.click();
+      return;
+    }
+
     // Escape — close things (outermost layer first)
     if (e.key === 'Escape') {
       if (state.presentationMode)  { closePresentation(); return; }
@@ -3649,6 +3731,11 @@ function setupKeyboard() {
       }
       if (state.gifMode) { exitGifMode(); return; }
       if (state.viewMode === 'solo') { enterGridMode(); return; }
+      // Clear selection if anything is selected
+      if (state.selectedPhotos.size > 0 || state.selectedIndex !== null) {
+        deselectAll();
+        return;
+      }
       return;
     }
 
@@ -4034,10 +4121,25 @@ function updateFilterUI() {
 function toggleFilter(filterName) {
   if (state.activeFilters.has(filterName)) {
     state.activeFilters.delete(filterName);
+    // If we just removed the focused filter, focus the next active one
+    if (state.focusedFilter === filterName) {
+      state.focusedFilter = [...state.activeFilters].pop() || null;
+    }
   } else {
     state.activeFilters.add(filterName);
+    state.focusedFilter = filterName; // focus the newly added filter
   }
   updateFilterUI();
+  _refreshFilterParamPanel();
+}
+
+function _refreshFilterParamPanel() {
+  const settingsEl = document.getElementById('filter-settings');
+  const variantEl  = document.getElementById('crt-variant-wrap');
+  const f = state.focusedFilter;
+  if (settingsEl) settingsEl.style.display = (f && state.activeFilters.has(f)) ? '' : 'none';
+  if (variantEl)  variantEl.style.display  = (f === 'crt') ? '' : 'none';
+  buildFilterParams(f || 'none');
 }
 
 function init() {
