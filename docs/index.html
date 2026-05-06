@@ -81,6 +81,8 @@
         <span class="ctrl-label grid-only">Thumbnails</span>
         <input type="range" id="thumb-size-slider" min="60" max="400" step="10" value="120" class="grid-only">
         <button id="btn-hide-empty" class="btn btn-ghost btn-sm grid-only" title="Hide empty photo slots">Hide empty</button>
+        <button id="btn-multiselect" class="btn btn-ghost btn-sm grid-only" title="Select photos then edit them together">⊡ Select</button>
+        <span id="multiselect-count" class="ctrl-label grid-only"></span>
         <button id="btn-contact-sheet" class="btn btn-ghost btn-sm file-only" title="Export all photos as a contact sheet">Export Contact Sheet…</button>
       </div>
 
@@ -133,6 +135,15 @@
       <!-- Export controls (always visible once a file is loaded) -->
       <div id="export-controls">
 
+          <!-- Sidebar preview -->
+          <div class="ctrl-group" id="preview-group">
+            <div class="ctrl-label">Preview</div>
+            <div id="sidebar-preview-wrap">
+              <canvas id="sidebar-preview-canvas" width="256" height="224"></canvas>
+              <span id="sidebar-preview-empty" class="detail-hint">Select a photo</span>
+            </div>
+          </div>
+
           <!-- Scope toggle: apply changes to All Photos or This Photo only -->
           <div class="ctrl-group scope-group">
             <div class="ctrl-label">Settings</div>
@@ -174,11 +185,11 @@
             </div>
           </div>
 
-          <!-- Tone controls (brightness, contrast, split toning) -->
-          <div class="ctrl-group" id="tone-controls">
+          <!-- Exposure controls (brightness, contrast) -->
+          <div class="ctrl-group" id="exposure-controls">
             <div class="tone-header">
-              <div class="ctrl-label">Tone</div>
-              <button id="tone-reset" class="btn btn-ghost btn-xs" title="Reset all tone adjustments">Reset</button>
+              <div class="ctrl-label">Exposure</div>
+              <button id="exposure-reset" class="btn btn-ghost btn-xs" title="Reset exposure adjustments">Reset</button>
             </div>
             <div class="range-wrap">
               <div class="range-header">
@@ -194,7 +205,14 @@
               </div>
               <input type="range" id="tone-contrast" min="-100" max="100" step="5" value="0">
             </div>
-            <div class="tone-section-label">Split Toning</div>
+          </div>
+
+          <!-- Split Tone controls -->
+          <div class="ctrl-group" id="split-tone-controls">
+            <div class="tone-header">
+              <div class="ctrl-label">Split Tone</div>
+              <button id="split-tone-reset" class="btn btn-ghost btn-xs" title="Reset split toning">Reset</button>
+            </div>
             <div class="range-wrap">
               <div class="range-header">
                 <span class="ctrl-label">Intensity</span>
@@ -237,11 +255,14 @@
               <button class="filter-btn" data-filter="halftone">Halftone</button>
               <button class="filter-btn" data-filter="jitter">Jitter</button>
             </div>
+            <!-- Filter stack — active filters shown here -->
+            <div id="filter-stack" style="display:none;"></div>
+
             <!-- Filter settings — shown when any filter is active -->
             <div id="filter-settings" style="display:none;">
               <div class="range-wrap" style="margin-top:8px;">
                 <div class="range-header">
-                  <span class="ctrl-label">Intensity</span>
+                  <span class="ctrl-label">Intensity <span id="filter-focused-label"></span></span>
                   <span class="range-val" id="filter-intensity-val">100%</span>
                 </div>
                 <input type="range" id="filter-intensity" min="0" max="100" step="5" value="100">

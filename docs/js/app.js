@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.6.1';
+const APP_VERSION = 'v0.6.2';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -194,6 +194,7 @@ const state = {
   gifPaletteScope: null,   // null=global; number=frame order index being re-palettted
   gifDelay: 250,           // ms per frame
   gifLoop: 'infinite',     // 'infinite' | 'once' | 'bounce'
+  activeFilters:   new Set(),        // active filter names for stackable effects
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
   lightboxOpen: false,     // lightbox overlay visible
   viewMode: 'grid',        // 'grid' | 'solo'
@@ -206,7 +207,10 @@ const state = {
   shadowColor:     '#0033aa',
   highlightColor:  '#ff8800',
   toneBalance:     0,      // -100 (more shadow) to +100 (more highlight)
+  multiSelectMode: false, // toggle multi-select mode
+  selectedPhotos:  new Set(), // indices of selected photos in multi-select mode
 };
+
 
 // ── DOM refs ───────────────────────────────────────────────────────────────
 
@@ -620,6 +624,7 @@ function repaintGrid() {
   if (state.lightboxOpen && state.selectedIndex !== null) {
     renderLightbox(state.selectedIndex);
   }
+  updateSidebarPreview();
 }
 
 // Re-render a single thumbnail slot (after palette or transform change)
@@ -658,6 +663,22 @@ function selectPhoto(index) {
     return;
   }
 
+  // Handle multi-select mode
+  if (state.multiSelectMode) {
+    const slot = dom.photoGrid.querySelector(`[data-index="${index}"]`);
+    if (slot && !slot.classList.contains('empty')) {
+      if (state.selectedPhotos.has(index)) {
+        state.selectedPhotos.delete(index);
+        slot.classList.remove('multi-selected');
+      } else {
+        state.selectedPhotos.add(index);
+        slot.classList.add('multi-selected');
+      }
+      updateMultiselectCount();
+    }
+    return;
+  }
+
   // Update selected state on slots
   dom.photoGrid.querySelectorAll('.photo-slot').forEach(el => el.classList.remove('selected'));
   const slot = dom.photoGrid.querySelector(`[data-index="${index}"]`);
@@ -674,6 +695,7 @@ function selectPhoto(index) {
     syncControlsToEffectiveSettings(index);
   }
   updateExportSelectedBtn();
+  updateSidebarPreview();
   // Lightbox no longer auto-opens on grid click — use F key or the ⛶ button
 }
 
@@ -757,6 +779,7 @@ function renderSoloView(index) {
     if (btn.dataset.action === 'flip-h') btn.classList.toggle('active', t2.flipH);
     if (btn.dataset.action === 'flip-v') btn.classList.toggle('active', t2.flipV);
   });
+  updateSidebarPreview();
 }
 
 function soloStep(dir) {
@@ -1522,6 +1545,12 @@ function wireButtons() {
   // View mode toggle (Grid / Solo)
   document.getElementById('btn-view-grid')?.addEventListener('click', enterGridMode);
   document.getElementById('btn-view-solo')?.addEventListener('click', enterSoloMode);
+
+  // Multi-select mode toggle
+  const btnMultiselect = document.getElementById('btn-multiselect');
+  if (btnMultiselect) {
+    btnMultiselect.addEventListener('click', toggleMultiselectMode);
+  }
 
   // Solo navigation + transforms
   document.getElementById('solo-prev')?.addEventListener('click', () => soloStep(-1));
@@ -3747,7 +3776,7 @@ function setupToneControls() {
   const highlightColorEl = document.getElementById('tone-highlight-color');
   const balanceEl      = document.getElementById('tone-balance');
   const balanceVal     = document.getElementById('tone-balance-val');
-  const resetBtn       = document.getElementById('tone-reset');
+  const resetBtn       = document.getElementById('exposure-reset');
 
   if (!brightnessEl) return; // not in DOM (shouldn't happen)
 
@@ -3949,6 +3978,153 @@ function setupCollapsibleSections() {
       saveState();
     });
   });
+}
+
+
+// ── Multi-select and sidebar preview helpers ───────────────────────────────────────
+
+function updateMultiselectCount() {
+  const count = state.selectedPhotos.size;
+  const countEl = document.getElementById('multiselect-count');
+  if (!countEl) return;
+  if (count === 0) {
+    countEl.textContent = '';
+  } else {
+    countEl.textContent = `${count} selected`;
+  }
+}
+
+function toggleMultiselectMode() {
+  state.multiSelectMode = !state.multiSelectMode;
+  state.selectedPhotos.clear();
+  updateMultiselectCount();
+  
+  const btn = document.getElementById('btn-multiselect');
+  if (btn) btn.classList.toggle('active', state.multiSelectMode);
+  
+  dom.photoGrid.querySelectorAll('.photo-slot').forEach(el => el.classList.remove('multi-selected'));
+}
+
+function updateSidebarPreview() {
+  const canvas = document.getElementById('sidebar-preview-canvas');
+  const emptyEl = document.getElementById('sidebar-preview-empty');
+  
+  if (!canvas || state.selectedIndex === null || !state.photos[state.selectedIndex]) {
+    if (emptyEl) emptyEl.style.display = 'block';
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    return;
+  }
+  
+  if (emptyEl) emptyEl.style.display = 'none';
+  
+  const photo = state.photos[state.selectedIndex];
+  const ctx = canvas.getContext('2d');
+  
+  // Draw the photo to the canvas with all current settings applied
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  
+  // Get effective settings for this photo
+  const effectiveSettings = getEffectiveSettings(state.selectedIndex);
+  const paletteId = effectiveSettings.paletteId || state.palette;
+  const filter = effectiveSettings.exportFilter || state.exportFilter;
+  const filterIntensity = effectiveSettings.filterIntensity ?? state.filterIntensity;
+  const filterVariant = effectiveSettings.filterVariant || state.filterVariant;
+  const filterParams = effectiveSettings.filterParams || state.filterParams;
+  const brightness = effectiveSettings.brightness ?? state.brightness;
+  const contrast = effectiveSettings.contrast ?? state.contrast;
+  const toneIntensity = effectiveSettings.toneIntensity ?? state.toneIntensity;
+  const shadowColor = effectiveSettings.shadowColor || state.shadowColor;
+  const highlightColor = effectiveSettings.highlightColor || state.highlightColor;
+  const toneBalance = effectiveSettings.toneBalance ?? state.toneBalance;
+  
+  // Create a temporary canvas for rendering
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = 128;
+  tempCanvas.height = 112;
+  const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+  
+  // Draw the photo
+  const imgData = tempCtx.createImageData(128, 112);
+  const palette = paletteId === 'dmg' ? PALETTES.dmg : (PALETTES[paletteId] || PALETTES.dmg);
+  
+  for (let i = 0; i < 128 * 112; i++) {
+    const colorIdx = photo.pixels[i];
+    const [r, g, b] = paletteToRGB(palette, colorIdx);
+    imgData.data[i * 4] = r;
+    imgData.data[i * 4 + 1] = g;
+    imgData.data[i * 4 + 2] = b;
+    imgData.data[i * 4 + 3] = 255;
+  }
+  tempCtx.putImageData(imgData, 0, 0);
+  
+  // Apply transforms
+  const transforms = state.photoTransforms[state.selectedIndex] || { rotate: 0, flipH: false, flipV: false };
+  if (transforms.rotate || transforms.flipH || transforms.flipV) {
+    const tCanvas = document.createElement('canvas');
+    tCanvas.width = 128;
+    tCanvas.height = 112;
+    const tCtx = tCanvas.getContext('2d');
+    tCtx.translate(64, 56);
+    if (transforms.flipH) tCtx.scale(-1, 1);
+    if (transforms.flipV) tCtx.scale(1, -1);
+    if (transforms.rotate) tCtx.rotate((transforms.rotate * Math.PI) / 180);
+    tCtx.drawImage(tempCanvas, -64, -56);
+    tempCtx.clearRect(0, 0, 128, 112);
+    tempCtx.drawImage(tCanvas, 0, 0);
+  }
+  
+  // Apply tone adjustments
+  applyToneAdjustments(tempCtx, brightness, contrast, toneIntensity, shadowColor, highlightColor, toneBalance);
+  
+  // Apply export filter
+  if (filter && filter !== 'none') {
+    applyExportFilter(tempCtx, filter, filterIntensity, filterVariant, filterParams);
+  }
+  
+  // Scale up to canvas and draw
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+}
+
+// ── Stackable effects ────────────────────────────────────────────────────────
+
+function applyActiveEffects(ctx, filterIntensity, filterVariant, filterParams) {
+  // Apply all active filters in sequence
+  if (state.activeFilters.size === 0) return;
+  
+  // Build an array of active filter names and apply them
+  const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'border', 'dot', 'glow', 'chroma', 'jitter'];
+  for (const filterName of filterOrder) {
+    if (state.activeFilters.has(filterName)) {
+      applyExportFilter(ctx, filterName, filterIntensity, filterVariant, filterParams);
+    }
+  }
+}
+
+// ── Filter UI management ───────────────────────────────────────────────────
+
+function updateFilterUI() {
+  const filterBtns = document.querySelectorAll('.filter-seg button[data-filter]');
+  filterBtns.forEach(btn => {
+    const filterName = btn.getAttribute('data-filter');
+    if (state.activeFilters.has(filterName)) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+
+function toggleFilter(filterName) {
+  if (state.activeFilters.has(filterName)) {
+    state.activeFilters.delete(filterName);
+  } else {
+    state.activeFilters.add(filterName);
+  }
+  updateFilterUI();
 }
 
 function init() {
