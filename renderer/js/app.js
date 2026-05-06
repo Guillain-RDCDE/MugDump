@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.7.0';
+const APP_VERSION = 'v0.7.1';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -207,8 +207,8 @@ const state = {
   shadowColor:     '#0033aa',
   highlightColor:  '#ff8800',
   toneBalance:     0,      // -100 (more shadow) to +100 (more highlight)
-  multiSelectMode: false, // toggle multi-select mode
-  selectedPhotos:  new Set(), // indices of selected photos in multi-select mode
+  selectedPhotos:     new Set(), // indices of currently selected photos (multi)
+  lastSelectedIndex:  null,      // last clicked photo index, for shift-range
 };
 
 
@@ -304,9 +304,13 @@ function getEffectiveSettings(index) {
 
 /** Write a setting to the per-photo override or global state, depending on scope. */
 function setScopedSetting(key, value) {
-  if (state.applyScope === 'photo' && state.selectedIndex !== null) {
-    if (!state.photoSettings[state.selectedIndex]) state.photoSettings[state.selectedIndex] = {};
-    state.photoSettings[state.selectedIndex][key] = value;
+  // Apply to all selected photos if any; otherwise apply globally
+  const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
+  if (targets) {
+    for (const idx of targets) {
+      if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+      state.photoSettings[idx][key] = value;
+    }
   } else {
     state[key] = value;
   }
@@ -314,11 +318,10 @@ function setScopedSetting(key, value) {
 
 /** Returns the filterParams object that event handlers should mutate for the current scope/photo. */
 function getWritableFilterParams(filter) {
-  if (state.applyScope === 'photo' && state.selectedIndex !== null) {
-    const idx = state.selectedIndex;
+  const idx = state.selectedPhotos.size > 0 ? [...state.selectedPhotos][0] : state.selectedIndex;
+  if (idx !== null && idx !== undefined) {
     if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
     if (!state.photoSettings[idx].filterParams) {
-      // inherit a deep copy of current global params so defaults are preserved
       state.photoSettings[idx].filterParams = JSON.parse(JSON.stringify(state.filterParams));
     }
     const fp = state.photoSettings[idx].filterParams;
@@ -341,9 +344,9 @@ function clearPhotoOverride(index) {
   delete state.photoSettings[index];
 }
 
-/** Returns the palette id that should be shown as "active" in the picker, given current scope. */
+/** Returns the palette id that should be shown as "active" in the picker. */
 function getDisplayPaletteId() {
-  if (state.applyScope === 'photo' && state.selectedIndex !== null) {
+  if (state.selectedIndex !== null) {
     return getEffectiveSettings(state.selectedIndex).palette?.id || state.palette.id;
   }
   return state.palette.id;
@@ -364,9 +367,9 @@ function syncControlsToEffectiveSettings(index) {
   });
   updateCurrentPalettePin();
 
-  // Filter buttons
+  // Filter buttons — reflect active stacked filters
   document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.filter === eff.exportFilter);
+    btn.classList.toggle('active', state.activeFilters.has(btn.dataset.filter));
   });
 
   // Intensity slider
@@ -410,9 +413,6 @@ function syncControlsToEffectiveSettings(index) {
   if (balEl)  balEl.value = eff.toneBalance;
   if (balVal) balVal.textContent = eff.toneBalance > 0 ? `+${eff.toneBalance}` : String(eff.toneBalance);
 
-  // Scope reset button visibility
-  const resetScopeBtn = document.getElementById('btn-scope-reset');
-  if (resetScopeBtn) resetScopeBtn.classList.toggle('hidden', !hasPhotoOverride(index));
 }
 
 // ── Status bar ─────────────────────────────────────────────────────────────
@@ -583,9 +583,9 @@ function renderGrid() {
       });
       slot.appendChild(check);
 
-      slot.addEventListener('click', () => selectPhoto(photo.index));
-      slot.addEventListener('dblclick', () => {
-        selectPhoto(photo.index);
+      slot.addEventListener('click', (e) => selectPhoto(photo.index, e));
+      slot.addEventListener('dblclick', (e) => {
+        selectPhoto(photo.index, e);
         enterSoloMode();
       });
     }
@@ -597,6 +597,14 @@ function renderGrid() {
   if (state.selectedIndex !== null) {
     const el = dom.photoGrid.querySelector(`[data-index="${state.selectedIndex}"]`);
     if (el) el.classList.add('selected');
+  }
+
+  // Apply multi-selected state
+  for (const idx of state.selectedPhotos) {
+    if (state.selectedPhotos.size > 1) {
+      const el = dom.photoGrid.querySelector(`[data-index="${idx}"]`);
+      if (el) el.classList.add('multi-selected');
+    }
   }
 
   // Apply GIF selections
@@ -655,48 +663,53 @@ function updateExportSelectedBtn() {
   btn.style.opacity = hasPhoto ? '' : '0.4';
 }
 
-function selectPhoto(index) {
+function selectPhoto(index, event) {
   if (state.gifMode) {
-    // In GIF mode the whole slot toggles frame selection
     const slot = dom.photoGrid.querySelector(`[data-index="${index}"]`);
     if (slot && !slot.classList.contains('empty')) toggleGifSelection(index, slot);
     return;
   }
 
-  // Handle multi-select mode
-  if (state.multiSelectMode) {
-    const slot = dom.photoGrid.querySelector(`[data-index="${index}"]`);
-    if (slot && !slot.classList.contains('empty')) {
-      if (state.selectedPhotos.has(index)) {
-        state.selectedPhotos.delete(index);
-        slot.classList.remove('multi-selected');
-      } else {
-        state.selectedPhotos.add(index);
-        slot.classList.add('multi-selected');
-      }
-      updateMultiselectCount();
+  const photo = state.photos[index];
+  if (!photo || photo.isEmpty) return;
+
+  if (event?.shiftKey && state.lastSelectedIndex !== null) {
+    // Range select: add all non-empty photos between lastSelectedIndex and index
+    const lo = Math.min(state.lastSelectedIndex, index);
+    const hi = Math.max(state.lastSelectedIndex, index);
+    for (let i = lo; i <= hi; i++) {
+      if (state.photos[i] && !state.photos[i].isEmpty) state.selectedPhotos.add(i);
     }
-    return;
+    state.selectedIndex = index;
+  } else if (event?.metaKey || event?.ctrlKey) {
+    // Cmd/Ctrl: toggle this photo in/out of selection
+    if (state.selectedPhotos.has(index)) {
+      state.selectedPhotos.delete(index);
+    } else {
+      state.selectedPhotos.add(index);
+    }
+    state.selectedIndex = index;
+    state.lastSelectedIndex = index;
+  } else {
+    // Plain click: single select
+    state.selectedPhotos.clear();
+    state.selectedPhotos.add(index);
+    state.selectedIndex = index;
+    state.lastSelectedIndex = index;
   }
 
-  // Update selected state on slots
-  dom.photoGrid.querySelectorAll('.photo-slot').forEach(el => el.classList.remove('selected'));
-  const slot = dom.photoGrid.querySelector(`[data-index="${index}"]`);
-  if (slot) slot.classList.add('selected');
+  // Update visual selection on all slots
+  dom.photoGrid.querySelectorAll('.photo-slot').forEach(el => {
+    const i = parseInt(el.dataset.index);
+    const inSet = state.selectedPhotos.has(i);
+    el.classList.toggle('selected', i === state.selectedIndex);
+    el.classList.toggle('multi-selected', inSet && state.selectedPhotos.size > 1);
+  });
 
-  state.selectedIndex = index;
-
-  if (state.viewMode === 'solo') {
-    renderSoloView(index);
-  }
-
-  // Sync right-panel controls to show effective settings for this photo
-  if (state.applyScope === 'photo') {
-    syncControlsToEffectiveSettings(index);
-  }
+  if (state.viewMode === 'solo') renderSoloView(index);
+  syncControlsToEffectiveSettings(index);
   updateExportSelectedBtn();
   updateSidebarPreview();
-  // Lightbox no longer auto-opens on grid click — use F key or the ⛶ button
 }
 
 // ── Detail / lightbox rendering ───────────────────────────────────────────────
@@ -759,9 +772,8 @@ function renderSoloView(index) {
   renderPhotoWithTransform(ctx, photo, effSolo.palette, SOLO_SCALE, index);
 
   const w = dom.soloCanvas.width, h = dom.soloCanvas.height;
-  if (effSolo.exportFilter !== 'none') {
-    applyExportFilter(ctx, w, h, SOLO_SCALE,
-      effSolo.exportFilter, effSolo.filterIntensity, effSolo.filterVariant, effSolo.filterParams);
+  if (state.activeFilters.size > 0) {
+    applyActiveEffects(ctx, w, h, SOLO_SCALE, effSolo.filterIntensity, effSolo.filterVariant, effSolo.filterParams);
   }
   applyToneAdjustments(ctx, w, h, effSolo);
 
@@ -824,9 +836,8 @@ function renderLightbox(index) {
   renderPhotoWithTransform(ctx, photo, effLb.palette, PREVIEW_SCALE, index);
 
   const w = dom.lbCanvas.width, h = dom.lbCanvas.height;
-  if (effLb.exportFilter !== 'none') {
-    applyExportFilter(ctx, w, h, PREVIEW_SCALE,
-      effLb.exportFilter, effLb.filterIntensity, effLb.filterVariant, effLb.filterParams);
+  if (state.activeFilters.size > 0) {
+    applyActiveEffects(ctx, w, h, PREVIEW_SCALE, effLb.filterIntensity, effLb.filterVariant, effLb.filterParams);
   }
   applyToneAdjustments(ctx, w, h, effLb);
 
@@ -985,12 +996,13 @@ async function exportSinglePng() {
   renderPhotoWithTransform(ctx, photo, effExp.palette, scale, index);
 
   const { width, height } = { width: canvas.width, height: canvas.height };
-  applyExportFilter(ctx, width, height, scale,
-    effExp.exportFilter, effExp.filterIntensity, effExp.filterVariant, effExp.filterParams);
+  if (state.activeFilters.size > 0) {
+    applyActiveEffects(ctx, width, height, scale, effExp.filterIntensity, effExp.filterVariant, effExp.filterParams);
+  }
   applyToneAdjustments(ctx, width, height, effExp);
 
   const dataUrl = canvas.toDataURL('image/png');
-  const filterTag = effExp.exportFilter !== 'none' ? `_${effExp.exportFilter}` : '';
+  const filterTag = state.activeFilters.size > 0 ? `_${[...state.activeFilters].join('+')}` : '';
   const scaleTag = state.exportScale === 'custom' ? `${width}px` : `${state.exportScale}x`;
   const defaultName = `gbcam_${String(index + 1).padStart(2, '0')}_${effExp.palette.id}_${scaleTag}${filterTag}.png`;
 
@@ -1009,19 +1021,20 @@ async function exportBatchPng() {
   const batch = [];
 
   const batchScale = state.exportScale === 'custom' ? Math.max(1, Math.round(width / GBCam.PHOTO_WIDTH)) : state.exportScale;
-  const filterTag  = state.exportFilter !== 'none' ? `_${state.exportFilter}` : '';
+  const filterTag  = state.activeFilters.size > 0 ? `_${[...state.activeFilters].join('+')}` : '';
 
   for (const photo of photos) {
     const canvas = document.createElement('canvas');
     const ctx    = canvas.getContext('2d');
     const effBatch = getEffectiveSettings(photo.index);
     renderPhotoWithTransform(ctx, photo, effBatch.palette, batchScale, photo.index);
-    applyExportFilter(ctx, canvas.width, canvas.height, batchScale,
-      effBatch.exportFilter, effBatch.filterIntensity, effBatch.filterVariant, effBatch.filterParams);
+    if (state.activeFilters.size > 0) {
+      applyActiveEffects(ctx, canvas.width, canvas.height, batchScale,
+        effBatch.filterIntensity, effBatch.filterVariant, effBatch.filterParams);
+    }
     applyToneAdjustments(ctx, canvas.width, canvas.height, effBatch);
     const dataUrl = canvas.toDataURL('image/png');
-    const phFilterTag = effBatch.exportFilter !== 'none' ? `_${effBatch.exportFilter}` : '';
-    const name = `gbcam_${String(photo.index + 1).padStart(2, '0')}_${effBatch.palette.id}_${scaleTag}${phFilterTag}.png`;
+    const name = `gbcam_${String(photo.index + 1).padStart(2, '0')}_${effBatch.palette.id}_${scaleTag}${filterTag}.png`;
     batch.push({ dataUrl, name });
   }
 
@@ -1121,10 +1134,9 @@ function renderGifFrameStrip() {
       const tctx = tmp.getContext('2d');
       GBCam.renderToCanvas(tctx, photo.pixels, pal, 1);
       applyToneAdjustments(tctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, eff);
-      // Apply filter at native res if one is active
-      if (eff.exportFilter && eff.exportFilter !== 'none') {
-        applyExportFilter(tctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, 1,
-          eff.exportFilter, eff.filterIntensity, eff.filterVariant, eff.filterParams);
+      if (state.activeFilters.size > 0) {
+        applyActiveEffects(tctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, 1,
+          eff.filterIntensity, eff.filterVariant, eff.filterParams);
       }
       canvas.getContext('2d').drawImage(tmp, 0, 0, GIF_THUMB_W, GIF_THUMB_H);
     }
@@ -1497,11 +1509,14 @@ function wireButtons() {
     btn.addEventListener('click', () => setExportFormat(btn.dataset.fmt));
   });
 
-  // Export filter buttons — click active filter again to turn it off
+  // Filter buttons — stackable toggle
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const next = (state.exportFilter === btn.dataset.filter) ? 'none' : btn.dataset.filter;
-      setExportFilter(next);
+      toggleFilter(btn.dataset.filter);
+      repaintGrid();
+      if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+      if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+      updateSidebarPreview();
     });
   });
 
@@ -1546,12 +1561,6 @@ function wireButtons() {
   document.getElementById('btn-view-grid')?.addEventListener('click', enterGridMode);
   document.getElementById('btn-view-solo')?.addEventListener('click', enterSoloMode);
 
-  // Multi-select mode toggle
-  const btnMultiselect = document.getElementById('btn-multiselect');
-  if (btnMultiselect) {
-    btnMultiselect.addEventListener('click', toggleMultiselectMode);
-  }
-
   // Solo navigation + transforms
   document.getElementById('solo-prev')?.addEventListener('click', () => soloStep(-1));
   document.getElementById('solo-next')?.addEventListener('click', () => soloStep( 1));
@@ -1570,36 +1579,15 @@ function wireButtons() {
   document.getElementById('btn-export-gif').addEventListener('click', exportGif);
   document.getElementById('btn-contact-sheet')?.addEventListener('click', exportContactSheet);
 
-  // Scope toggle (All Photos / This Photo)
-  document.getElementById('btn-scope-all')?.addEventListener('click', () => {
-    state.applyScope = 'all';
-    document.getElementById('btn-scope-all')?.classList.add('active');
-    document.getElementById('btn-scope-photo')?.classList.remove('active');
-    document.getElementById('btn-scope-reset')?.classList.add('hidden');
-    // Restore right-panel controls to global state
-    updatePalettePickerBtn();
-    const globalId = state.palette.id;
-    document.querySelectorAll('.pal-item').forEach(item =>
-      item.classList.toggle('active', item.dataset.palette === globalId));
-    updateCurrentPalettePin();
-  });
-  document.getElementById('btn-scope-photo')?.addEventListener('click', () => {
-    state.applyScope = 'photo';
-    document.getElementById('btn-scope-photo')?.classList.add('active');
-    document.getElementById('btn-scope-all')?.classList.remove('active');
-    if (state.selectedIndex !== null) {
-      syncControlsToEffectiveSettings(state.selectedIndex);
-    }
-  });
-  document.getElementById('btn-scope-reset')?.addEventListener('click', () => {
-    if (state.selectedIndex === null) return;
-    clearPhotoOverride(state.selectedIndex);
-    repaintGridSlot(state.selectedIndex);
-    if (state.viewMode === 'solo') renderSoloView(state.selectedIndex);
-    if (state.lightboxOpen) renderLightbox(state.selectedIndex);
-    syncControlsToEffectiveSettings(state.selectedIndex);
-    document.getElementById('btn-scope-reset')?.classList.add('hidden');
-    showToast('Per-photo settings cleared');
+  // Select All button
+  document.getElementById('btn-select-all')?.addEventListener('click', () => {
+    state.selectedPhotos.clear();
+    state.photos.forEach(p => { if (!p.isEmpty) state.selectedPhotos.add(p.index); });
+    state.selectedIndex = [...state.selectedPhotos][0] ?? null;
+    state.lastSelectedIndex = state.selectedIndex;
+    dom.photoGrid.querySelectorAll('.photo-slot:not(.empty)').forEach(el => el.classList.add('multi-selected'));
+    if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
+    updateSidebarPreview();
   });
 
   // Tone controls
@@ -2499,9 +2487,9 @@ function updateGifPreview() {
     const effGif = getEffectiveSettings(frameObj.photoIndex);
     const pal = frameObj.paletteId ? PALETTES[frameObj.paletteId] : effGif.palette;
     GBCam.renderToCanvas(frameCtx, photo.pixels, pal, PREVIEW_SCALE);
-    if (effGif.exportFilter !== 'none') {
-      applyExportFilter(frameCtx, dom.gifPreviewCanvas.width, dom.gifPreviewCanvas.height, PREVIEW_SCALE,
-        effGif.exportFilter, effGif.filterIntensity, effGif.filterVariant, effGif.filterParams);
+    if (state.activeFilters.size > 0) {
+      applyActiveEffects(frameCtx, dom.gifPreviewCanvas.width, dom.gifPreviewCanvas.height, PREVIEW_SCALE,
+        effGif.filterIntensity, effGif.filterVariant, effGif.filterParams);
     }
     applyToneAdjustments(frameCtx, dom.gifPreviewCanvas.width, dom.gifPreviewCanvas.height, effGif);
 
@@ -3547,12 +3535,13 @@ function renderPresentation() {
   const scale = Math.max(1, Math.floor(Math.min(vw / srcW, vh / srcH)));
 
   const ctx = dom.presCanvas.getContext('2d');
-  renderPhotoWithTransform(ctx, photo, state.palette, scale, _presIndex);
-  if (state.exportFilter !== 'none') {
-    applyExportFilter(ctx, dom.presCanvas.width, dom.presCanvas.height, scale,
-      state.exportFilter, state.filterIntensity, state.filterVariant);
+  const effPres = getEffectiveSettings(_presIndex);
+  renderPhotoWithTransform(ctx, photo, effPres.palette, scale, _presIndex);
+  if (state.activeFilters.size > 0) {
+    applyActiveEffects(ctx, dom.presCanvas.width, dom.presCanvas.height, scale,
+      effPres.filterIntensity, effPres.filterVariant, effPres.filterParams);
   }
-  applyToneAdjustments(ctx, dom.presCanvas.width, dom.presCanvas.height);
+  applyToneAdjustments(ctx, dom.presCanvas.width, dom.presCanvas.height, effPres);
 
   const filled = state.photos.filter(p => !p.isEmpty).length;
   const pos    = state.photos.slice(0, _presIndex + 1).filter(p => !p.isEmpty).length;
@@ -3595,12 +3584,13 @@ async function exportContactSheet() {
     // Render photo with transform + filter
     const tmp  = document.createElement('canvas');
     const tctx = tmp.getContext('2d');
-    renderPhotoWithTransform(tctx, photo, state.palette, 4, photo.index);
-    if (state.exportFilter !== 'none') {
-      applyExportFilter(tctx, tmp.width, tmp.height, 4,
-        state.exportFilter, state.filterIntensity, state.filterVariant);
+    const effSheet = getEffectiveSettings(photo.index);
+    renderPhotoWithTransform(tctx, photo, effSheet.palette, 4, photo.index);
+    if (state.activeFilters.size > 0) {
+      applyActiveEffects(tctx, tmp.width, tmp.height, 4,
+        effSheet.filterIntensity, effSheet.filterVariant, effSheet.filterParams);
     }
-    applyToneAdjustments(tctx, tmp.width, tmp.height);
+    applyToneAdjustments(tctx, tmp.width, tmp.height, effSheet);
     sc.drawImage(tmp, x, y);
 
     // Photo number label
@@ -3983,123 +3973,52 @@ function setupCollapsibleSections() {
 
 // ── Multi-select and sidebar preview helpers ───────────────────────────────────────
 
-function updateMultiselectCount() {
-  const count = state.selectedPhotos.size;
-  const countEl = document.getElementById('multiselect-count');
-  if (!countEl) return;
-  if (count === 0) {
-    countEl.textContent = '';
-  } else {
-    countEl.textContent = `${count} selected`;
-  }
-}
-
-function toggleMultiselectMode() {
-  state.multiSelectMode = !state.multiSelectMode;
-  state.selectedPhotos.clear();
-  updateMultiselectCount();
-  
-  const btn = document.getElementById('btn-multiselect');
-  if (btn) btn.classList.toggle('active', state.multiSelectMode);
-  
-  dom.photoGrid.querySelectorAll('.photo-slot').forEach(el => el.classList.remove('multi-selected'));
-}
 
 function updateSidebarPreview() {
   const canvas = document.getElementById('sidebar-preview-canvas');
   const emptyEl = document.getElementById('sidebar-preview-empty');
-  
-  if (!canvas || state.selectedIndex === null || !state.photos[state.selectedIndex]) {
+
+  const idx = state.selectedIndex;
+  const photo = idx !== null ? state.photos[idx] : null;
+
+  if (!canvas || !photo || photo.isEmpty) {
     if (emptyEl) emptyEl.style.display = 'block';
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
+    if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
     return;
   }
-  
+
   if (emptyEl) emptyEl.style.display = 'none';
-  
-  const photo = state.photos[state.selectedIndex];
+
+  const SCALE = 2; // 128×112 → 256×224
+  const W = GBCam.PHOTO_WIDTH  * SCALE;
+  const H = GBCam.PHOTO_HEIGHT * SCALE;
+
+  const tmp = document.createElement('canvas');
+  tmp.width  = W;
+  tmp.height = H;
+  const tmpCtx = tmp.getContext('2d', { willReadFrequently: true });
+
+  const eff = getEffectiveSettings(idx);
+  renderPhotoWithTransform(tmpCtx, photo, eff.palette, SCALE, idx);
+  applyToneAdjustments(tmpCtx, W, H, eff);
+  if (state.activeFilters.size > 0) {
+    applyActiveEffects(tmpCtx, W, H, SCALE, eff.filterIntensity, eff.filterVariant, eff.filterParams);
+  }
+
   const ctx = canvas.getContext('2d');
-  
-  // Draw the photo to the canvas with all current settings applied
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  
-  // Get effective settings for this photo
-  const effectiveSettings = getEffectiveSettings(state.selectedIndex);
-  const paletteId = effectiveSettings.paletteId || state.palette;
-  const filter = effectiveSettings.exportFilter || state.exportFilter;
-  const filterIntensity = effectiveSettings.filterIntensity ?? state.filterIntensity;
-  const filterVariant = effectiveSettings.filterVariant || state.filterVariant;
-  const filterParams = effectiveSettings.filterParams || state.filterParams;
-  const brightness = effectiveSettings.brightness ?? state.brightness;
-  const contrast = effectiveSettings.contrast ?? state.contrast;
-  const toneIntensity = effectiveSettings.toneIntensity ?? state.toneIntensity;
-  const shadowColor = effectiveSettings.shadowColor || state.shadowColor;
-  const highlightColor = effectiveSettings.highlightColor || state.highlightColor;
-  const toneBalance = effectiveSettings.toneBalance ?? state.toneBalance;
-  
-  // Create a temporary canvas for rendering
-  const tempCanvas = document.createElement('canvas');
-  tempCanvas.width = 128;
-  tempCanvas.height = 112;
-  const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
-  
-  // Draw the photo
-  const imgData = tempCtx.createImageData(128, 112);
-  const palette = paletteId === 'dmg' ? PALETTES.dmg : (PALETTES[paletteId] || PALETTES.dmg);
-  
-  for (let i = 0; i < 128 * 112; i++) {
-    const colorIdx = photo.pixels[i];
-    const [r, g, b] = paletteToRGB(palette, colorIdx);
-    imgData.data[i * 4] = r;
-    imgData.data[i * 4 + 1] = g;
-    imgData.data[i * 4 + 2] = b;
-    imgData.data[i * 4 + 3] = 255;
-  }
-  tempCtx.putImageData(imgData, 0, 0);
-  
-  // Apply transforms
-  const transforms = state.photoTransforms[state.selectedIndex] || { rotate: 0, flipH: false, flipV: false };
-  if (transforms.rotate || transforms.flipH || transforms.flipV) {
-    const tCanvas = document.createElement('canvas');
-    tCanvas.width = 128;
-    tCanvas.height = 112;
-    const tCtx = tCanvas.getContext('2d');
-    tCtx.translate(64, 56);
-    if (transforms.flipH) tCtx.scale(-1, 1);
-    if (transforms.flipV) tCtx.scale(1, -1);
-    if (transforms.rotate) tCtx.rotate((transforms.rotate * Math.PI) / 180);
-    tCtx.drawImage(tempCanvas, -64, -56);
-    tempCtx.clearRect(0, 0, 128, 112);
-    tempCtx.drawImage(tCanvas, 0, 0);
-  }
-  
-  // Apply tone adjustments
-  applyToneAdjustments(tempCtx, brightness, contrast, toneIntensity, shadowColor, highlightColor, toneBalance);
-  
-  // Apply export filter
-  if (filter && filter !== 'none') {
-    applyExportFilter(tempCtx, filter, filterIntensity, filterVariant, filterParams);
-  }
-  
-  // Scale up to canvas and draw
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(tempCanvas, 0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(tmp, 0, 0, canvas.width, canvas.height);
 }
 
 // ── Stackable effects ────────────────────────────────────────────────────────
 
-function applyActiveEffects(ctx, filterIntensity, filterVariant, filterParams) {
-  // Apply all active filters in sequence
+function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVariant, filterParams) {
   if (state.activeFilters.size === 0) return;
-  
-  // Build an array of active filter names and apply them
   const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'border', 'dot', 'glow', 'chroma', 'jitter'];
   for (const filterName of filterOrder) {
     if (state.activeFilters.has(filterName)) {
-      applyExportFilter(ctx, filterName, filterIntensity, filterVariant, filterParams);
+      applyExportFilter(ctx, width, height, scale, filterName, filterIntensity, filterVariant, filterParams);
     }
   }
 }
@@ -4107,14 +4026,8 @@ function applyActiveEffects(ctx, filterIntensity, filterVariant, filterParams) {
 // ── Filter UI management ───────────────────────────────────────────────────
 
 function updateFilterUI() {
-  const filterBtns = document.querySelectorAll('.filter-seg button[data-filter]');
-  filterBtns.forEach(btn => {
-    const filterName = btn.getAttribute('data-filter');
-    if (state.activeFilters.has(filterName)) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.classList.toggle('active', state.activeFilters.has(btn.dataset.filter));
   });
 }
 

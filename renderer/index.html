@@ -81,8 +81,9 @@
         <span class="ctrl-label grid-only">Thumbnails</span>
         <input type="range" id="thumb-size-slider" min="60" max="400" step="10" value="120" class="grid-only">
         <button id="btn-hide-empty" class="btn btn-ghost btn-sm grid-only" title="Hide empty photo slots">Hide empty</button>
-        <button id="btn-multiselect" class="btn btn-ghost btn-sm grid-only" title="Select photos then edit them together">⊡ Select</button>
-        <span id="multiselect-count" class="ctrl-label grid-only"></span>
+        <button id="btn-select-all" class="btn btn-ghost btn-sm grid-only" title="Select all photos (then Cmd+click to deselect)">Select All</button>
+        
+        
         <button id="btn-contact-sheet" class="btn btn-ghost btn-sm file-only" title="Export all photos as a contact sheet">Export Contact Sheet…</button>
       </div>
 
@@ -144,15 +145,6 @@
             </div>
           </div>
 
-          <!-- Scope toggle: apply changes to All Photos or This Photo only -->
-          <div class="ctrl-group scope-group">
-            <div class="ctrl-label">Settings</div>
-            <div class="view-seg scope-seg">
-              <button id="btn-scope-all"   class="seg-btn active" title="Apply changes to all photos">⊞ All Photos</button>
-              <button id="btn-scope-photo" class="seg-btn"        title="Apply changes to this photo only">⊙ This Photo</button>
-            </div>
-            <button id="btn-scope-reset" class="btn btn-ghost btn-sm hidden" title="Clear per-photo overrides for this photo">Reset ↺</button>
-          </div>
 
           <!-- Scale / export size -->
           <div class="ctrl-group">
