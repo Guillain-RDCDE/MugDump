@@ -223,8 +223,8 @@ function syncControlsToEffectiveSettings(index) {
     b.classList.toggle('active', b.dataset.variant === eff.filterVariant);
   });
 
-  // Rebuild filter param UI (reads from getWritableFilterParams in current scope)
-  buildFilterParams(eff.exportFilter);
+  // Rebuild filter param UI — pass display values so no photoSettings entry is created just for display
+  buildFilterParams(eff.exportFilter, eff.filterParams?.[eff.exportFilter] || {});
 
   // Tone controls
   const bEl  = document.getElementById('tone-brightness');
@@ -2610,14 +2610,18 @@ function setExportFilter(filter) {
   repaintGrid();
 }
 
-/** Injects per-filter granular controls into #filter-params */
-function buildFilterParams(filter) {
+/** Injects per-filter granular controls into #filter-params.
+ *  displayParams: optional read-only values to populate the UI with (used when
+ *  syncing controls to effective settings without creating a photoSettings entry).
+ *  Omit to use the normal writable path (getWritableFilterParams). */
+function buildFilterParams(filter, displayParams) {
   const container = document.getElementById('filter-params');
   if (!container) return;
   container.innerHTML = '';
   if (!filter || filter === 'none') return;
 
-  const p = getWritableFilterParams(filter);
+  // displayParams = values to show; writable ref is obtained lazily on interaction.
+  const initP = displayParams || getWritableFilterParams(filter);
 
   function repaint() { repaintGrid(); }
 
@@ -2627,11 +2631,12 @@ function buildFilterParams(filter) {
     const hdr = document.createElement('div');
     hdr.className = 'range-header';
     const lbl = document.createElement('span'); lbl.className = 'ctrl-label'; lbl.textContent = label;
-    const val = document.createElement('span'); val.className = 'range-val'; val.textContent = valFmt(p[key]);
+    const val = document.createElement('span'); val.className = 'range-val'; val.textContent = valFmt(initP[key]);
     hdr.appendChild(lbl); hdr.appendChild(val);
     const slider = document.createElement('input');
-    slider.type = 'range'; slider.min = min; slider.max = max; slider.step = step; slider.value = p[key];
+    slider.type = 'range'; slider.min = min; slider.max = max; slider.step = step; slider.value = initP[key];
     slider.addEventListener('input', () => {
+      const p = getWritableFilterParams(filter); // create entry only on actual user interaction
       p[key] = parseFloat(slider.value);
       val.textContent = valFmt(p[key]);
       repaint();
@@ -2646,9 +2651,10 @@ function buildFilterParams(filter) {
     const seg = document.createElement('div'); seg.className = 'seg-control';
     for (const [optVal, optLabel] of options) {
       const btn = document.createElement('button');
-      btn.className = 'seg-btn' + (p[key] === optVal ? ' active' : '');
+      btn.className = 'seg-btn' + (initP[key] === optVal ? ' active' : '');
       btn.textContent = optLabel;
       btn.addEventListener('click', () => {
+        const p = getWritableFilterParams(filter); // create entry only on actual user interaction
         p[key] = optVal;
         seg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.textContent === optLabel));
         repaint();
