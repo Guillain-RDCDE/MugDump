@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.25';
+const APP_VERSION = 'v0.9.26';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -160,6 +160,10 @@ function syncColorSwatchBtn(input, hex) {
 
 const THUMB_SCALE = 4; // grid thumbnails rendered at 4× for CRT scanline clarity
 
+// Pixel-dense effects that look garbled / shift on mouseover at thumbnail scale.
+// These are skipped during grid repaint — they'll still apply in solo/export views.
+const THUMBNAIL_SKIP_FILTERS = new Set(['crt', 'lcd', 'grid', 'halftone', 'dot', 'jitter', 'interlace', 'bayer', 'floyd']);
+
 // ── Filter definitions (single source of truth for UI + defaults) ─────────
 
 const FILTER_DEFS = [
@@ -264,7 +268,7 @@ const state = {
   filePath: null,
   selectedIndex: null,  // currently selected photo index (0–29)
   palette: PALETTES.dmg,
-  exportScale: 8,
+  exportScale: 20,
   exportFormat: 'png',  // 'png' | 'gif'
   exportFilter:    'none',   // legacy single-filter field; kept for backwards compat with old .gbcp files
   filterIntensity: 1.0,     // 0.0–1.0
@@ -826,8 +830,11 @@ function repaintGridSlot(index) {
   renderPhotoWithTransform(ctx, photo, eff.palette, THUMB_SCALE, index);
   applyToneAdjustments(ctx, canvas.width, canvas.height, eff);
   if (eff.activeFilters.size > 0) {
-    applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
-                       eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters, false, index);
+    const thumbFilters = new Set([...eff.activeFilters].filter(id => !THUMBNAIL_SKIP_FILTERS.has(id)));
+    if (thumbFilters.size > 0) {
+      applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
+                         eff.filterIntensity, eff.filterVariant, eff.filterParams, thumbFilters, false, index);
+    }
   }
   // Slot badge — photo-specific settings override indicator
   slot.classList.toggle('has-photo-settings', hasPhotoOverride(index));
