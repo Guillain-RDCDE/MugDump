@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.12';
+const APP_VERSION = 'v0.9.13';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -4914,7 +4914,13 @@ function copyEffects() {
   const _cpTgt = state.selectedIndex;
   const _cpEff = _cpTgt !== null ? getEffectiveSettings(_cpTgt) : null;
   const src = _cpEff || state;
+  // Resolve paletteId: per-photo override first, then global palette's id
+  const cpPaletteId = _cpTgt !== null && state.photoSettings[_cpTgt]?.paletteId
+    ? state.photoSettings[_cpTgt].paletteId
+    : (state.palette?.id ?? null);
   state.effectClipboard = {
+    // Palette
+    paletteId:       cpPaletteId,
     // Filters
     activeFilters:   _cpEff ? [..._cpEff.activeFilters] : [...state.activeFilters],
     filterIntensity: src.filterIntensity ?? state.filterIntensity,
@@ -4943,6 +4949,8 @@ function pasteEffects() {
   for (const idx of targets) {
     if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
     const ps = state.photoSettings[idx];
+    // Palette
+    if (cb.paletteId) ps.paletteId = cb.paletteId;
     // Filters
     ps.filterIntensity = cb.filterIntensity;
     ps.filterVariant   = cb.filterVariant;
