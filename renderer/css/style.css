@@ -990,21 +990,76 @@ input[type="range"] {
 
 #grid-header .ctrl-label { margin: 0; }
 
-/* ── Panel resize handle ──────────────────────────────────────────────────── */
+/* ── Panel resize handle + sidebar collapse tab ───────────────────────────── */
 
 #panel-resize-handle {
-  width: 4px;
+  width: 14px;           /* wider to house the collapse tab */
   background: transparent;
   cursor: col-resize;
   flex-shrink: 0;
   transition: background 0.15s ease;
   position: relative;
   z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-#panel-resize-handle:hover,
-#panel-resize-handle.dragging {
+/* Thin drag-indicator strip down the centre */
+#panel-resize-handle::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0; bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  background: transparent;
+  transition: background 0.15s ease;
+  pointer-events: none;
+}
+#panel-resize-handle:hover::before,
+#panel-resize-handle.dragging::before {
   background: var(--accent);
+}
+
+/* Sidebar collapse/expand tab — centred on the handle */
+#sidebar-collapse-btn {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 48px;
+  padding: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  z-index: 2;
+  pointer-events: auto;
+}
+#sidebar-collapse-btn:hover {
+  background: var(--surface-3);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* Collapsed state: sidebar folds to zero, tab is the only thing visible */
+#app.sidebar-collapsed #detail-panel {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-left: none;
+}
+/* Hide the tab at tablet/mobile — overlay sidebar uses #btn-sidebar-toggle */
+@media (max-width: 1024px) {
+  #sidebar-collapse-btn { display: none; }
 }
 
 /* (detail preview canvas removed — lightbox handles solo view) */
@@ -1226,6 +1281,9 @@ input[type="range"] {
   display: flex;
   align-items: center;
   gap: 3px;
+  flex: 1;          /* take all remaining palette-bar space */
+  min-width: 0;     /* allow shrinking below content size */
+  overflow: hidden; /* clip chips that exceed available width */
 }
 
 /* Favourite palette buttons — colour-only chips, no text */
@@ -2690,11 +2748,14 @@ input[type="range"] {
   transition: opacity 0.22s ease;
 }
 
-/* Sidebar toggle — hidden on desktop, shown at tablet */
+/* Sidebar toggle — hidden on desktop, shown at tablet as a simple arrow */
 #btn-sidebar-toggle {
   display: none;
   align-items: center;
-  gap: 5px;
+  justify-content: center;
+  font-size: 18px;
+  padding: 4px 10px;
+  line-height: 1;
 }
 
 /* ── Responsive: Small Laptop (≤1280px) ─────────────────────────────────── */
@@ -2728,8 +2789,7 @@ input[type="range"] {
   /* Show the sidebar toggle button */
   #btn-sidebar-toggle { display: inline-flex; }
 
-  /* Palette bar: hide favourites strip to save horizontal space */
-  #fav-palettes { display: none; }
+  /* Palette bar: fav strip visibility is now JS-controlled (responsive chip count) */
 
   /* Resize handle hidden — sidebar is an overlay, not inline */
   #panel-resize-handle { display: none; }
@@ -2857,8 +2917,5 @@ body.web #titlebar { padding-left: 16px; }
 /* Hide individual action buttons when overflow menu is active */
 #grid-header.overflow-active .grid-action-item { display: none !important; }
 
-/* Fav menu: hidden by default; shown at ≤1024px when fav-palettes strip is hidden */
+/* Fav menu: JS-controlled via setupFavCarouselResponsive(); hidden by default */
 #btn-fav-menu { display: none; }
-@media (max-width: 1024px) {
-  #btn-fav-menu { display: inline-flex; }
-}

@@ -35,7 +35,7 @@
         <button class="overflow-item overflow-file-only" data-for="tb-reload-sav">↺ Reload .sav</button>
       </div>
     </div>
-    <button id="btn-sidebar-toggle" class="btn btn-ghost btn-sm" title="Show editing panel">Edit ›</button>
+    <button id="btn-sidebar-toggle" class="btn btn-ghost btn-sm" title="Show editing panel">›</button>
   </div>
 
   <!-- ── Palette bar ────────────────────────────────────────────────────────── -->
@@ -147,8 +147,10 @@
       </div>
     </div>
 
-    <!-- Drag-resize handle between panels -->
-    <div id="panel-resize-handle"></div>
+    <!-- Drag-resize handle + sidebar collapse tab -->
+    <div id="panel-resize-handle">
+      <button id="sidebar-collapse-btn" title="Collapse sidebar">‹</button>
+    </div>
 
     <!-- Detail / export panel -->
     <div id="detail-panel">
