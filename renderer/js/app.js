@@ -3585,7 +3585,6 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
     ctx.putImageData(dst, 0, 0);
     return;
-  }
 
   } else if (filter === 'noise') {
     // ── Noise / Static ──────────────────────────────────────────────────────
