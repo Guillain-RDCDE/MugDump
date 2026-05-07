@@ -342,12 +342,11 @@ html, body {
   cursor: pointer;
   overflow: hidden;
   background: var(--surface);
-  transition: border-color 0.1s ease, transform 0.1s ease;
+  transition: border-color 0.1s ease;
 }
 
 .photo-slot:hover {
   border-color: var(--border);
-  transform: scale(1.02);
 }
 
 .photo-slot.selected {
