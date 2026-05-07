@@ -132,8 +132,10 @@
       <div id="export-controls">
 
           <!-- Unified preview — single photo or animated GIF frames -->
-          <div class="ctrl-group" id="preview-group">
-            <div class="ctrl-label">Preview</div>
+          <div class="ctrl-group collapsible" id="preview-group">
+            <div class="tone-header section-header">
+              <div class="ctrl-label section-label">Preview</div>
+            </div>
             <div id="sidebar-preview-wrap">
               <canvas id="sidebar-preview-canvas" width="256" height="224"></canvas>
               <div id="gif-preview-info" style="display:none;"></div>
@@ -176,10 +178,10 @@
           <!-- Exposure controls (brightness, contrast) -->
           <div class="ctrl-group collapsible" id="exposure-controls">
             <div class="tone-header section-header">
-              <label class="section-check-wrap">
-                <input type="checkbox" class="section-check" data-section="exposure" checked>
-              </label>
               <div class="ctrl-label section-label">Exposure</div>
+              <label class="section-check-wrap" title="Enable exposure adjustments">
+                <input type="checkbox" class="section-check" data-section="exposure">
+              </label>
               <button id="exposure-reset" class="btn btn-ghost btn-xs" title="Reset exposure adjustments">Reset</button>
             </div>
             <div class="range-wrap">
@@ -201,10 +203,10 @@
           <!-- Split Tone controls -->
           <div class="ctrl-group collapsible" id="split-tone-controls">
             <div class="tone-header section-header">
-              <label class="section-check-wrap">
-                <input type="checkbox" class="section-check" data-section="splitTone" checked>
-              </label>
               <div class="ctrl-label section-label">Split Tone</div>
+              <label class="section-check-wrap" title="Enable split toning">
+                <input type="checkbox" class="section-check" data-section="splitTone">
+              </label>
               <button id="split-tone-reset" class="btn btn-ghost btn-xs" title="Reset split toning">Reset</button>
             </div>
             <div class="range-wrap">
@@ -238,10 +240,10 @@
           <!-- Effects / filters -->
           <div class="ctrl-group collapsible" id="effects-controls">
             <div class="ctrl-header-row section-header">
-              <label class="section-check-wrap">
-                <input type="checkbox" class="section-check" data-section="effects" checked>
-              </label>
               <div class="ctrl-label section-label">Effects &amp; Filters</div>
+              <label class="section-check-wrap" title="Enable effects and filters">
+                <input type="checkbox" class="section-check" data-section="effects">
+              </label>
               <div class="ctrl-header-actions">
                 <button id="btn-copy-effects" class="btn btn-ghost btn-xs" title="Copy effects from selected photo">Copy</button>
                 <button id="btn-paste-effects" class="btn btn-ghost btn-xs" title="Paste effects to selected photos" disabled>Paste</button>
@@ -522,7 +524,7 @@
 <script src="js/palettes.js"></script>
 <script src="js/palettes-ext.js"></script>
 <script src="js/gbcam.js"></script>
-  <script src="js/web-api.js"></script>
+<script src="js/web-api.js"></script>
 <script src="js/app.js"></script>
 
 </body>
