@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.3';
+const APP_VERSION = 'v0.9.4';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -174,7 +174,7 @@ const FILTER_DEFS = [
     { type: 'range', key: 'bleed',     label: 'Backlight bleed', def: 0,  min: 0,   max: 80,  step: 5, fmt: v => `${v}%` },
   ]},
   { id: 'glow',     label: 'Phosphor Glow',        params: [
-    { type: 'range', key: 'blur',      label: 'Bloom radius',    def: 110, min: 50,  max: 300, step: 10, fmt: v => `${v}%` },
+    { type: 'range', key: 'blur',      label: 'Bloom radius',    def: 110, min: 0,   max: 300, step: 10, fmt: v => `${v}%` },
     { type: 'seg',   key: 'phosphor',  label: 'Phosphor colour', def: 'none',       opts: [['none','None'],['green','Green'],['amber','Amber'],['blue','Blue']] },
   ]},
   { id: 'vignette', label: 'Vignette',             params: [
@@ -184,20 +184,18 @@ const FILTER_DEFS = [
   { id: 'halftone', label: 'Halftone',             params: [
     { type: 'range', key: 'radius',    label: 'Dot size',        def: 38, min: 20,  max: 60,  step: 2, fmt: v => `${v}%` },
   ]},
-  { id: 'border',   label: 'Border',               params: [
-    { type: 'seg',   key: 'thickness', label: 'Thickness',       def: 'medium',     opts: [['thin','Thin'],['medium','Medium'],['thick','Thick']] },
-  ]},
   { id: 'dot',      label: 'Dot Matrix',           params: [
     { type: 'range', key: 'radius',    label: 'Dot size',        def: 44, min: 20,  max: 80,  step: 2, fmt: v => `${v}%` },
     { type: 'range', key: 'halation',  label: 'Halation',        def: 0,  min: 0,   max: 80,  step: 5, fmt: v => `${v}%` },
   ]},
   { id: 'chroma',   label: 'Chromatic Aberration', params: [
-    { type: 'range', key: 'shift',     label: 'Channel shift',   def: 75, min: 25,  max: 300, step: 5, fmt: v => `${v}%` },
-    { type: 'seg',   key: 'direction', label: 'Direction',       def: 'horizontal', opts: [['horizontal','Horizontal'],['radial','Radial']] },
+    { type: 'range', key: 'shiftH',    label: 'Horizontal shift', def: 75, min: 0,  max: 500, step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'shiftV',    label: 'Vertical shift',   def: 0,  min: 0,  max: 500, step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'shiftR',    label: 'Radial shift',     def: 0,  min: 0,  max: 500, step: 5, fmt: v => `${v}%` },
   ]},
   { id: 'grid',     label: 'Pixel Grid',           params: [
-    { type: 'range', key: 'opacity',   label: 'Grid opacity',    def: 30, min: 10,  max: 100, step: 5, fmt: v => `${v}%` },
-    { type: 'seg',   key: 'weight',    label: 'Line weight',     def: 'thin',       opts: [['thin','Thin'],['medium','Medium'],['thick','Thick']] },
+    { type: 'range', key: 'opacity',   label: 'Grid opacity',    def: 30, min: 10,  max: 100, step: 5,   fmt: v => `${v}%` },
+    { type: 'range', key: 'weight',    label: 'Line weight',     def: 1,  min: 1,   max: 5,   step: 0.5, fmt: v => `${v}px` },
   ]},
   { id: 'jitter',   label: 'Scanline Jitter',      params: [
     { type: 'range', key: 'amount',    label: 'Jitter amount',   def: 40, min: 5,   max: 100, step: 5, fmt: v => `${v}%` },
@@ -1630,11 +1628,20 @@ function wireButtons() {
   // Note: filter-check and filter-settings-btn are removed (accordion design has no checkboxes).
   // filter-btn click is wired above; inline params are injected by buildFilterParams.
 
-  // Copy / Paste effects
-  const copyBtn  = document.getElementById('btn-copy-effects');
-  const pasteBtn = document.getElementById('btn-paste-effects');
-  if (copyBtn)  copyBtn.addEventListener('click',  copyEffects);
-  if (pasteBtn) pasteBtn.addEventListener('click', pasteEffects);
+  // Copy / Paste — wire up all instances (grid header + any others)
+  document.querySelectorAll('.btn-copy-effects').forEach(b => b.addEventListener('click', copyEffects));
+  document.querySelectorAll('.btn-paste-effects').forEach(b => b.addEventListener('click', pasteEffects));
+
+  // Effects reset button
+  document.getElementById('btn-reset-effects')?.addEventListener('click', resetEffects);
+
+  // Deselect All button
+  document.getElementById('btn-deselect-all')?.addEventListener('click', () => {
+    state.selectedPhotos.clear();
+    state.lastSelectedIndex = null;
+    repaintGrid();
+    syncControlsToEffectiveSettings(state.selectedIndex);
+  });
 
   // Save preset
   const savePresetBtn = document.getElementById('btn-save-preset');
@@ -3316,8 +3323,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     // Pixel grid — draws lines on GB pixel boundaries so each pixel has a clear border.
     // Only meaningful when each GB pixel occupies ≥ 2 screen pixels.
     const gridOpacity = ((filterParams.grid || {}).opacity ?? 30) / 100;
-    const gridWeight  = (filterParams.grid || {}).weight ?? 'thin';
-    const lineW       = { thin: 1, medium: 2, thick: 3 }[gridWeight] ?? 1;
+    const lineW       = ((filterParams.grid || {}).weight ?? 1);
     if (s >= 2) {
       ec.strokeStyle = `rgba(0,0,0,${gridOpacity})`;
       ec.lineWidth = lineW;
@@ -3340,9 +3346,10 @@ function applyExportFilter(ctx, width, height, scale, filter,
       ? ({ soft: 20, medium: 50, hard: 80 }[_fv] ?? 50)
       : _fv) / 100; // 0..1
     const cx = width / 2, cy = height / 2;
-    const innerMult = 0.45 - _t * 0.35; // 0.45 (soft) → 0.10 (hard)
-    const outerMult = 0.95 - _t * 0.20; // 0.95 (soft) → 0.75 (hard)
-    const darkMax   = 0.20 + _t * 0.78; // 0.20 (soft) → 0.98 (hard) — stronger than before
+    // Bring vignette closer to centre: inner starts at 20% (soft) → 0% (hard)
+    const innerMult = 0.20 - _t * 0.18; // 0.20 → 0.02
+    const outerMult = 0.75 - _t * 0.15; // 0.75 → 0.60
+    const darkMax   = 0.30 + _t * 0.68; // 0.30 → 0.98
 
     if (_shape > 0.05) {
       // Square-ish vignette — squish canvas coords then apply circular gradient
@@ -3350,21 +3357,21 @@ function applyExportFilter(ctx, width, height, scale, filter,
       ec.translate(cx, cy);
       ec.scale(1, width / height * (1 - _shape * 0.4) + _shape * (height / width * 1.4));
       ec.translate(-cx, -cy);
-      const squishR = Math.min(width, height) * (innerMult + _shape * 0.1);
+      const squishR = Math.min(width, height) * Math.max(0, innerMult + _shape * 0.05);
       const squishOuter = Math.max(width, height) * (outerMult + _shape * 0.05);
       const gSq = ec.createRadialGradient(cx, cy, squishR, cx, cy, squishOuter);
       gSq.addColorStop(0,   'rgba(0,0,0,0)');
-      gSq.addColorStop(0.6, `rgba(0,0,0,${(darkMax * 0.25).toFixed(2)})`);
+      gSq.addColorStop(0.5, `rgba(0,0,0,${(darkMax * 0.30).toFixed(2)})`);
       gSq.addColorStop(1,   `rgba(0,0,0,${darkMax})`);
       ec.fillStyle = gSq;
       ec.fillRect(-width, -height, width * 3, height * 3);
       ec.restore();
     } else {
-      const inner = Math.min(width, height) * innerMult;
+      const inner = Math.min(width, height) * Math.max(0, innerMult);
       const outer = Math.max(width, height) * outerMult;
       const grad  = ec.createRadialGradient(cx, cy, inner, cx, cy, outer);
       grad.addColorStop(0,   'rgba(0,0,0,0)');
-      grad.addColorStop(0.6, `rgba(0,0,0,${(darkMax * 0.2).toFixed(2)})`);
+      grad.addColorStop(0.5, `rgba(0,0,0,${(darkMax * 0.25).toFixed(2)})`);
       grad.addColorStop(1,   `rgba(0,0,0,${darkMax})`);
       ec.fillStyle = grad;
       ec.fillRect(0, 0, width, height);
@@ -3381,49 +3388,6 @@ function applyExportFilter(ctx, width, height, scale, filter,
         ec.fill();
       }
     }
-
-  } else if (filter === 'border') {
-    const thk = (filterParams.border || {}).thickness ?? 'medium';
-    const thkMult = { thin: 0.040, medium: 0.058, thick: 0.085 }[thk] ?? 0.058;
-    const bw   = Math.max(8, Math.round(Math.min(width, height) * thkMult));
-    const bwTB = Math.round(bw * 1.35);
-
-    ec.fillStyle = '#1c1c1e';
-    ec.fillRect(0, 0, width, bwTB);
-    ec.fillRect(0, height - bwTB, width, bwTB);
-    ec.fillRect(0, bwTB, bw, height - bwTB * 2);
-    ec.fillRect(width - bw, bwTB, bw, height - bwTB * 2);
-
-    ec.strokeStyle = 'rgba(255,255,255,0.20)';
-    ec.lineWidth = 1.5;
-    ec.beginPath();
-    ec.moveTo(bw + 0.75, height - bwTB); ec.lineTo(bw + 0.75, bwTB);
-    ec.lineTo(width - bw, bwTB + 0.75);
-    ec.stroke();
-
-    ec.strokeStyle = 'rgba(0,0,0,0.60)';
-    ec.beginPath();
-    ec.moveTo(width - bw - 0.75, bwTB); ec.lineTo(width - bw - 0.75, height - bwTB);
-    ec.lineTo(bw, height - bwTB - 0.75);
-    ec.stroke();
-
-    const gloss = ec.createLinearGradient(0, 0, 0, bwTB);
-    gloss.addColorStop(0,   'rgba(255,255,255,0.14)');
-    gloss.addColorStop(0.5, 'rgba(255,255,255,0.04)');
-    gloss.addColorStop(1,   'rgba(255,255,255,0)');
-    ec.fillStyle = gloss;
-    ec.fillRect(0, 0, width, bwTB);
-
-    const gr   = Math.max(3, Math.round(bw * 0.5));
-    const glow = ec.createRadialGradient(bw + gr, bwTB * 0.4, 0, bw + gr, bwTB * 0.4, gr * 3);
-    glow.addColorStop(0, 'rgba(255,255,255,0.40)');
-    glow.addColorStop(1, 'rgba(255,255,255,0)');
-    ec.fillStyle = glow;
-    ec.fillRect(bw, 0, gr * 6, bwTB);
-
-    ec.strokeStyle = 'rgba(0,0,0,0.85)';
-    ec.lineWidth = 1;
-    ec.strokeRect(0.5, 0.5, width - 1, height - 1);
 
   } else if (filter === 'dot') {
     // ── Dot Matrix ─────────────────────────────────────────────────────────
@@ -3502,10 +3466,11 @@ function applyExportFilter(ctx, width, height, scale, filter,
     return; // composited directly; skip the generic end-of-function drawImage
 
   } else if (filter === 'chroma') {
-    // ── Chromatic Aberration ───────────────────────────────────────────────
-    const chromaShiftPct = ((filterParams.chroma || {}).shift     ?? 75) / 100;
-    const chromaDir      = (filterParams.chroma || {}).direction ?? 'horizontal';
-    const shift = Math.max(1, Math.round(s * chromaShiftPct));
+    // ── Chromatic Aberration — independent H/V/R channel shifts ──────────
+    const cp = filterParams.chroma || {};
+    const hpx = Math.round(s * (cp.shiftH ?? 75) / 100);
+    const vpx = Math.round(s * (cp.shiftV ?? 0)  / 100);
+    const rpx = Math.round(s * (cp.shiftR ?? 0)  / 100);
     const orig  = ctx.getImageData(0, 0, width, height);
     const dst   = new ImageData(width, height);
     const d = orig.data, o = dst.data;
@@ -3513,25 +3478,26 @@ function applyExportFilter(ctx, width, height, scale, filter,
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const i  = (y * width + x) * 4;
-        let rx, ry2, bx, by2;
-        if (chromaDir === 'radial') {
+        const i = (y * width + x) * 4;
+        // Radial component: normalised direction vector from centre
+        let nx = 0, ny = 0;
+        if (rpx !== 0) {
           const dx = x - cx2, dy = y - cy2;
           const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          const nx = dx / dist, ny = dy / dist;
-          rx = Math.min(width  - 1, Math.max(0, Math.round(x + nx * shift)));
-          ry2= Math.min(height - 1, Math.max(0, Math.round(y + ny * shift)));
-          bx = Math.min(width  - 1, Math.max(0, Math.round(x - nx * shift)));
-          by2= Math.min(height - 1, Math.max(0, Math.round(y - ny * shift)));
-        } else {
-          rx = Math.min(width - 1, x + shift);  ry2 = y;
-          bx = Math.max(0, x - shift);           by2 = y;
+          nx = dx / dist; ny = dy / dist;
         }
-        const ri = (ry2 * width + rx) * 4;
-        const bi = (by2 * width + bx) * 4;
-        o[i]     = d[ri];
-        o[i + 1] = d[i + 1];
-        o[i + 2] = d[bi + 2];
+        // Red channel: shift +H/+V/+R
+        const rx = Math.min(width  - 1, Math.max(0, Math.round(x + hpx + nx * rpx)));
+        const ry = Math.min(height - 1, Math.max(0, Math.round(y + vpx + ny * rpx)));
+        // Blue channel: shift -H/-V/-R
+        const bx = Math.min(width  - 1, Math.max(0, Math.round(x - hpx - nx * rpx)));
+        const by = Math.min(height - 1, Math.max(0, Math.round(y - vpx - ny * rpx)));
+
+        const ri = (ry * width + rx) * 4;
+        const bi = (by * width + bx) * 4;
+        o[i]     = d[ri];       // R from shifted source
+        o[i + 1] = d[i + 1];   // G stays
+        o[i + 2] = d[bi + 2];  // B from shifted source
         o[i + 3] = 255;
       }
     }
@@ -4496,21 +4462,28 @@ function renderPresetList() {
 function copyEffects() {
   const _cpTgt = state.selectedIndex;
   const _cpEff = _cpTgt !== null ? getEffectiveSettings(_cpTgt) : null;
+  const src = _cpEff || state;
   state.effectClipboard = {
+    // Filters
     activeFilters:   _cpEff ? [..._cpEff.activeFilters] : [...state.activeFilters],
-    filterIntensity: _cpEff ? _cpEff.filterIntensity : state.filterIntensity,
-    filterVariant:   _cpEff ? _cpEff.filterVariant   : state.filterVariant,
-    filterParams:    JSON.parse(JSON.stringify(_cpEff ? _cpEff.filterParams : state.filterParams)),
+    filterIntensity: src.filterIntensity ?? state.filterIntensity,
+    filterVariant:   src.filterVariant   ?? state.filterVariant,
+    filterParams:    JSON.parse(JSON.stringify(src.filterParams ?? state.filterParams)),
+    // Tone / exposure
+    brightness:      src.brightness     ?? state.brightness,
+    contrast:        src.contrast       ?? state.contrast,
+    toneIntensity:   src.toneIntensity  ?? state.toneIntensity,
+    shadowColor:     src.shadowColor    ?? state.shadowColor,
+    highlightColor:  src.highlightColor ?? state.highlightColor,
+    toneBalance:     src.toneBalance    ?? state.toneBalance,
   };
-  const pasteBtn = document.getElementById('btn-paste-effects');
-  if (pasteBtn) pasteBtn.disabled = false;
-  showToast('Effects copied');
+  document.querySelectorAll('.btn-paste-effects').forEach(b => b.disabled = false);
+  showToast('All settings copied');
 }
 
 function pasteEffects() {
   if (!state.effectClipboard) return;
   const cb = state.effectClipboard;
-  // Determine target photos
   const targets = state.selectedPhotos.size > 0
     ? [...state.selectedPhotos]
     : state.selectedIndex !== null ? [state.selectedIndex] : [];
@@ -4518,20 +4491,50 @@ function pasteEffects() {
   for (const idx of targets) {
     if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
     const ps = state.photoSettings[idx];
+    // Filters
     ps.filterIntensity = cb.filterIntensity;
     ps.filterVariant   = cb.filterVariant;
     ps.filterParams    = JSON.parse(JSON.stringify(cb.filterParams));
-  }
-  // Write activeFilters per-photo for each target
-  for (const idx of targets) {
-    if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
-    state.photoSettings[idx].activeFilters = [...cb.activeFilters];
+    ps.activeFilters   = [...cb.activeFilters];
+    // Tone / exposure
+    ps.brightness      = cb.brightness;
+    ps.contrast        = cb.contrast;
+    ps.toneIntensity   = cb.toneIntensity;
+    ps.shadowColor     = cb.shadowColor;
+    ps.highlightColor  = cb.highlightColor;
+    ps.toneBalance     = cb.toneBalance;
   }
   updateFilterUI();
   _refreshFilterParamPanel();
   syncControlsToEffectiveSettings(state.selectedIndex);
   repaintGrid();
-  showToast(`Effects pasted to ${targets.length} photo${targets.length > 1 ? 's' : ''}`);
+  showToast(`Settings pasted to ${targets.length} photo${targets.length > 1 ? 's' : ''}`);
+}
+
+function resetEffects() {
+  // Reset all filter state for selected photo(s), or global if none selected
+  const targets = state.selectedPhotos.size > 0
+    ? [...state.selectedPhotos]
+    : state.selectedIndex !== null ? [state.selectedIndex] : null;
+  if (targets) {
+    for (const idx of targets) {
+      if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+      const ps = state.photoSettings[idx];
+      ps.activeFilters   = [];
+      ps.filterParams    = buildDefaultFilterParams();
+      ps.filterIntensity = 1.0;
+      ps.filterVariant   = 'medium';
+    }
+  } else {
+    state.activeFilters.clear();
+    state.filterParams    = buildDefaultFilterParams();
+    state.filterIntensity = 1.0;
+    state.filterVariant   = 'medium';
+  }
+  updateFilterUI();
+  repaintGrid();
+  updateSidebarPreview();
+  showToast('Effects reset');
 }
 
 // ── Stackable effects ────────────────────────────────────────────────────────
@@ -4540,7 +4543,7 @@ function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVa
   if (state.sectionEnabled?.effects === false) return;
   const af = activeFilters || state.activeFilters;
   if (af.size === 0) return;
-  const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'border', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting'];
+  const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting'];
   for (const filterName of filterOrder) {
     if (af.has(filterName)) {
       applyExportFilter(ctx, width, height, scale, filterName, filterIntensity, filterVariant, filterParams);
@@ -4599,6 +4602,8 @@ function toggleFilter(filterName) {
     }
   }
   updateFilterUI();
+  repaintGrid();
+  updateSidebarPreview();
 }
 
 function _refreshFilterParamPanel() {
@@ -4690,6 +4695,9 @@ function setupFilterAccordion() {
     outer.className = 'fi-body-outer';
     const inner = document.createElement('div');
     inner.className = 'fi-body-inner';
+    const content = document.createElement('div');
+    content.className = 'fi-body-content';
+    inner.appendChild(content);
 
     for (const p of fd.params) {
       if (p.type === 'range') {
@@ -4732,7 +4740,7 @@ function setupFilterAccordion() {
 
         wrap.appendChild(hdr2);
         wrap.appendChild(slider);
-        inner.appendChild(wrap);
+        content.appendChild(wrap);
 
       } else if (p.type === 'seg') {
         const wrap = document.createElement('div');
@@ -4769,7 +4777,7 @@ function setupFilterAccordion() {
 
         wrap.appendChild(pLbl);
         wrap.appendChild(seg);
-        inner.appendChild(wrap);
+        content.appendChild(wrap);
       }
     }
 

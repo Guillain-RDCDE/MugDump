@@ -348,7 +348,7 @@ html, body {
 
 .photo-slot.selected {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), 0 0 12px var(--accent-glow);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .photo-slot.multi-selected {
@@ -2425,14 +2425,8 @@ input[type="range"] {
   color: var(--text) !important;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  flex: none; /* natural width — don't grow so checkbox sits snug next to label */
+  flex: 1; /* grow to push buttons + checkbox to the right */
   cursor: pointer;
-}
-
-/* Push the trailing action buttons to the far right */
-.section-header > button,
-.section-header > .ctrl-header-actions {
-  margin-left: auto;
 }
 
 /* Section enable/disable checkbox */
@@ -2525,13 +2519,17 @@ input[type="range"] {
 .fi-body-inner {
   overflow: hidden;
   min-height: 0;
+  /* No padding here — padding lives on .fi-body-content so grid collapse works cleanly */
+}
+/* The actual content wrapper inside the grid child — carries the padding */
+.fi-body-content {
   padding: 4px 8px 10px 14px;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.fi-body-inner .range-wrap { margin-top: 0; margin-bottom: 0; }
-.fi-body-inner .fp-row     { margin-top: 0; }
+.fi-body-content .range-wrap { margin-top: 0; margin-bottom: 0; }
+.fi-body-content .fp-row     { margin-top: 0; }
 
 /* ── Custom orange/black checkboxes ─────────────────────────────────────── */
 
