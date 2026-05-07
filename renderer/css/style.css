@@ -2449,9 +2449,10 @@ input[type="range"] {
   cursor: pointer;
 }
 
-/* ── Filter accordion ────────────────────────────────────────────────────── */
+/* ── Filter accordion (legacy + new fi- items) ───────────────────────────── */
 
-.filter-accordion {
+.filter-accordion,
+#filter-accordion {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -2459,13 +2460,95 @@ input[type="range"] {
   margin-bottom: 8px;
 }
 
+/* ── New Lightroom-style fi-item accordion ──────────────────────────────── */
+
+.fi-item {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.fi-item + .fi-item { margin-top: 1px; }
+
+.fi-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 6px 5px 4px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.1s;
+}
+.fi-header:hover { background: var(--surface-2); }
+
+.fi-chevron {
+  font-size: 14px;
+  color: var(--text-3);
+  flex-shrink: 0;
+  transition: transform 0.15s, color 0.15s;
+  margin-right: 1px;
+}
+
+.fi-label {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-2);
+  flex: 1;
+  user-select: none;
+  transition: color 0.1s;
+}
+
+.fi-check-wrap {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+/* Active state — filter is enabled */
+.fi-item.fi-active .fi-label  { color: var(--accent); font-weight: 500; }
+.fi-item.fi-active .fi-chevron { color: var(--accent); }
+.fi-item.fi-active .fi-header  { background: var(--accent-dim); }
+
+/* Collapsed body — hide params */
+.fi-body-outer {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.18s ease;
+  overflow: hidden;
+}
+.fi-body-outer .fi-body-inner {
+  min-height: 0;
+  padding: 4px 8px 8px 14px;
+}
+
+/* Items not active AND not manually expanded: collapse body */
+.fi-item:not(.fi-active) .fi-body-outer,
+.fi-item.fi-collapsed    .fi-body-outer {
+  grid-template-rows: 0fr;
+}
+/* But if manually collapsed, even active items collapse */
+.fi-item.fi-active.fi-collapsed .fi-body-outer {
+  grid-template-rows: 0fr;
+}
+/* Active items without fi-collapsed: show body */
+.fi-item.fi-active:not(.fi-collapsed) .fi-body-outer {
+  grid-template-rows: 1fr;
+}
+
+.fi-body-inner .range-wrap { margin-top: 0; margin-bottom: 6px; }
+.fi-body-inner .fp-row + * { margin-top: 6px; }
+
+/* ── Legacy filter-item / filter-btn / filter-inline (kept for compat) ──── */
+
 .filter-item {
   display: flex;
   flex-direction: column;
 }
 
 .filter-item .filter-btn {
-  /* Override any pill style — full-width left-aligned toggle */
   width: 100%;
   text-align: left;
   padding: 5px 8px;
@@ -2478,10 +2561,7 @@ input[type="range"] {
   cursor: pointer;
   transition: background 0.1s, border-color 0.1s, color 0.1s;
 }
-.filter-item .filter-btn:hover {
-  background: var(--surface-2);
-  color: var(--text);
-}
+.filter-item .filter-btn:hover { background: var(--surface-2); color: var(--text); }
 .filter-item .filter-btn.active {
   background: var(--accent-dim);
   border-color: var(--accent);
@@ -2496,15 +2576,8 @@ input[type="range"] {
   border-left: 2px solid var(--accent);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
-
-.filter-inline .range-wrap {
-  margin-top: 0;
-  margin-bottom: 6px;
-}
-
-.filter-inline .fp-row + * {
-  margin-top: 6px;
-}
+.filter-inline .range-wrap { margin-top: 0; margin-bottom: 6px; }
+.filter-inline .fp-row + *  { margin-top: 6px; }
 
 /* ── gif-preview-info inside preview wrap ───────────────────────────────── */
 #gif-preview-info {

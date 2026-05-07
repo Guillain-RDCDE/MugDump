@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.1';
+const APP_VERSION = 'v0.9.2';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -160,6 +160,71 @@ function syncColorSwatchBtn(input, hex) {
 
 const THUMB_SCALE = 4; // grid thumbnails rendered at 4× for CRT scanline clarity
 
+// ── Filter definitions (single source of truth for UI + defaults) ─────────
+
+const FILTER_DEFS = [
+  { id: 'crt',      label: 'CRT Scanlines',       params: [
+    { type: 'seg',   key: 'variant',   label: 'Scanlines',       def: 'medium',      stateKey: 'filterVariant', opts: [['fine','Fine'],['medium','Medium'],['thick','Thick'],['wide','Wide']] },
+    { type: 'seg',   key: 'curve',     label: 'Screen shape',    def: 'none',        opts: [['none','Flat'],['mild','Mild'],['strong','Strong']] },
+    { type: 'range', key: 'noise',     label: 'Film noise',      def: 20, min: 0,   max: 80,  step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'bleed',     label: 'Edge bleed',      def: 0,  min: 0,   max: 100, step: 5, fmt: v => `${v}%` },
+  ]},
+  { id: 'lcd',      label: 'LCD',                  params: [
+    { type: 'range', key: 'subpixel',  label: 'Sub-pixel tint',  def: 30, min: 0,   max: 80,  step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'bleed',     label: 'Backlight bleed', def: 0,  min: 0,   max: 80,  step: 5, fmt: v => `${v}%` },
+  ]},
+  { id: 'glow',     label: 'Phosphor Glow',        params: [
+    { type: 'range', key: 'blur',      label: 'Bloom radius',    def: 110, min: 50,  max: 300, step: 10, fmt: v => `${v}%` },
+    { type: 'seg',   key: 'phosphor',  label: 'Phosphor colour', def: 'none',       opts: [['none','None'],['green','Green'],['amber','Amber'],['blue','Blue']] },
+  ]},
+  { id: 'vignette', label: 'Vignette',             params: [
+    { type: 'range', key: 'falloff',   label: 'Intensity',       def: 50, min: 0,   max: 100, step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'shape',     label: 'Shape',           def: 0,  min: 0,   max: 100, step: 5, fmt: v => v <= 5 ? 'Round' : v >= 95 ? 'Square' : `${v}%` },
+  ]},
+  { id: 'halftone', label: 'Halftone',             params: [
+    { type: 'range', key: 'radius',    label: 'Dot size',        def: 38, min: 20,  max: 60,  step: 2, fmt: v => `${v}%` },
+  ]},
+  { id: 'border',   label: 'Border',               params: [
+    { type: 'seg',   key: 'thickness', label: 'Thickness',       def: 'medium',     opts: [['thin','Thin'],['medium','Medium'],['thick','Thick']] },
+  ]},
+  { id: 'dot',      label: 'Dot Matrix',           params: [
+    { type: 'range', key: 'radius',    label: 'Dot size',        def: 44, min: 20,  max: 80,  step: 2, fmt: v => `${v}%` },
+    { type: 'range', key: 'halation',  label: 'Halation',        def: 0,  min: 0,   max: 80,  step: 5, fmt: v => `${v}%` },
+  ]},
+  { id: 'chroma',   label: 'Chromatic Aberration', params: [
+    { type: 'range', key: 'shift',     label: 'Channel shift',   def: 75, min: 25,  max: 300, step: 5, fmt: v => `${v}%` },
+    { type: 'seg',   key: 'direction', label: 'Direction',       def: 'horizontal', opts: [['horizontal','Horizontal'],['radial','Radial']] },
+  ]},
+  { id: 'grid',     label: 'Pixel Grid',           params: [
+    { type: 'range', key: 'opacity',   label: 'Grid opacity',    def: 30, min: 10,  max: 100, step: 5, fmt: v => `${v}%` },
+    { type: 'seg',   key: 'weight',    label: 'Line weight',     def: 'thin',       opts: [['thin','Thin'],['medium','Medium'],['thick','Thick']] },
+  ]},
+  { id: 'jitter',   label: 'Scanline Jitter',      params: [
+    { type: 'range', key: 'amount',    label: 'Jitter amount',   def: 40, min: 5,   max: 100, step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'frequency', label: 'Frequency',       def: 50, min: 10,  max: 100, step: 5, fmt: v => `${v}%` },
+  ]},
+  { id: 'noise',    label: 'Noise / Static',       params: [
+    { type: 'range', key: 'amount',    label: 'Amount',          def: 40, min: 5,   max: 100, step: 5, fmt: v => `${v}%` },
+    { type: 'seg',   key: 'type',      label: 'Type',            def: 'film',       opts: [['film','Film'],['static','Static'],['bands','Bands']] },
+  ]},
+  { id: 'ghosting', label: 'VHS Ghosting',         params: [
+    { type: 'range', key: 'offset',    label: 'Echo offset',     def: 60, min: 10,  max: 150, step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'fade',      label: 'Echo fade',       def: 70, min: 10,  max: 100, step: 5, fmt: v => `${v}%` },
+  ]},
+];
+
+function buildDefaultFilterParams() {
+  const out = {};
+  for (const fd of FILTER_DEFS) {
+    out[fd.id] = {};
+    for (const p of fd.params) {
+      if (p.stateKey) continue; // handled in state directly (e.g. filterVariant)
+      out[fd.id][p.key] = p.def;
+    }
+  }
+  return out;
+}
+
 // ── State ──────────────────────────────────────────────────────────────────
 
 const state = {
@@ -175,18 +240,7 @@ const state = {
   exportFilter:    'none',   // 'none' | 'crt' | 'lcd' | 'grid' | 'vignette' | 'halftone' | 'border'
   filterIntensity: 1.0,     // 0.0–1.0
   filterVariant:   'medium', // crt only: 'fine'|'medium'|'thick'|'wide'
-  filterParams: {           // per-filter granular parameters
-    crt:      { phosphor: 'green', curve: 'none' }, // phosphor: 'none'|'green'|'amber'; curve: 'none'|'mild'|'strong'
-    lcd:      { subpixel: 30 },        // 0–80 %
-    dot:      { radius: 44 },          // 20–80 % of scale
-    glow:     { blur: 110, phosphor: 'green' }, // 50–300 % of scale; phosphor: 'none'|'green'|'amber'
-    chroma:   { shift: 75 },           // 25–300 % of scale
-    jitter:   { amount: 40 },          // 5–100 % of scale
-    grid:     { opacity: 30 },         // 10–60 %
-    vignette: { falloff: 50 },         // 0–100 continuous
-    halftone: { radius: 38 },          // 20–60 % of scale
-    border:   { thickness: 'medium' }, // 'thin'|'medium'|'thick'
-  },
+  filterParams: buildDefaultFilterParams(), // per-filter granular parameters (see FILTER_DEFS)
   photoTransforms: {},      // { photoIndex: { rotate: 0, flipH: false, flipV: false } }
   hideEmpty: false,         // whether to collapse empty grid slots
   presentationMode: false,  // fullscreen presentation overlay active
@@ -388,18 +442,7 @@ function resetAllEdits() {
     state.shadowColor     = '#0033aa';
     state.highlightColor  = '#ff8800';
     state.toneBalance     = 0;
-    state.filterParams    = {
-      crt:      { phosphor: 'green', curve: 'none' },
-      lcd:      { subpixel: 30 },
-      dot:      { radius: 44 },
-      glow:     { blur: 110 },
-      chroma:   { shift: 75 },
-      jitter:   { amount: 40 },
-      grid:     { opacity: 30 },
-      vignette: { falloff: 50 },
-      halftone: { radius: 38 },
-      border:   { thickness: 'medium' },
-    };
+    state.filterParams    = buildDefaultFilterParams();
     state.activeFilters.clear();
     state.focusedFilter = null;
     state.palette = PALETTES.dmg;
@@ -436,19 +479,8 @@ function syncControlsToEffectiveSettings(index) {
   });
   updateCurrentPalettePin();
 
-  // Filter buttons — reflect active stacked filters
-  document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.classList.toggle('active', eff.activeFilters.has(btn.dataset.filter));
-  });
-
-  // Intensity slider
-  const intSlider = document.getElementById('filter-intensity');
-  const intVal    = document.getElementById('filter-intensity-val');
-  if (intSlider) intSlider.value = Math.round(eff.filterIntensity * 100);
-  if (intVal)    intVal.textContent = `${Math.round(eff.filterIntensity * 100)}%`;
-
-  // Rebuild filter param inline panels to reflect effective settings for this photo
-  _refreshFilterParamPanel();
+  // Sync filter accordion checkboxes + param values
+  syncFilterAccordion(eff);
 
   // Tone controls
   const bEl  = document.getElementById('tone-brightness');
@@ -3192,20 +3224,32 @@ function applyExportFilter(ctx, width, height, scale, filter,
       ec.fillRect(0, rowTop + brightH, width, gapH);
     }
 
-    // Phosphor tint — colour the bright part of each row
-    const ph = (filterParams.crt || {}).phosphor ?? 'green';
-    if (ph !== 'none' && brightH > 0) {
-      const phColors = {
-        green: 'rgba(0,255,60,0.14)',
-        amber: 'rgba(255,160,0,0.16)',
-      };
-      const tintColor = phColors[ph];
-      if (tintColor) {
-        for (let row = 0; row < GBCam.PHOTO_HEIGHT; row++) {
-          ec.fillStyle = tintColor;
-          ec.fillRect(0, row * rowH, width, brightH);
-        }
+    // Film noise overlay
+    const crtNoise = ((filterParams.crt || {}).noise ?? 20);
+    if (crtNoise > 0) {
+      const noiseStr = crtNoise / 100;
+      const imgData  = ec.getImageData(0, 0, width, height);
+      const d = imgData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const grain = (Math.random() - 0.5) * noiseStr * 200;
+        d[i]   = Math.min(255, Math.max(0, d[i]   + grain));
+        d[i+1] = Math.min(255, Math.max(0, d[i+1] + grain));
+        d[i+2] = Math.min(255, Math.max(0, d[i+2] + grain));
       }
+      ec.putImageData(imgData, 0, 0);
+    }
+
+    // Edge bleed (vignette-style bloom from edges)
+    const crtBleed = ((filterParams.crt || {}).bleed ?? 0);
+    if (crtBleed > 0) {
+      const bleedStr = crtBleed / 100;
+      const edgeGrad = ec.createRadialGradient(width/2, height/2, Math.min(width,height)*0.2, width/2, height/2, Math.max(width,height)*0.8);
+      edgeGrad.addColorStop(0, 'rgba(255,255,255,0)');
+      edgeGrad.addColorStop(1, `rgba(255,255,255,${bleedStr * 0.25})`);
+      ec.globalCompositeOperation = 'screen';
+      ec.fillStyle = edgeGrad;
+      ec.fillRect(0, 0, width, height);
+      ec.globalCompositeOperation = 'source-over';
     }
 
     // Screen curvature — edge darkening + specular highlight
@@ -3231,7 +3275,8 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
 
   } else if (filter === 'lcd') {
-    const spStr = ((filterParams.lcd || {}).subpixel ?? 10) / 100;
+    const spStr    = ((filterParams.lcd || {}).subpixel ?? 30) / 100;
+    const lcdBleed = ((filterParams.lcd || {}).bleed    ?? 0)  / 100;
     // Row gaps
     for (let y = s - 1; y < height; y += s) {
       ec.fillStyle = 'rgba(0,0,0,0.38)';
@@ -3254,43 +3299,76 @@ function applyExportFilter(ctx, width, height, scale, filter,
         ec.fillRect(x + cw * 2, 0, cw, height);
       }
     }
+    // Backlight bleed — faint white glow from corners/edges
+    if (lcdBleed > 0) {
+      const corners = [[0, 0], [width, 0], [0, height], [width, height]];
+      const bleedR  = Math.max(width, height) * 0.6;
+      for (const [cx2, cy2] of corners) {
+        const bg = ec.createRadialGradient(cx2, cy2, 0, cx2, cy2, bleedR);
+        bg.addColorStop(0, `rgba(255,255,255,${lcdBleed * 0.18})`);
+        bg.addColorStop(1, 'rgba(255,255,255,0)');
+        ec.fillStyle = bg;
+        ec.fillRect(0, 0, width, height);
+      }
+    }
 
   } else if (filter === 'grid') {
     // Pixel grid — draws lines on GB pixel boundaries so each pixel has a clear border.
     // Only meaningful when each GB pixel occupies ≥ 2 screen pixels.
     const gridOpacity = ((filterParams.grid || {}).opacity ?? 30) / 100;
+    const gridWeight  = (filterParams.grid || {}).weight ?? 'thin';
+    const lineW       = { thin: 1, medium: 2, thick: 3 }[gridWeight] ?? 1;
     if (s >= 2) {
       ec.strokeStyle = `rgba(0,0,0,${gridOpacity})`;
-      ec.lineWidth = 1;
+      ec.lineWidth = lineW;
       // Vertical lines between each GB pixel column
       for (let col = 1; col < GBCam.PHOTO_WIDTH; col++) {
-        const x = col * s - 0.5;
+        const x = col * s - lineW / 2;
         ec.beginPath(); ec.moveTo(x, 0); ec.lineTo(x, height); ec.stroke();
       }
       // Horizontal lines between each GB pixel row
       for (let row = 1; row < GBCam.PHOTO_HEIGHT; row++) {
-        const y = row * s - 0.5;
+        const y = row * s - lineW / 2;
         ec.beginPath(); ec.moveTo(0, y); ec.lineTo(width, y); ec.stroke();
       }
     }
 
   } else if (filter === 'vignette') {
-    const _fv = (filterParams.vignette || {}).falloff ?? 50;
-    const _t  = (typeof _fv === 'string'
+    const _fv    = (filterParams.vignette || {}).falloff ?? 50;
+    const _shape = ((filterParams.vignette || {}).shape  ?? 0) / 100; // 0=round, 1=square
+    const _t     = (typeof _fv === 'string'
       ? ({ soft: 20, medium: 50, hard: 80 }[_fv] ?? 50)
       : _fv) / 100; // 0..1
     const cx = width / 2, cy = height / 2;
     const innerMult = 0.45 - _t * 0.35; // 0.45 (soft) → 0.10 (hard)
     const outerMult = 0.95 - _t * 0.20; // 0.95 (soft) → 0.75 (hard)
-    const darkMax   = 0.40 + _t * 0.50; // 0.40 (soft) → 0.90 (hard)
-    const inner = Math.min(width, height) * innerMult;
-    const outer = Math.max(width, height) * outerMult;
-    const grad = ec.createRadialGradient(cx, cy, inner, cx, cy, outer);
-    grad.addColorStop(0,   'rgba(0,0,0,0)');
-    grad.addColorStop(0.6, `rgba(0,0,0,${(darkMax * 0.2).toFixed(2)})`);
-    grad.addColorStop(1,   `rgba(0,0,0,${darkMax})`);
-    ec.fillStyle = grad;
-    ec.fillRect(0, 0, width, height);
+    const darkMax   = 0.20 + _t * 0.78; // 0.20 (soft) → 0.98 (hard) — stronger than before
+
+    if (_shape > 0.05) {
+      // Square-ish vignette — squish canvas coords then apply circular gradient
+      ec.save();
+      ec.translate(cx, cy);
+      ec.scale(1, width / height * (1 - _shape * 0.4) + _shape * (height / width * 1.4));
+      ec.translate(-cx, -cy);
+      const squishR = Math.min(width, height) * (innerMult + _shape * 0.1);
+      const squishOuter = Math.max(width, height) * (outerMult + _shape * 0.05);
+      const gSq = ec.createRadialGradient(cx, cy, squishR, cx, cy, squishOuter);
+      gSq.addColorStop(0,   'rgba(0,0,0,0)');
+      gSq.addColorStop(0.6, `rgba(0,0,0,${(darkMax * 0.25).toFixed(2)})`);
+      gSq.addColorStop(1,   `rgba(0,0,0,${darkMax})`);
+      ec.fillStyle = gSq;
+      ec.fillRect(-width, -height, width * 3, height * 3);
+      ec.restore();
+    } else {
+      const inner = Math.min(width, height) * innerMult;
+      const outer = Math.max(width, height) * outerMult;
+      const grad  = ec.createRadialGradient(cx, cy, inner, cx, cy, outer);
+      grad.addColorStop(0,   'rgba(0,0,0,0)');
+      grad.addColorStop(0.6, `rgba(0,0,0,${(darkMax * 0.2).toFixed(2)})`);
+      grad.addColorStop(1,   `rgba(0,0,0,${darkMax})`);
+      ec.fillStyle = grad;
+      ec.fillRect(0, 0, width, height);
+    }
 
   } else if (filter === 'halftone') {
     const htRad = ((filterParams.halftone || {}).radius ?? 38) / 100;
@@ -3355,7 +3433,8 @@ function applyExportFilter(ctx, width, height, scale, filter,
     ec.fillRect(0, 0, width, height);
     // Punch circular holes so the underlying pixel colours show through
     ec.globalCompositeOperation = 'destination-out';
-    const dotRadPct = ((filterParams.dot || {}).radius ?? 44) / 100;
+    const dotRadPct  = ((filterParams.dot || {}).radius   ?? 44) / 100;
+    const halationPct= ((filterParams.dot || {}).halation ?? 0)  / 100;
     const dotR = Math.max(1, Math.round(s * dotRadPct));
     for (let py = 0; py < GBCam.PHOTO_HEIGHT; py++) {
       for (let px = 0; px < GBCam.PHOTO_WIDTH; px++) {
@@ -3367,14 +3446,31 @@ function applyExportFilter(ctx, width, height, scale, filter,
       }
     }
     ec.globalCompositeOperation = 'source-over';
+    // Halation — soft outer glow around each dot
+    if (halationPct > 0) {
+      for (let py = 0; py < GBCam.PHOTO_HEIGHT; py++) {
+        for (let px = 0; px < GBCam.PHOTO_WIDTH; px++) {
+          const cx2 = Math.round(px * s + s * 0.5);
+          const cy2 = Math.round(py * s + s * 0.5);
+          const gR   = dotR + Math.round(s * halationPct * 0.8);
+          const hGrad = ec.createRadialGradient(cx2, cy2, dotR * 0.8, cx2, cy2, gR);
+          hGrad.addColorStop(0, `rgba(255,255,255,${halationPct * 0.3})`);
+          hGrad.addColorStop(1, 'rgba(255,255,255,0)');
+          ec.fillStyle = hGrad;
+          ec.beginPath();
+          ec.arc(cx2, cy2, gR, 0, Math.PI * 2);
+          ec.fill();
+        }
+      }
+    }
 
   } else if (filter === 'glow') {
     // ── Phosphor Glow ──────────────────────────────────────────────────────
     // Creates a coloured phosphor bloom: tint a copy of the source, blur it
     // heavily, then screen-blend it back so bright pixels glow outward.
     const glowBlurPct = ((filterParams.glow || {}).blur ?? 110) / 100;
-    const ph          = (filterParams.glow || {}).phosphor ?? 'green';
-    const phColors    = { green: 'rgba(0,255,80,0.40)', amber: 'rgba(255,170,0,0.42)' };
+    const ph          = (filterParams.glow || {}).phosphor ?? 'none';
+    const phColors    = { green: 'rgba(0,255,80,0.40)', amber: 'rgba(255,170,0,0.42)', blue: 'rgba(80,160,255,0.40)' };
 
     // Step 1: draw source image onto tinting canvas
     const bloomSrc = Object.assign(document.createElement('canvas'), { width, height });
@@ -3382,9 +3478,9 @@ function applyExportFilter(ctx, width, height, scale, filter,
     bsc.drawImage(ctx.canvas, 0, 0);
 
     // Step 2: overlay phosphor colour using 'source-atop' so tint only goes where pixels are
-    if (ph !== 'none') {
+    if (ph !== 'none' && phColors[ph]) {
       bsc.globalCompositeOperation = 'source-atop';
-      bsc.fillStyle = phColors[ph] || phColors.green;
+      bsc.fillStyle = phColors[ph];
       bsc.fillRect(0, 0, width, height);
       bsc.globalCompositeOperation = 'source-over';
     }
@@ -3407,32 +3503,39 @@ function applyExportFilter(ctx, width, height, scale, filter,
 
   } else if (filter === 'chroma') {
     // ── Chromatic Aberration ───────────────────────────────────────────────
-    // Shift the R channel rightward and the B channel leftward by ~1 GB
-    // pixel width, keeping G in place.  Produces that colour-fringing look.
-    const chromaShiftPct = ((filterParams.chroma || {}).shift ?? 75) / 100;
+    const chromaShiftPct = ((filterParams.chroma || {}).shift     ?? 75) / 100;
+    const chromaDir      = (filterParams.chroma || {}).direction ?? 'horizontal';
     const shift = Math.max(1, Math.round(s * chromaShiftPct));
     const orig  = ctx.getImageData(0, 0, width, height);
     const dst   = new ImageData(width, height);
     const d = orig.data, o = dst.data;
+    const cx2 = width / 2, cy2 = height / 2;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const i  = (y * width + x) * 4;
-        // R from the right
-        const rx = Math.min(width - 1, x + shift);
-        const ri = (y * width + rx) * 4;
-        // B from the left
-        const bx = Math.max(0, x - shift);
-        const bi = (y * width + bx) * 4;
-
-        o[i]     = d[ri];       // shifted R
-        o[i + 1] = d[i + 1];   // original G
-        o[i + 2] = d[bi + 2];  // shifted B
+        let rx, ry2, bx, by2;
+        if (chromaDir === 'radial') {
+          const dx = x - cx2, dy = y - cy2;
+          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+          const nx = dx / dist, ny = dy / dist;
+          rx = Math.min(width  - 1, Math.max(0, Math.round(x + nx * shift)));
+          ry2= Math.min(height - 1, Math.max(0, Math.round(y + ny * shift)));
+          bx = Math.min(width  - 1, Math.max(0, Math.round(x - nx * shift)));
+          by2= Math.min(height - 1, Math.max(0, Math.round(y - ny * shift)));
+        } else {
+          rx = Math.min(width - 1, x + shift);  ry2 = y;
+          bx = Math.max(0, x - shift);           by2 = y;
+        }
+        const ri = (ry2 * width + rx) * 4;
+        const bi = (by2 * width + bx) * 4;
+        o[i]     = d[ri];
+        o[i + 1] = d[i + 1];
+        o[i + 2] = d[bi + 2];
         o[i + 3] = 255;
       }
     }
 
-    // Blend the aberrated image with the original at requested intensity
     const t = Math.min(1, Math.max(0, intensity));
     if (t < 1) {
       for (let i = 0; i < o.length; i += 4) {
@@ -3449,8 +3552,9 @@ function applyExportFilter(ctx, width, height, scale, filter,
     // ── Scanline Jitter ────────────────────────────────────────────────────
     // Displaces each row of pixels horizontally by a deterministic amount,
     // grouped by GB tile row for an authentic corrupted-signal look.
-    const jitterPct = ((filterParams.jitter || {}).amount ?? 40) / 100;
-    const maxShift  = Math.max(1, Math.round(s * jitterPct * 3));
+    const jitterPct   = ((filterParams.jitter || {}).amount    ?? 40) / 100;
+    const jitterFreq  = ((filterParams.jitter || {}).frequency ?? 50) / 100; // 0.1–1.0: lower = fewer affected rows
+    const maxShift    = Math.max(1, Math.round(s * jitterPct * 3));
     const orig = ctx.getImageData(0, 0, width, height);
     const dst  = new ImageData(width, height);
     const d = orig.data, o = dst.data;
@@ -3458,10 +3562,11 @@ function applyExportFilter(ctx, width, height, scale, filter,
 
     for (let y = 0; y < height; y++) {
       const tileY = Math.floor(y / tileH);
-      // Deterministic hash — same image always gets same jitter pattern
       const frac  = (Math.sin(tileY * 43758.5453123) * 43758.5453123) % 1;
       const norm  = frac < 0 ? frac + 1 : frac;
-      const shift = Math.round((norm * 2 - 1) * maxShift);
+      // Frequency: only displace rows where the "noise" exceeds (1 - jitterFreq)
+      const shouldJitter = norm > (1 - jitterFreq);
+      const shift = shouldJitter ? Math.round((norm * 2 - 1) * maxShift) : 0;
       for (let x = 0; x < width; x++) {
         const sx = Math.min(width - 1, Math.max(0, x + shift));
         const i  = (y * width + x) * 4;
@@ -3476,6 +3581,73 @@ function applyExportFilter(ctx, width, height, scale, filter,
         o[i]   = Math.round(d[i]   * (1-t) + o[i]   * t);
         o[i+1] = Math.round(d[i+1] * (1-t) + o[i+1] * t);
         o[i+2] = Math.round(d[i+2] * (1-t) + o[i+2] * t);
+      }
+    }
+    ctx.putImageData(dst, 0, 0);
+    return;
+  }
+
+  } else if (filter === 'noise') {
+    // ── Noise / Static ──────────────────────────────────────────────────────
+    // Film: per-pixel luminance noise. Static: random R/G/B noise. Bands: row noise.
+    const noiseAmt  = ((filterParams.noise || {}).amount ?? 40) / 100;
+    const noiseType = (filterParams.noise || {}).type ?? 'film';
+    const orig = ctx.getImageData(0, 0, width, height);
+    const d    = orig.data;
+
+    if (noiseType === 'film') {
+      for (let i = 0; i < d.length; i += 4) {
+        const g = (Math.random() - 0.5) * noiseAmt * 200;
+        d[i]   = Math.min(255, Math.max(0, d[i]   + g));
+        d[i+1] = Math.min(255, Math.max(0, d[i+1] + g));
+        d[i+2] = Math.min(255, Math.max(0, d[i+2] + g));
+      }
+    } else if (noiseType === 'static') {
+      for (let i = 0; i < d.length; i += 4) {
+        d[i]   = Math.min(255, Math.max(0, d[i]   + (Math.random() - 0.5) * noiseAmt * 200));
+        d[i+1] = Math.min(255, Math.max(0, d[i+1] + (Math.random() - 0.5) * noiseAmt * 200));
+        d[i+2] = Math.min(255, Math.max(0, d[i+2] + (Math.random() - 0.5) * noiseAmt * 200));
+      }
+    } else if (noiseType === 'bands') {
+      for (let y = 0; y < height; y++) {
+        const rowNoise = (Math.random() - 0.5) * noiseAmt * 180;
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          d[i]   = Math.min(255, Math.max(0, d[i]   + rowNoise));
+          d[i+1] = Math.min(255, Math.max(0, d[i+1] + rowNoise));
+          d[i+2] = Math.min(255, Math.max(0, d[i+2] + rowNoise));
+        }
+      }
+    }
+    ctx.putImageData(orig, 0, 0);
+    return;
+
+  } else if (filter === 'ghosting') {
+    // ── VHS Ghosting ──────────────────────────────────────────────────────
+    // Blends in a horizontally-offset semi-transparent copy of the image,
+    // then a second dimmer copy at 2× offset — mimics VHS tape ghosting.
+    const ghostOffset = ((filterParams.ghosting || {}).offset ?? 60) / 100;
+    const ghostFade   = ((filterParams.ghosting || {}).fade   ?? 70) / 100;
+    const shift2      = Math.max(2, Math.round(s * ghostOffset));
+    const orig = ctx.getImageData(0, 0, width, height);
+    const dst  = new ImageData(width, height);
+    const d = orig.data, o = dst.data;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i   = (y * width + x) * 4;
+        // Ghost 1: shift left by offset
+        const g1x = Math.max(0, x - shift2);
+        const g1i = (y * width + g1x) * 4;
+        // Ghost 2: shift left by 2× offset (dimmer)
+        const g2x = Math.max(0, x - shift2 * 2);
+        const g2i = (y * width + g2x) * 4;
+        const a1  = (1 - ghostFade) * 0.8;
+        const a2  = (1 - ghostFade) * 0.35;
+        o[i]   = Math.min(255, d[i]   + d[g1i]   * a1 + d[g2i]   * a2);
+        o[i+1] = Math.min(255, d[i+1] + d[g1i+1] * a1 + d[g2i+1] * a2);
+        o[i+2] = Math.min(255, d[i+2] + d[g1i+2] * a1 + d[g2i+2] * a2);
+        o[i+3] = 255;
       }
     }
     ctx.putImageData(dst, 0, 0);
@@ -4369,7 +4541,7 @@ function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVa
   if (state.sectionEnabled?.effects === false) return;
   const af = activeFilters || state.activeFilters;
   if (af.size === 0) return;
-  const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'border', 'dot', 'glow', 'chroma', 'jitter'];
+  const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'border', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting'];
   for (const filterName of filterOrder) {
     if (af.has(filterName)) {
       applyExportFilter(ctx, width, height, scale, filterName, filterIntensity, filterVariant, filterParams);
@@ -4380,30 +4552,14 @@ function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVa
 // ── Filter UI management ───────────────────────────────────────────────────
 
 function updateFilterUI() {
-  // Get effective activeFilters for current photo (or global if none selected)
+  // Sync checkboxes and accordion expand/collapse state
   const _uiTgt = state.selectedPhotos.size > 0
     ? [...state.selectedPhotos][0]
     : state.selectedIndex;
-  const af = (_uiTgt !== null && _uiTgt !== undefined)
-    ? getEffectiveSettings(_uiTgt).activeFilters
-    : state.activeFilters;
-
-  document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.classList.toggle('active', af.has(btn.dataset.filter));
-  });
-  document.querySelectorAll('.filter-check').forEach(cb => {
-    cb.checked = af.has(cb.dataset.filter);
-  });
-  document.querySelectorAll('.filter-row').forEach(row => {
-    const f = row.dataset.filter;
-    row.classList.toggle('filter-row-active', af.has(f));
-    row.classList.toggle('filter-row-focused', state.focusedFilter === f);
-  });
-  // Show/hide inline param panels
-  document.querySelectorAll('.filter-inline').forEach(panel => {
-    const f = panel.dataset.filter;
-    panel.style.display = (f && af.has(f) && state.focusedFilter === f) ? '' : 'none';
-  });
+  const eff = (_uiTgt !== null && _uiTgt !== undefined)
+    ? getEffectiveSettings(_uiTgt)
+    : null;
+  syncFilterAccordion(eff);
 }
 
 function toggleFilter(filterName) {
@@ -4444,33 +4600,195 @@ function toggleFilter(filterName) {
     }
   }
   updateFilterUI();
-  _refreshFilterParamPanel();
 }
 
 function _refreshFilterParamPanel() {
-  const f = state.focusedFilter;
-  document.querySelectorAll('.filter-row').forEach(row => {
-    row.classList.toggle('filter-row-focused', row.dataset.filter === f);
+  // No-op — filter accordion syncs via syncFilterAccordion()
+}
+
+/**
+ * Sync accordion checkboxes, expand/collapse state, and param slider values
+ * to reflect `eff` (effective settings object) — or global state if eff is null.
+ */
+function syncFilterAccordion(eff) {
+  const af = eff ? eff.activeFilters : state.activeFilters;
+  const fp = eff ? eff.filterParams  : state.filterParams;
+  const fv = eff ? eff.filterVariant : state.filterVariant;
+
+  document.querySelectorAll('.fi-item').forEach(item => {
+    const filterId = item.dataset.filter;
+    const active   = af.has(filterId);
+    const cb       = item.querySelector('.fi-check');
+    if (cb) cb.checked = active;
+
+    // Expand/collapse body
+    item.classList.toggle('fi-active', active);
+
+    // Sync param values
+    const fp_f = (fp && fp[filterId]) || {};
+    item.querySelectorAll('[data-fi-key]').forEach(el => {
+      const key      = el.dataset.fiKey;
+      const stateKey = el.dataset.fiStatekey;
+      const curVal   = stateKey ? fv : (fp_f[key] ?? el._fiDef);
+      if (el.tagName === 'INPUT' && el.type === 'range') {
+        el.value = curVal;
+        const valEl = el.previousElementSibling?.querySelector('.fi-val')
+                   || el.parentElement?.querySelector('.fi-val');
+        if (valEl && el._fiFmt) valEl.textContent = el._fiFmt(Number(curVal));
+      } else if (el.classList.contains('seg-control')) {
+        el.querySelectorAll('.seg-btn').forEach(btn => {
+          btn.classList.toggle('active', btn.dataset.val === String(curVal));
+        });
+      }
+    });
   });
-  const _rpTgt = state.selectedPhotos.size > 0
-    ? [...state.selectedPhotos][0]
-    : state.selectedIndex;
-  const af = (_rpTgt !== null && _rpTgt !== undefined)
-    ? getEffectiveSettings(_rpTgt).activeFilters
-    : state.activeFilters;
-  // Hide all inline panels first
-  document.querySelectorAll('.filter-inline').forEach(panel => { panel.style.display = 'none'; });
-  // Show and populate focused filter's inline panel
-  if (f && af.has(f)) {
-    const inlinePanel = document.getElementById('fp-' + f);
-    if (inlinePanel) {
-      inlinePanel.style.display = '';
-      buildFilterParams(f);
+}
+
+/**
+ * Build the filter accordion DOM inside #filter-accordion.
+ * Called once from init(). Event handlers live here.
+ */
+function setupFilterAccordion() {
+  const container = document.getElementById('filter-accordion');
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (const fd of FILTER_DEFS) {
+    const item = document.createElement('div');
+    item.className = 'fi-item';
+    item.dataset.filter = fd.id;
+
+    // ── Header ──────────────────────────────────────────────────────────────
+    const header = document.createElement('div');
+    header.className = 'fi-header';
+
+    const chevron = document.createElement('span');
+    chevron.className = 'fi-chevron section-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = '▾';
+
+    const lbl = document.createElement('span');
+    lbl.className = 'fi-label';
+    lbl.textContent = fd.label;
+
+    const checkWrap = document.createElement('label');
+    checkWrap.className = 'section-check-wrap fi-check-wrap';
+    checkWrap.title = `Enable ${fd.label}`;
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'fi-check';
+    cb.dataset.filter = fd.id;
+    checkWrap.appendChild(cb);
+
+    header.appendChild(chevron);
+    header.appendChild(lbl);
+    header.appendChild(checkWrap);
+    item.appendChild(header);
+
+    // ── Params body ─────────────────────────────────────────────────────────
+    const outer = document.createElement('div');
+    outer.className = 'fi-body-outer section-body-outer';
+    const inner = document.createElement('div');
+    inner.className = 'fi-body-inner section-body-inner';
+
+    for (const p of fd.params) {
+      if (p.type === 'range') {
+        const wrap = document.createElement('div');
+        wrap.className = 'range-wrap fp-row';
+        const hdr2 = document.createElement('div');
+        hdr2.className = 'range-header';
+        const pLbl = document.createElement('span');
+        pLbl.className = 'ctrl-label';
+        pLbl.textContent = p.label;
+        const pVal = document.createElement('span');
+        pVal.className = 'range-val fi-val';
+        pVal.textContent = p.fmt(p.def);
+        hdr2.appendChild(pLbl);
+        hdr2.appendChild(pVal);
+
+        const slider = document.createElement('input');
+        slider.type  = 'range';
+        slider.min   = p.min;
+        slider.max   = p.max;
+        slider.step  = p.step;
+        slider.value = p.def;
+        slider.dataset.fiKey = p.key;
+        if (p.stateKey) slider.dataset.fiStatekey = p.stateKey;
+        slider._fiDef = p.def;
+        slider._fiFmt = p.fmt;
+
+        slider.addEventListener('input', () => {
+          const v = parseFloat(slider.value);
+          pVal.textContent = p.fmt(v);
+          if (p.stateKey) {
+            setScopedSetting(p.stateKey, slider.value);
+          } else {
+            const fp = getWritableFilterParams(fd.id);
+            fp[p.key] = v;
+          }
+          repaintGrid();
+          updateSidebarPreview();
+        });
+
+        wrap.appendChild(hdr2);
+        wrap.appendChild(slider);
+        inner.appendChild(wrap);
+
+      } else if (p.type === 'seg') {
+        const wrap = document.createElement('div');
+        wrap.className = 'fp-row';
+        const pLbl = document.createElement('div');
+        pLbl.className = 'ctrl-label';
+        pLbl.style.marginBottom = '4px';
+        pLbl.textContent = p.label;
+        const seg = document.createElement('div');
+        seg.className = 'seg-control';
+        seg.dataset.fiKey = p.key;
+        if (p.stateKey) seg.dataset.fiStatekey = p.stateKey;
+        seg._fiDef = p.def;
+
+        for (const [optVal, optLabel] of p.opts) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'seg-btn' + (optVal === p.def ? ' active' : '');
+          btn.textContent = optLabel;
+          btn.dataset.val = optVal;
+          btn.addEventListener('click', () => {
+            seg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+            if (p.stateKey) {
+              setScopedSetting(p.stateKey, optVal);
+            } else {
+              const fp = getWritableFilterParams(fd.id);
+              fp[p.key] = optVal;
+            }
+            repaintGrid();
+            updateSidebarPreview();
+          });
+          seg.appendChild(btn);
+        }
+
+        wrap.appendChild(pLbl);
+        wrap.appendChild(seg);
+        inner.appendChild(wrap);
+      }
     }
+
+    outer.appendChild(inner);
+    item.appendChild(outer);
+
+    // ── Toggle filter on checkbox change ─────────────────────────────────
+    cb.addEventListener('change', () => {
+      toggleFilter(fd.id);
+    });
+
+    // ── Chevron click: expand/collapse params body ────────────────────────
+    header.addEventListener('click', e => {
+      if (e.target.closest('.fi-check-wrap')) return; // let checkbox handle it
+      item.classList.toggle('fi-collapsed');
+    });
+
+    container.appendChild(item);
   }
-  // Hide legacy global settings panel (kept for fallback)
-  const settingsEl = document.getElementById('filter-settings');
-  if (settingsEl) settingsEl.style.display = 'none';
 }
 
 function init() {
@@ -4485,6 +4803,7 @@ function init() {
   setupPanelResize();
   setupKeyboard();
   setupCollapsibleSections();
+  setupFilterAccordion();
   setStatus('No file loaded');
   setExportScale(8);
   setThumbnailSize(120); // default: ~120px thumbnails (auto-fill)
