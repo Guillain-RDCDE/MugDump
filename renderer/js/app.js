@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.8';
+const APP_VERSION = 'v0.9.9';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -278,8 +278,8 @@ const state = {
   gifDelay: 250,           // ms per frame
   gifLoop: 'infinite',     // 'infinite' | 'once' | 'bounce'
   activeFilters:   new Set(),        // active filter names for stackable effects
-  sectionEnabled:  { exposure: true, splitTone: true, effects: true }, // per-section on/off (on by default)
-  effectsPreviewMode: false, // toggle before/after for effects
+  sectionEnabled:  { exposure: false, splitTone: false, effects: false }, // per-section on/off (off by default)
+  effectsPreviewMode: false, // toggle before/after for effects; false = effects visible (normal rendering)
   filterOrder: ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap'],
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
   lightboxOpen: false,     // lightbox overlay visible
@@ -1672,12 +1672,21 @@ function wireButtons() {
   document.getElementById('btn-reset-effects')?.addEventListener('click', resetEffects);
 
   // Effects preview toggle button
+  // active = effects ARE visible (normal mode); inactive = effects hidden (original view)
+  const _previewBtn = document.getElementById('effects-preview-btn');
+  if (_previewBtn) {
+    _previewBtn.classList.add('active'); // default: effects visible → button active
+    _previewBtn.title = 'Click to hide effects and see original (P)';
+  }
   document.getElementById('effects-preview-btn')?.addEventListener('click', () => {
     state.effectsPreviewMode = !state.effectsPreviewMode;
     const btn = document.getElementById('effects-preview-btn');
     if (btn) {
-      btn.classList.toggle('active', state.effectsPreviewMode);
-      btn.title = state.effectsPreviewMode ? 'Effects preview enabled (P)' : 'Toggle effects preview mode (P)';
+      // active = effects visible (effectsPreviewMode=false); inactive = effects hidden (effectsPreviewMode=true)
+      btn.classList.toggle('active', !state.effectsPreviewMode);
+      btn.title = state.effectsPreviewMode
+        ? 'Effects hidden — click to show (P)'
+        : 'Click to hide effects and see original (P)';
     }
     repaintGrid();
     if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
@@ -4297,8 +4306,9 @@ function setupKeyboard() {
     if (e.key === 'p' || e.key === 'P') {
       state.effectsPreviewMode = !state.effectsPreviewMode;
       const previewBtn = document.getElementById('effects-preview-btn');
-      if (previewBtn) previewBtn.classList.toggle('active', state.effectsPreviewMode);
+      if (previewBtn) previewBtn.classList.toggle('active', !state.effectsPreviewMode);
       repaintGrid();
+      updateSidebarPreview();
       return;
     }
 
@@ -4574,12 +4584,13 @@ function wireButtonsPaletteEditor() {
 // ── Collapsible sidebar sections ──────────────────────────────────────────────
 
 function setupCollapsibleSections() {
-  const STORAGE_KEY = 'darkroom:collapsed-sections';
-  let collapsed = new Set();
-  try { collapsed = new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')); } catch(_) {}
+  const STORAGE_KEY = 'darkroom:section-states'; // object map of sectionId → isCollapsed
+  let sectionStates = {};
+  try { sectionStates = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(_) {}
 
-  function saveState() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...collapsed])); } catch(_) {}
+  function saveState(sectionId, isCollapsed) {
+    sectionStates[sectionId] = isCollapsed;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sectionStates)); } catch(_) {}
   }
 
   document.querySelectorAll('#export-controls .ctrl-group.collapsible').forEach(group => {
@@ -4618,8 +4629,9 @@ function setupCollapsibleSections() {
     outer.appendChild(inner);
     group.appendChild(outer);
 
-    // Restore saved state, then apply DEFAULT_COLLAPSED if not in localStorage
-    const isCollapsed = collapsed.has(sectionId) || group.getAttribute('data-default-collapsed') === 'true';
+    // Use saved state if available; otherwise use data-default-collapsed attribute
+    const defaultCollapsed = group.getAttribute('data-default-collapsed') === 'true';
+    const isCollapsed = sectionId in sectionStates ? sectionStates[sectionId] : defaultCollapsed;
     if (isCollapsed) group.classList.add('collapsed');
 
     // Toggle on click — ignore clicks on buttons and checkboxes inside the header
@@ -4629,9 +4641,7 @@ function setupCollapsibleSections() {
       if (e.target !== clickTarget && e.target !== labelEl &&
           !e.target.classList.contains('section-chevron')) return;
       const nowCollapsed = group.classList.toggle('collapsed');
-      if (nowCollapsed) collapsed.add(sectionId);
-      else collapsed.delete(sectionId);
-      saveState();
+      saveState(sectionId, nowCollapsed);
     });
   });
 }
@@ -5031,12 +5041,12 @@ function updateFilterUI() {
 
 function toggleFilter(filterName) {
   pushUndo();
-  const targets = state.selectedPhotos.size > 0
-    ? [...state.selectedPhotos]
-    : state.selectedIndex !== null ? [state.selectedIndex] : null;
+  // Only go per-photo when multiple photos are explicitly multi-selected.
+  // Single-selected photos still get the global filter (shows on all thumbnails).
+  const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
 
   if (targets) {
-    // Per-photo toggle
+    // Per-photo toggle (multi-select only)
     const firstPs = state.photoSettings[targets[0]];
     const firstAf = firstPs?.activeFilters
       ? new Set(firstPs.activeFilters)
@@ -5051,12 +5061,13 @@ function toggleFilter(filterName) {
     }
     if (adding) {
       state.focusedFilter = filterName;
+      _autoEnableEffectsSection();
     } else if (state.focusedFilter === filterName) {
       const remaining = new Set(state.photoSettings[targets[0]]?.activeFilters || []);
       state.focusedFilter = [...remaining].pop() || null;
     }
   } else {
-    // Global toggle (no photo selected)
+    // Global toggle — applies to all photos
     if (state.activeFilters.has(filterName)) {
       state.activeFilters.delete(filterName);
       if (state.focusedFilter === filterName) {
@@ -5065,11 +5076,21 @@ function toggleFilter(filterName) {
     } else {
       state.activeFilters.add(filterName);
       state.focusedFilter = filterName;
+      _autoEnableEffectsSection();
     }
   }
   updateFilterUI();
   repaintGrid();
   updateSidebarPreview();
+}
+
+/** If the effects section is disabled, automatically enable it (and update its checkbox). */
+function _autoEnableEffectsSection() {
+  if (!state.sectionEnabled.effects) {
+    state.sectionEnabled.effects = true;
+    const cb = document.querySelector('.section-check[data-section="effects"]');
+    if (cb) cb.checked = true;
+  }
 }
 
 function _refreshFilterParamPanel() {
