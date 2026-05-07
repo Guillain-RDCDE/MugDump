@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.18';
+const APP_VERSION = 'v0.9.19';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -742,6 +742,41 @@ function renderGrid() {
     if (el) el.classList.add('selected-for-gif');
   }
   updateGifFrameNumbers();
+}
+
+// ── Repaint helpers ──────────────────────────────────────────────────────────
+
+// Repaint only the detail/preview canvases (solo, lightbox, sidebar).
+// Fast — renders 1-3 canvases instead of the full 30-slot grid.
+// Use during interactive slider drag so the UI stays responsive.
+function repaintDetailOnly() {
+  if (state.viewMode === 'solo' && state.selectedIndex !== null) {
+    renderSoloView(state.selectedIndex);
+  }
+  if (state.lightboxOpen && state.selectedIndex !== null) {
+    renderLightbox(state.selectedIndex);
+  }
+  updateSidebarPreview();
+}
+
+// Debounced full grid repaint — fires 160ms after the last call.
+// Called alongside repaintDetailOnly() during slider drag so the grid
+// catches up once the user pauses.
+let _gridRepaintTimer = null;
+function scheduleGridRepaint() {
+  clearTimeout(_gridRepaintTimer);
+  _gridRepaintTimer = setTimeout(() => {
+    const slots = dom.photoGrid.querySelectorAll('.photo-slot:not(.empty)');
+    for (const slot of slots) repaintGridSlot(parseInt(slot.dataset.index));
+    _gridRepaintTimer = null;
+  }, 160);
+}
+
+// Use this instead of repaintGrid() in interactive (per-tick) handlers.
+// Gives immediate detail feedback while deferring the expensive grid repaint.
+function repaintInteractive() {
+  repaintDetailOnly();
+  scheduleGridRepaint();
 }
 
 // Re-render all canvases when palette/filter/tone changes (without rebuilding the DOM)
@@ -4560,7 +4595,7 @@ function setupKeyboard() {
 // ── Tone controls wiring ─────────────────────────────────────────────────────
 
 function setupToneControls() {
-  function redrawDetail() { repaintGrid(); }
+  function redrawDetail() { repaintInteractive(); }
 
   const brightnessEl   = document.getElementById('tone-brightness');
   const brightnessVal  = document.getElementById('tone-brightness-val');
@@ -5428,8 +5463,7 @@ function setupFilterAccordion() {
           );
         }
       });
-      repaintGrid();
-      updateSidebarPreview();
+      repaintInteractive();
     });
 
     header.appendChild(dragHandle);
@@ -5526,8 +5560,7 @@ function setupFilterAccordion() {
             const fp = getWritableFilterParams(fd.id);
             fp[p.key] = v;
           }
-          repaintGrid();
-          updateSidebarPreview();
+          repaintInteractive();
         });
 
         wrap.appendChild(hdr2);
@@ -5562,8 +5595,7 @@ function setupFilterAccordion() {
               const fp = getWritableFilterParams(fd.id);
               fp[p.key] = optVal;
             }
-            repaintGrid();
-            updateSidebarPreview();
+            repaintInteractive();
           });
           seg.appendChild(btn);
         }
