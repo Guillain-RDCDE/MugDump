@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.23';
+const APP_VERSION = 'v0.9.24';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -1927,6 +1927,14 @@ function wireButtons() {
   document.getElementById('btn-palette-grid').addEventListener('click', openPaletteGrid);
   document.getElementById('palette-grid-close').addEventListener('click', closePaletteGrid);
 
+  // Random palette dice button
+  document.getElementById('btn-random-palette').addEventListener('click', () => {
+    const ids = Object.keys(PALETTES);
+    const id  = ids[Math.floor(Math.random() * ids.length)];
+    setPalette(id);
+    showToast(`🎲 ${PALETTES[id].name}`);
+  });
+
   // GIF toolbar
   document.getElementById('btn-gif-clear')?.addEventListener('click', clearGifFrames);
 
@@ -2622,20 +2630,6 @@ function rebuildPalettePickerList() {
 
   refreshCustomPalettes();
 
-  // ── Random palette shortcut ─────────────────────────────────────────────
-  const randItem = document.createElement('div');
-  randItem.className = 'pal-item pal-item-random';
-  randItem.title = 'Pick a random palette';
-  randItem.innerHTML = '<span class="pal-item-random-icon">🎲</span><span class="pal-item-name">Random palette</span>';
-  randItem.addEventListener('click', () => {
-    const ids = Object.keys(PALETTES);
-    const id  = ids[Math.floor(Math.random() * ids.length)];
-    setPalette(id);
-    closePalettePicker();
-    showToast(`Random palette · ${PALETTES[id].name}`);
-  });
-  list.appendChild(randItem);
-
   // Bucket built-in palettes by group
   const grouped = {};
   for (const [id, pal] of Object.entries(PALETTES)) {
@@ -2869,6 +2863,7 @@ function renderRecentPalettes() { /* strip removed — see fav palettes */ }
 // ── Favourite palettes ─────────────────────────────────────────────────────
 
 const FAV_PALETTES_KEY = 'gbcam_fav_palettes';
+const MAX_FAV_PALETTES = 16;
 
 function loadFavPalettes() {
   try { return JSON.parse(localStorage.getItem(FAV_PALETTES_KEY) || '[]'); }
@@ -2882,6 +2877,10 @@ function toggleFavPalette(id) {
   if (favs.includes(id)) {
     favs = favs.filter(f => f !== id);
   } else {
+    if (favs.length >= MAX_FAV_PALETTES) {
+      showToast(`Favourites full (${MAX_FAV_PALETTES} max) — remove one first ★`);
+      return;
+    }
     favs.push(id);
   }
   localStorage.setItem(FAV_PALETTES_KEY, JSON.stringify(favs));
