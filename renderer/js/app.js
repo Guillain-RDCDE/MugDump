@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.50';
+const APP_VERSION = 'v0.9.51';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -158,8 +158,7 @@ function syncColorSwatchBtn(input, hex) {
   if (input._cpBtn) input._cpBtn.style.background = hex;
 }
 
-const THUMB_SCALE = 4; // grid thumbnails rendered at 4× for CRT scanline clarity
-let thumbScale    = 4; // dynamically adjusted to match actual slot display size
+const THUMB_SCALE = 4; // grid thumbnails rendered at 4× — fixed scale
 
 // Pixel-dense effects that look garbled / shift on mouseover at thumbnail scale.
 // These are skipped during grid repaint — they'll still apply in solo/export views.
@@ -299,7 +298,7 @@ const state = {
   activeFilters:   new Set(),        // active filter names for stackable effects
   sectionEnabled:  { exposure: false, splitTone: false, effects: false }, // per-section on/off (off by default)
   effectsPreviewMode: false, // toggle before/after for effects; false = effects visible (normal rendering)
-  filterOrder: ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap'],
+  filterOrder: ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap', 'rgbplanes', 'colcorrupt', 'signalwarp'],
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
   lightboxOpen: false,     // lightbox overlay visible
   viewMode: 'grid',        // 'grid' | 'solo'
@@ -695,16 +694,16 @@ function renderGrid() {
       placeholder.textContent = '—';
       slot.appendChild(placeholder);
     } else {
-      // Canvas thumbnail — rendered at thumbScale (adaptive to slot display size)
+      // Canvas thumbnail — rendered at THUMB_SCALE (4×) for filter clarity
       const canvas = document.createElement('canvas');
-      canvas.width  = GBCam.PHOTO_WIDTH  * thumbScale;
-      canvas.height = GBCam.PHOTO_HEIGHT * thumbScale;
+      canvas.width  = GBCam.PHOTO_WIDTH  * THUMB_SCALE;
+      canvas.height = GBCam.PHOTO_HEIGHT * THUMB_SCALE;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       const effThumb = getEffectiveSettings(photo.index);
-      renderPhotoWithTransform(ctx, photo, effThumb.palette, thumbScale, photo.index);
+      renderPhotoWithTransform(ctx, photo, effThumb.palette, THUMB_SCALE, photo.index);
       applyToneAdjustments(ctx, canvas.width, canvas.height, effThumb);
       if (effThumb.activeFilters.size > 0) {
-        applyActiveEffects(ctx, canvas.width, canvas.height, thumbScale,
+        applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
                            effThumb.filterIntensity, effThumb.filterVariant, effThumb.filterParams, effThumb.activeFilters, false, photo.index);
       }
       slot.appendChild(canvas);
@@ -767,18 +766,7 @@ function repaintDetailOnly() {
 
 // ── Grid repaint ─────────────────────────────────────────────────────────────
 
-/** Measure the actual slot display width and update thumbScale to match. */
-function updateThumbScale() {
-  const slot = dom.photoGrid?.querySelector('.photo-slot:not(.empty)');
-  if (!slot) return;
-  const w = slot.offsetWidth;
-  if (w <= 0) return;
-  const ideal = Math.max(2, Math.round(w / GBCam.PHOTO_WIDTH));
-  thumbScale = ideal;
-}
-
 function repaintGrid() {
-  updateThumbScale();
   const slots = dom.photoGrid.querySelectorAll('.photo-slot:not(.empty)');
   for (const slot of slots) repaintGridSlot(parseInt(slot.dataset.index));
   if (state.gifMode && state.gifSelection.size > 0) updateGifPreview();
@@ -834,17 +822,17 @@ function repaintGridSlot(index) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const eff = getEffectiveSettings(index);
-  // Re-size canvas when thumbScale has changed
-  if (canvas.width !== GBCam.PHOTO_WIDTH * thumbScale) {
-    canvas.width  = GBCam.PHOTO_WIDTH  * thumbScale;
-    canvas.height = GBCam.PHOTO_HEIGHT * thumbScale;
+  // Re-size canvas if needed (e.g. first paint)
+  if (canvas.width !== GBCam.PHOTO_WIDTH * THUMB_SCALE) {
+    canvas.width  = GBCam.PHOTO_WIDTH  * THUMB_SCALE;
+    canvas.height = GBCam.PHOTO_HEIGHT * THUMB_SCALE;
   }
-  renderPhotoWithTransform(ctx, photo, eff.palette, thumbScale, index);
+  renderPhotoWithTransform(ctx, photo, eff.palette, THUMB_SCALE, index);
   applyToneAdjustments(ctx, canvas.width, canvas.height, eff);
   if (eff.activeFilters.size > 0) {
     const thumbFilters = new Set([...eff.activeFilters].filter(id => !THUMBNAIL_SKIP_FILTERS.has(id)));
     if (thumbFilters.size > 0) {
-      applyActiveEffects(ctx, canvas.width, canvas.height, thumbScale,
+      applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
                          eff.filterIntensity, eff.filterVariant, eff.filterParams, thumbFilters, false, index);
     }
   }
@@ -1994,23 +1982,8 @@ function wireButtons() {
 
 // ── Thumbnail size ────────────────────────────────────────────────────────────
 
-let _thumbSizeRafId = null;
 function setThumbnailSize(px) {
   dom.photoGrid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${px}px, 1fr))`;
-  // After grid reflows, re-measure and repaint if the integer render scale changed
-  if (_thumbSizeRafId) cancelAnimationFrame(_thumbSizeRafId);
-  _thumbSizeRafId = requestAnimationFrame(() => {
-    _thumbSizeRafId = null;
-    const slot = dom.photoGrid?.querySelector('.photo-slot:not(.empty)');
-    if (!slot) return;
-    const w = slot.offsetWidth;
-    const newScale = w > 0 ? Math.max(2, Math.round(w / GBCam.PHOTO_WIDTH)) : thumbScale;
-    if (newScale !== thumbScale) {
-      thumbScale = newScale;
-      const slots = dom.photoGrid.querySelectorAll('.photo-slot:not(.empty)');
-      for (const s of slots) repaintGridSlot(parseInt(s.dataset.index));
-    }
-  });
 }
 
 // ── Panel resize (drag handle between grid and detail panel) ─────────────────
@@ -5710,7 +5683,12 @@ function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVa
   if (state.sectionEnabled?.effects === false) return;
   const af = activeFilters || state.activeFilters;
   if (af.size === 0) return;
-  const filterOrder = state.filterOrder || ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap', 'rgbplanes', 'colcorrupt', 'signalwarp'];
+  // Use state.filterOrder but ensure any active filter not in the stored order
+  // still runs — protects against stale localStorage filterOrder missing new filters.
+  const baseOrder = state.filterOrder || [];
+  const knownSet  = new Set(baseOrder);
+  const extraFilters = [...af].filter(id => !knownSet.has(id));
+  const filterOrder  = [...baseOrder, ...extraFilters];
   for (const filterName of filterOrder) {
     if (af.has(filterName)) {
       applyExportFilter(ctx, width, height, scale, filterName, filterIntensity, filterVariant, filterParams, photoSeed);
