@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.34';
+const APP_VERSION = 'v0.9.35';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -397,32 +397,13 @@ function getEffectiveSettings(index) {
   };
 }
 
-/** Write a setting to the per-photo override or global state, depending on scope. */
+/** Write a setting to global state. Sidebar controls always write globally so all thumbnails update. */
 function setScopedSetting(key, value) {
-  // Apply to all selected photos if any; otherwise apply globally
-  const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
-  if (targets) {
-    for (const idx of targets) {
-      if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
-      state.photoSettings[idx][key] = value;
-    }
-  } else {
-    state[key] = value;
-  }
+  state[key] = value;
 }
 
-/** Returns the filterParams object that event handlers should mutate for the current scope/photo. */
+/** Returns the filterParams object that event handlers should mutate. Always global — sidebar edits apply to all photos. */
 function getWritableFilterParams(filter) {
-  const idx = state.selectedPhotos.size > 0 ? [...state.selectedPhotos][0] : state.selectedIndex;
-  if (idx !== null && idx !== undefined) {
-    if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
-    if (!state.photoSettings[idx].filterParams) {
-      state.photoSettings[idx].filterParams = JSON.parse(JSON.stringify(state.filterParams));
-    }
-    const fp = state.photoSettings[idx].filterParams;
-    if (!fp[filter]) fp[filter] = {};
-    return fp[filter];
-  }
   if (!state.filterParams[filter]) state.filterParams[filter] = {};
   return state.filterParams[filter];
 }
@@ -801,14 +782,8 @@ function repaintInteractive() {
   _interactiveRAF = requestAnimationFrame(() => {
     _interactiveRAF = null;
     repaintDetailOnly();
-    if (state.applyScope === 'photo') {
-      const targets = state.selectedPhotos.size > 0
-        ? [...state.selectedPhotos]
-        : state.selectedIndex !== null ? [state.selectedIndex] : [];
-      for (const idx of targets) repaintGridSlot(idx);
-    } else {
-      scheduleGridRepaint();
-    }
+    // Sidebar edits always write to global state, so all thumbnails need to update.
+    scheduleGridRepaint();
   });
 }
 
@@ -4993,21 +4968,24 @@ function getPresets() {
 
 function savePreset(name) {
   if (!name) return;
-  // Always capture global state — presets are a darkroom "look" applied to all photos
-  const presets = getPresets();
-  presets[name] = {
-    activeFilters:   [...state.activeFilters],
-    filterIntensity: state.filterIntensity,
-    filterVariant:   state.filterVariant,
-    filterParams:    JSON.parse(JSON.stringify(state.filterParams)),
-    brightness:      state.brightness,
-    contrast:        state.contrast,
-    toneIntensity:   state.toneIntensity,
-    shadowColor:     state.shadowColor,
-    highlightColor:  state.highlightColor,
-    toneBalance:     state.toneBalance,
-    sectionEnabled:  JSON.parse(JSON.stringify(state.sectionEnabled)),
+  // Capture the effective settings of the currently selected/viewed photo.
+  // If no photo is selected, fall back to global state.
+  const idx = state.selectedIndex;
+  const eff = idx !== null ? getEffectiveSettings(idx) : null;
+  const src = {
+    activeFilters:   eff ? [...eff.activeFilters]                          : [...state.activeFilters],
+    filterIntensity: eff ? eff.filterIntensity                             : state.filterIntensity,
+    filterVariant:   eff ? eff.filterVariant                               : state.filterVariant,
+    filterParams:    JSON.parse(JSON.stringify(eff ? eff.filterParams      : state.filterParams)),
+    brightness:      eff ? eff.brightness                                  : state.brightness,
+    contrast:        eff ? eff.contrast                                    : state.contrast,
+    toneIntensity:   eff ? eff.toneIntensity                               : state.toneIntensity,
+    shadowColor:     eff ? eff.shadowColor                                 : state.shadowColor,
+    highlightColor:  eff ? eff.highlightColor                              : state.highlightColor,
+    toneBalance:     eff ? eff.toneBalance                                 : state.toneBalance,
   };
+  const presets = getPresets();
+  presets[name] = src;
   localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
   renderPresetList();
   showToast(`Preset "${name}" saved`);
@@ -5018,64 +4996,41 @@ function loadPreset(name) {
   const p = presets[name];
   if (!p) return;
 
-  // Always apply to global state — presets are a darkroom "look" for all photos
-  state.activeFilters.clear();
-  (p.activeFilters || []).forEach(f => state.activeFilters.add(f));
-  state.filterIntensity = p.filterIntensity ?? 1.0;
-  state.filterVariant   = p.filterVariant   ?? 'medium';
-  if (p.filterParams) {
-    // Merge into existing filterParams so unlisted filters keep their defaults
-    Object.assign(state.filterParams, JSON.parse(JSON.stringify(p.filterParams)));
+  // Apply to selected photos only (per-photo overrides).
+  // If nothing explicitly selected, apply to the current single-selected photo.
+  const targets = state.selectedPhotos.size > 0
+    ? [...state.selectedPhotos]
+    : state.selectedIndex !== null ? [state.selectedIndex] : [];
+
+  if (targets.length === 0) { showToast('Select a photo first'); return; }
+
+  for (const idx of targets) {
+    if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+    const ps = state.photoSettings[idx];
+    if (p.activeFilters  !== undefined) ps.activeFilters  = [...p.activeFilters];
+    if (p.filterIntensity !== undefined) ps.filterIntensity = p.filterIntensity;
+    if (p.filterVariant  !== undefined) ps.filterVariant  = p.filterVariant;
+    if (p.filterParams)                  ps.filterParams   = JSON.parse(JSON.stringify(p.filterParams));
+    if (p.brightness     !== undefined) ps.brightness     = p.brightness;
+    if (p.contrast       !== undefined) ps.contrast       = p.contrast;
+    if (p.toneIntensity  !== undefined) ps.toneIntensity  = p.toneIntensity;
+    if (p.shadowColor    !== undefined) ps.shadowColor    = p.shadowColor;
+    if (p.highlightColor !== undefined) ps.highlightColor = p.highlightColor;
+    if (p.toneBalance    !== undefined) ps.toneBalance    = p.toneBalance;
   }
-  if (p.brightness     !== undefined) state.brightness     = p.brightness;
-  if (p.contrast       !== undefined) state.contrast       = p.contrast;
-  if (p.toneIntensity  !== undefined) state.toneIntensity  = p.toneIntensity;
-  if (p.shadowColor    !== undefined) state.shadowColor    = p.shadowColor;
-  if (p.highlightColor !== undefined) state.highlightColor = p.highlightColor;
-  if (p.toneBalance    !== undefined) state.toneBalance    = p.toneBalance;
 
-  // Restore section enabled state
-  if (p.sectionEnabled) {
-    Object.assign(state.sectionEnabled, p.sectionEnabled);
-  } else {
-    _autoEnableEffectsSection();
+  // Repaint affected thumbnails
+  for (const idx of targets) repaintGridSlot(idx);
+
+  // Sync sidebar UI to the effective settings of the primary selected photo
+  if (state.selectedIndex !== null) {
+    syncControlsToEffectiveSettings(state.selectedIndex);
   }
-  document.querySelectorAll('.section-check').forEach(cb => {
-    cb.checked = state.sectionEnabled[cb.dataset.section] ?? false;
-  });
-
-  // Sync all UI controls to the new global state
-  updateFilterUI();
-  // Sync tone/exposure sliders — pass global state directly as an eff-shaped object
-  const fakeEff = {
-    brightness: state.brightness, contrast: state.contrast,
-    toneIntensity: state.toneIntensity, shadowColor: state.shadowColor,
-    highlightColor: state.highlightColor, toneBalance: state.toneBalance,
-    activeFilters: state.activeFilters, filterIntensity: state.filterIntensity,
-    filterVariant: state.filterVariant, filterParams: state.filterParams,
-    palette: state.palette,
-  };
-  // Update tone sliders manually
-  const setSlider = (id, val, fmt) => {
-    const el = document.getElementById(id);
-    const vl = document.getElementById(id + '-val');
-    if (el) el.value = val;
-    if (vl) vl.textContent = fmt(val);
-  };
-  setSlider('tone-brightness', state.brightness, v => v > 0 ? `+${v}` : String(v));
-  setSlider('tone-contrast',   state.contrast,   v => v > 0 ? `+${v}` : String(v));
-  setSlider('tone-intensity',  state.toneIntensity, v => `${v}%`);
-  setSlider('tone-balance',    state.toneBalance,   v => v > 0 ? `+${v}` : String(v));
-  const scEl = document.getElementById('tone-shadow-color');
-  if (scEl) { scEl.value = state.shadowColor; syncColorSwatchBtn(scEl, state.shadowColor); }
-  const hcEl = document.getElementById('tone-highlight-color');
-  if (hcEl) { hcEl.value = state.highlightColor; syncColorSwatchBtn(hcEl, state.highlightColor); }
-
-  syncFilterAccordion(fakeEff);
-  repaintGrid();
   updateSidebarPreview();
   if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
-  showToast(`Preset "${name}" loaded`);
+
+  const n = targets.length;
+  showToast(`Preset "${name}" applied to ${n} photo${n !== 1 ? 's' : ''}`);
 }
 
 function deletePreset(name) {
@@ -5349,43 +5304,17 @@ function updateFilterUI() {
 
 function toggleFilter(filterName) {
   pushUndo();
-  // Only go per-photo when multiple photos are explicitly multi-selected.
-  // Single-selected photos still get the global filter (shows on all thumbnails).
-  const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
-
-  if (targets) {
-    // Per-photo toggle (multi-select only)
-    const firstPs = state.photoSettings[targets[0]];
-    const firstAf = firstPs?.activeFilters
-      ? new Set(firstPs.activeFilters)
-      : new Set(state.activeFilters);
-    const adding = !firstAf.has(filterName);
-    for (const idx of targets) {
-      if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
-      const ps = state.photoSettings[idx];
-      const cur = ps.activeFilters ? new Set(ps.activeFilters) : new Set(state.activeFilters);
-      if (adding) cur.add(filterName); else cur.delete(filterName);
-      ps.activeFilters = [...cur];
-    }
-    if (adding) {
-      state.focusedFilter = filterName;
-      _autoEnableEffectsSection();
-    } else if (state.focusedFilter === filterName) {
-      const remaining = new Set(state.photoSettings[targets[0]]?.activeFilters || []);
-      state.focusedFilter = [...remaining].pop() || null;
+  // Always toggle globally — filter changes apply to all photos so the entire grid updates.
+  // Per-photo filter differences are only set via preset load.
+  if (state.activeFilters.has(filterName)) {
+    state.activeFilters.delete(filterName);
+    if (state.focusedFilter === filterName) {
+      state.focusedFilter = [...state.activeFilters].pop() || null;
     }
   } else {
-    // Global toggle — applies to all photos
-    if (state.activeFilters.has(filterName)) {
-      state.activeFilters.delete(filterName);
-      if (state.focusedFilter === filterName) {
-        state.focusedFilter = [...state.activeFilters].pop() || null;
-      }
-    } else {
-      state.activeFilters.add(filterName);
-      state.focusedFilter = filterName;
-      _autoEnableEffectsSection();
-    }
+    state.activeFilters.add(filterName);
+    state.focusedFilter = filterName;
+    _autoEnableEffectsSection();
   }
   updateFilterUI();
   repaintGrid();
