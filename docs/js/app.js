@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.41';
+const APP_VERSION = 'v0.9.42';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -459,11 +459,11 @@ function clearEdits() {
   }
   pushUndo();
   for (const idx of targets) {
-    // Preserve per-photo palette; clear everything else
-    const savedPalette = state.photoSettings[idx]?.palette;
+    // Preserve per-photo palette id; clear everything else
+    const savedPaletteId = state.photoSettings[idx]?.paletteId;
     delete state.photoSettings[idx];
-    if (savedPalette) {
-      state.photoSettings[idx] = { palette: savedPalette };
+    if (savedPaletteId) {
+      state.photoSettings[idx] = { paletteId: savedPaletteId };
     }
     delete state.photoTransforms[idx];
     repaintGridSlot(idx);
