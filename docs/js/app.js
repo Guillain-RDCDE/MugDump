@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.43';
+const APP_VERSION = 'v0.9.44';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -2942,6 +2942,44 @@ function renderFavPalettes() {
 
     container.appendChild(btn);
   }
+
+  // Keep the fav dropdown in sync
+  renderFavDropdown();
+}
+
+/** Populate the fav-dropdown with clickable palette items (palette bar overflow menu). */
+function renderFavDropdown() {
+  const dd = document.getElementById('fav-dropdown');
+  if (!dd) return;
+  const favs = loadFavPalettes().filter(id => PALETTES[id]);
+  dd.innerHTML = '';
+  if (favs.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'overflow-item';
+    empty.style.cssText = 'opacity:0.45;cursor:default;pointer-events:none;';
+    empty.textContent = 'No favourites yet';
+    dd.appendChild(empty);
+    return;
+  }
+  for (const id of favs) {
+    const pal = PALETTES[id];
+    const item = document.createElement('button');
+    item.className = 'overflow-item';
+    const swatch = document.createElement('span');
+    swatch.className = 'overflow-pal-swatch';
+    for (const color of pal.colors) {
+      const sq = document.createElement('span');
+      sq.style.background = color;
+      swatch.appendChild(sq);
+    }
+    item.appendChild(swatch);
+    item.appendChild(document.createTextNode(pal.name));
+    item.addEventListener('click', () => {
+      dd.classList.add('hidden');
+      setPalette(id);
+    });
+    dd.appendChild(item);
+  }
 }
 
 // ── Browse button: inject colourful mini-grid icon + update text ────────────
@@ -5662,6 +5700,89 @@ function setupFilterAccordion() {
   }
 }
 
+// ── Overflow / collapse menus ─────────────────────────────────────────────────
+// Three rows can collapse into dropdowns when they run out of horizontal space:
+//   Titlebar → Tools ▾   (CSS breakpoint ≤1280px)
+//   Grid header → Actions ▾  (JS ResizeObserver)
+//   Palette bar → Favs ▾  (CSS breakpoint ≤1024px)
+
+function setupOverflowMenus() {
+  const allDropdowns = () => document.querySelectorAll('.overflow-dropdown');
+
+  function closeAll() { allDropdowns().forEach(d => d.classList.add('hidden')); }
+
+  // Close on outside click or Escape
+  document.addEventListener('click', closeAll);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+
+  // Toggle a dropdown on its trigger button
+  function bindToggle(btnId, ddId) {
+    const btn = document.getElementById(btnId);
+    const dd  = document.getElementById(ddId);
+    if (!btn || !dd) return;
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const opening = dd.classList.contains('hidden');
+      closeAll();
+      if (opening) dd.classList.remove('hidden');
+    });
+  }
+
+  // Wire overflow items: data-for → click the target element by id
+  function wireItems(ddId) {
+    const dd = document.getElementById(ddId);
+    if (!dd) return;
+    dd.querySelectorAll('.overflow-item[data-for]').forEach(item => {
+      const target = document.getElementById(item.dataset.for);
+      if (!target) return;
+      item.addEventListener('click', e => {
+        e.stopPropagation();
+        closeAll();
+        target.click();
+      });
+      // Mirror disabled attribute (e.g. Paste Settings)
+      if (target.hasAttribute('disabled') || target.disabled) item.disabled = true;
+      new MutationObserver(() => { item.disabled = target.disabled; })
+        .observe(target, { attributes: true, attributeFilter: ['disabled'] });
+    });
+  }
+
+  // ── Titlebar Tools menu ──────────────────────────────────────────────────────
+  bindToggle('btn-tools-menu', 'tools-dropdown');
+  wireItems('tools-dropdown');
+
+  // ── Grid Actions menu ────────────────────────────────────────────────────────
+  bindToggle('btn-grid-actions', 'grid-actions-dropdown');
+  wireItems('grid-actions-dropdown');
+
+  // ResizeObserver: detect when grid-header children overflow available width
+  const gridHeader = document.getElementById('grid-header');
+  const gridActionsWrap = document.getElementById('grid-actions-wrap');
+  if (gridHeader && gridActionsWrap && window.ResizeObserver) {
+    let lastOverflow = null;
+    const checkGridOverflow = () => {
+      // Step 1: remove overflow-active so all action items are "visible" for measurement
+      gridHeader.classList.remove('overflow-active');
+      gridActionsWrap.style.visibility = 'hidden'; // keep in flow but invisible
+
+      // Step 2: measure — scrollWidth is reliable even with overflow-x:auto
+      const isOverflowing = gridHeader.scrollWidth > gridHeader.clientWidth + 4;
+
+      // Step 3: restore
+      gridActionsWrap.style.visibility = '';
+      if (isOverflowing !== lastOverflow) {
+        lastOverflow = isOverflowing;
+        gridHeader.classList.toggle('overflow-active', isOverflowing);
+      }
+    };
+    new ResizeObserver(checkGridOverflow).observe(gridHeader);
+  }
+
+  // ── Fav Palettes menu ────────────────────────────────────────────────────────
+  bindToggle('btn-fav-menu', 'fav-dropdown');
+  // Content populated by renderFavDropdown() called from renderFavPalettes()
+}
+
 function init() {
   // Inject version string
   const verEl = document.getElementById('app-version');
@@ -5673,6 +5794,7 @@ function init() {
   setupDragDrop();
   setupPanelResize();
   setupSidebarToggle();
+  setupOverflowMenus();
   setupKeyboard();
   setupCollapsibleSections();
   setupFilterAccordion();

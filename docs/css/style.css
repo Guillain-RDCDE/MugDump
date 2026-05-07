@@ -2756,3 +2756,90 @@ input[type="range"] {
 
 /* Web version: no macOS traffic lights, so drop the 80px left padding */
 body.web #titlebar { padding-left: 16px; }
+
+/* ── Overflow / collapse menus ──────────────────────────────────────────────
+   Three collapsible menus appear when their parent row runs out of space:
+   - #tools-menu-wrap  → titlebar (at ≤1280px, when tool buttons are hidden)
+   - #grid-actions-wrap → grid header (detected dynamically via JS)
+   - #fav-menu-wrap    → palette bar (at ≤1024px, when fav strip is hidden)
+   ────────────────────────────────────────────────────────────────────────── */
+
+.overflow-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.overflow-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+  z-index: 600;
+  min-width: 190px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.55);
+  -webkit-app-region: no-drag;
+}
+.overflow-dropdown.hidden { display: none; }
+
+.overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  -webkit-app-region: no-drag;
+}
+.overflow-item:hover { background: var(--surface-3); }
+.overflow-item:disabled { opacity: 0.38; cursor: default; }
+.overflow-item:disabled:hover { background: none; }
+
+/* File-only items inside overflow menus */
+.overflow-file-only { display: none; }
+.has-file .overflow-file-only { display: flex; }
+
+/* Grid-only items inside overflow menus (hidden in solo mode) */
+.overflow-grid-only { display: flex; }
+#grid-panel.solo-mode .overflow-grid-only { display: none; }
+
+/* Fav palette swatch inside dropdown */
+.overflow-pal-swatch {
+  display: inline-flex;
+  width: 44px;
+  height: 12px;
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.overflow-pal-swatch span { flex: 1; }
+
+/* ── Overflow button visibility rules ─────────────────────────────────────── */
+
+/* Tools menu: always hidden until ≤1280px */
+#btn-tools-menu { display: none; }
+@media (max-width: 1280px) {
+  #btn-tools-menu { display: inline-flex; }
+}
+
+/* Grid actions menu: hidden by default; JS adds .overflow-active to #grid-header to reveal */
+#btn-grid-actions { display: none; }
+#grid-header.overflow-active #btn-grid-actions { display: inline-flex; }
+/* Hide individual action buttons when overflow menu is active */
+#grid-header.overflow-active .grid-action-item { display: none !important; }
+
+/* Fav menu: hidden by default; shown at ≤1024px when fav-palettes strip is hidden */
+#btn-fav-menu { display: none; }
+@media (max-width: 1024px) {
+  #btn-fav-menu { display: inline-flex; }
+}

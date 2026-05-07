@@ -29,6 +29,16 @@
     <button id="tb-save-project"  class="btn btn-ghost btn-sm file-only">Save Project…</button>
     <button id="tb-export-sav"    class="btn btn-ghost btn-sm file-only">Export .sav…</button>
     <button id="tb-reload-sav"    class="btn btn-ghost btn-sm file-only" title="Reload this .sav file from disk">↺ Reload</button>
+    <div class="overflow-wrap" id="tools-menu-wrap">
+      <button id="btn-tools-menu" class="btn btn-ghost btn-sm" title="File tools">Tools ▾</button>
+      <div id="tools-dropdown" class="overflow-dropdown hidden">
+        <button class="overflow-item" data-for="tb-open-pocket">Open from Pocket SD…</button>
+        <button class="overflow-item" data-for="tb-open-project">Open Project…</button>
+        <button class="overflow-item overflow-file-only" data-for="tb-save-project">Save Project…</button>
+        <button class="overflow-item overflow-file-only" data-for="tb-export-sav">Export .sav…</button>
+        <button class="overflow-item overflow-file-only" data-for="tb-reload-sav">↺ Reload .sav</button>
+      </div>
+    </div>
     <button id="btn-sidebar-toggle" class="btn btn-ghost btn-sm" title="Show editing panel">Edit ›</button>
   </div>
 
@@ -56,6 +66,10 @@
     </div>
     <button id="btn-random-palette" class="btn btn-ghost btn-sm btn-icon" title="Random palette">🎲</button>
     <button id="btn-palette-grid" class="btn btn-ghost btn-sm" title="Browse all palettes with visualiser">Browse</button>
+    <div class="overflow-wrap" id="fav-menu-wrap">
+      <button id="btn-fav-menu" class="btn btn-ghost btn-sm" title="Favourite palettes">Favs ▾</button>
+      <div id="fav-dropdown" class="overflow-dropdown hidden"></div>
+    </div>
     <div id="fav-palettes"></div>
   </div>
 
@@ -88,12 +102,23 @@
         <!-- Grid-only controls -->
         <span class="ctrl-label grid-only">Thumbnails</span>
         <input type="range" id="thumb-size-slider" min="60" max="400" step="10" value="120" class="grid-only">
-        <button id="btn-select-all" class="btn btn-ghost btn-sm grid-only" title="Select all photos">Select All</button>
-        <button id="btn-deselect-all" class="btn btn-ghost btn-sm grid-only" title="Deselect all photos">Deselect</button>
-        <button id="btn-reset-all" class="btn btn-ghost btn-sm file-only" title="Clear effects and tone from selected photos (palette preserved)">Clear Edits</button>
-        <button class="btn-copy-effects btn btn-ghost btn-sm file-only" title="Copy all settings from selected photo">Copy Settings</button>
-        <button class="btn-paste-effects btn btn-ghost btn-sm file-only" title="Paste settings to selected photos" disabled>Paste Settings</button>
-        <button id="btn-contact-sheet" class="btn btn-ghost btn-sm file-only" title="Export all photos as a contact sheet">Export Contact Sheet…</button>
+        <button id="btn-select-all" class="btn btn-ghost btn-sm grid-only grid-action-item" title="Select all photos">Select All</button>
+        <button id="btn-deselect-all" class="btn btn-ghost btn-sm grid-only grid-action-item" title="Deselect all photos">Deselect</button>
+        <button id="btn-reset-all" class="btn btn-ghost btn-sm file-only grid-action-item" title="Clear effects and tone from selected photos (palette preserved)">Clear Edits</button>
+        <button id="btn-copy-effects" class="btn-copy-effects btn btn-ghost btn-sm file-only grid-action-item" title="Copy all settings from selected photo">Copy Settings</button>
+        <button id="btn-paste-effects" class="btn-paste-effects btn btn-ghost btn-sm file-only grid-action-item" title="Paste settings to selected photos" disabled>Paste Settings</button>
+        <button id="btn-contact-sheet" class="btn btn-ghost btn-sm file-only grid-action-item" title="Export all photos as a contact sheet">Export Contact Sheet…</button>
+        <div class="overflow-wrap" id="grid-actions-wrap">
+          <button id="btn-grid-actions" class="btn btn-ghost btn-sm" title="More actions">Actions ▾</button>
+          <div id="grid-actions-dropdown" class="overflow-dropdown hidden">
+            <button class="overflow-item overflow-grid-only" data-for="btn-select-all">Select All</button>
+            <button class="overflow-item overflow-grid-only" data-for="btn-deselect-all">Deselect</button>
+            <button class="overflow-item overflow-file-only" data-for="btn-reset-all">Clear Edits</button>
+            <button class="overflow-item overflow-file-only" data-for="btn-copy-effects">Copy Settings</button>
+            <button class="overflow-item overflow-file-only" data-for="btn-paste-effects">Paste Settings</button>
+            <button class="overflow-item overflow-file-only" data-for="btn-contact-sheet">Export Contact Sheet…</button>
+          </div>
+        </div>
       </div>
 
       <!-- Grid view -->
