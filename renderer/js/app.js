@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.53';
+const APP_VERSION = 'v0.9.54';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -6089,6 +6089,11 @@ function setupOverflowMenus() {
     if (detailPanel) new ResizeObserver(scheduleGhCheck).observe(detailPanel);
     // Belt-and-suspenders: also catch raw window resize events
     window.addEventListener('resize', scheduleGhCheck);
+    // Watch #app for class changes (has-file added/removed when a .sav is loaded/
+    // unloaded) and #grid-panel for solo-mode — both change which buttons are
+    // visible without triggering any resize event, so we must re-check manually.
+    new MutationObserver(scheduleGhCheck).observe(dom.app,      { attributes: true, attributeFilter: ['class'] });
+    new MutationObserver(scheduleGhCheck).observe(gridPanel,    { attributes: true, attributeFilter: ['class'] });
     // Run once on init so initial state is correct
     scheduleGhCheck();
   }
