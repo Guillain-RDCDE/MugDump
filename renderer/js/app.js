@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.26';
+const APP_VERSION = 'v0.9.28';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -1781,16 +1781,52 @@ function wireButtons() {
     deselectAll();
   });
 
-  // Save preset
-  const savePresetBtn = document.getElementById('btn-save-preset');
-  if (savePresetBtn) {
-    savePresetBtn.addEventListener('click', () => {
-      const name = prompt('Preset name:');
-      if (name && name.trim()) savePreset(name.trim());
-    });
-  }
+  // Preset controls
+  document.getElementById('btn-save-preset')?.addEventListener('click', () => {
+    const name = prompt('Preset name:');
+    if (name && name.trim()) savePreset(name.trim());
+  });
 
-  // Render preset list on load
+  document.getElementById('btn-load-preset')?.addEventListener('click', () => {
+    const sel = document.getElementById('preset-select');
+    if (sel?.value) loadPreset(sel.value);
+    else showToast('Select a preset first');
+  });
+
+  document.getElementById('btn-delete-preset')?.addEventListener('click', () => {
+    const sel = document.getElementById('preset-select');
+    if (!sel?.value) { showToast('Select a preset first'); return; }
+    if (confirm(`Delete preset "${sel.value}"?`)) deletePreset(sel.value);
+  });
+
+  document.getElementById('btn-export-presets')?.addEventListener('click', exportPresets);
+
+  document.getElementById('btn-import-presets')?.addEventListener('click', () => {
+    document.getElementById('preset-import-input')?.click();
+  });
+
+  document.getElementById('preset-import-input')?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const imported = JSON.parse(ev.target.result);
+        if (typeof imported !== 'object' || Array.isArray(imported)) throw new Error('Invalid format');
+        const existing = getPresets();
+        const merged = { ...existing, ...imported };
+        localStorage.setItem(PRESET_KEY, JSON.stringify(merged));
+        renderPresetList();
+        showToast(`Imported ${Object.keys(imported).length} preset(s)`);
+      } catch {
+        showToast('Import failed — not a valid preset file');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // allow re-importing same file
+  });
+
+  // Render preset dropdown on load
   renderPresetList();
 
   // Section enable/disable checkboxes
@@ -5009,32 +5045,33 @@ function deletePreset(name) {
 }
 
 function renderPresetList() {
-  const list = document.getElementById('preset-list');
-  if (!list) return;
+  const sel = document.getElementById('preset-select');
+  if (!sel) return;
   const presets = getPresets();
-  const names = Object.keys(presets);
-  if (names.length === 0) {
-    list.innerHTML = '<span class="detail-hint" style="font-size:11px;">No presets saved yet</span>';
-    return;
-  }
-  list.innerHTML = '';
+  const names   = Object.keys(presets).sort((a, b) => a.localeCompare(b));
+  const prev     = sel.value;
+  sel.innerHTML  = '<option value="">— select preset —</option>';
   for (const name of names) {
-    const chip = document.createElement('div');
-    chip.className = 'preset-chip';
-    const lbl = document.createElement('span');
-    lbl.className = 'preset-chip-name';
-    lbl.textContent = name;
-    lbl.title = 'Load preset';
-    lbl.addEventListener('click', () => loadPreset(name));
-    const rm = document.createElement('button');
-    rm.className = 'preset-chip-rm';
-    rm.textContent = '✕';
-    rm.title = 'Delete preset';
-    rm.addEventListener('click', (e) => { e.stopPropagation(); deletePreset(name); });
-    chip.appendChild(lbl);
-    chip.appendChild(rm);
-    list.appendChild(chip);
+    const opt = document.createElement('option');
+    opt.value       = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
   }
+  // Restore selection if still valid
+  if (prev && names.includes(prev)) sel.value = prev;
+}
+
+function exportPresets() {
+  const presets = getPresets();
+  if (Object.keys(presets).length === 0) { showToast('No presets to export'); return; }
+  const blob = new Blob([JSON.stringify(presets, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'dmg-darkroom-presets.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`Exported ${Object.keys(presets).length} preset(s)`);
 }
 
 // ── Effect copy / paste ──────────────────────────────────────────────────────
