@@ -8,7 +8,7 @@
 
 ## Features
 
-* **Load Game Boy Camera .sav files directly:** Drag and drop or open from file. Also supports Analogue Pocket SD cards.
+* **Load Game Boy Camera saves directly:** Supports `.sav` and `.srm` (RetroArch) formats — drag and drop or open from file. Also supports Analogue Pocket SD cards.
 * **100+ colour palettes:** DMG, GBC, SGB, Lospec community palettes, plus a custom palette editor with `.pal`/`.gbp` import/export and favourites.
 * **LoFi style effects:** CRT, LCD grid, halftone, dot matrix, phosphor glow, chromatic aberration, vignette, noise, VHS ghosting, scanline jitter, and more — each with granular per-filter controls.
 * **Tone controls:** Brightness, contrast, and split toning (shadow/highlight colour with intensity and balance sliders).
