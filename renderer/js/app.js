@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.19';
+const APP_VERSION = 'v0.9.20';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -1576,12 +1576,55 @@ async function openPocketModal() {
     return;
   }
 
+  // Web version: file handles but no previewPixels — decode client-side via GBCam
+  for (const save of saves) {
+    if (!save.previewPixels && save.handle) {
+      try {
+        const file = await save.handle.getFile();
+        const buf  = new Uint8Array(await file.arrayBuffer());
+        save.previewPixels = GBCam.decodeFirstPhoto(buf);
+      } catch (_) {}
+    }
+  }
+
+  const previewPalette = PALETTES.dmg;
+
   for (const save of saves) {
     const item = document.createElement('div');
     item.className = 'save-item';
-    item.innerHTML =
+
+    // Left: preview thumbnail
+    const previewWrap = document.createElement('div');
+    previewWrap.className = 'save-preview-wrap';
+
+    if (save.previewPixels) {
+      const canvas = document.createElement('canvas');
+      canvas.width  = GBCam.PHOTO_WIDTH;
+      canvas.height = GBCam.PHOTO_HEIGHT;
+      canvas.className = 'save-preview';
+      const ctx = canvas.getContext('2d');
+      const pixels = save.previewPixels instanceof Uint8Array
+        ? save.previewPixels
+        : new Uint8Array(save.previewPixels);
+      GBCam.renderToCanvas(ctx, pixels, previewPalette, 1);
+      previewWrap.appendChild(canvas);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'save-preview-empty';
+      ph.textContent = '?';
+      previewWrap.appendChild(ph);
+    }
+
+    // Right: filename + path
+    const info = document.createElement('div');
+    info.className = 'save-info';
+    info.innerHTML =
       `<span class="save-name">${save.name}</span>` +
       `<span class="save-path">📼 ${save.volume} › ${save.path.split('/').slice(-2).join('/')}</span>`;
+
+    item.appendChild(previewWrap);
+    item.appendChild(info);
+
     item.addEventListener('click', () => {
       dom.pocketSaveList.querySelectorAll('.save-item').forEach(el => el.classList.remove('selected'));
       item.classList.add('selected');

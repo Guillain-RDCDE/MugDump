@@ -162,6 +162,18 @@ window.GBCam = (() => {
     return { photos, activeCount, sav };
   }
 
+  // ── First non-empty photo decoder ─────────────────────────────────────────
+  //
+  // Returns the pixel indices (Uint8Array, 0–3) for the first non-empty photo
+  // slot, or null if the save contains no photos at all.
+
+  function decodeFirstPhoto(sav) {
+    for (let i = 0; i < PHOTO_COUNT; i++) {
+      if (!isPhotoEmpty(sav, i)) return decodePhoto(sav, i);
+    }
+    return null;
+  }
+
   // ── Exported API ──────────────────────────────────────────────────────────
 
   return {
@@ -170,6 +182,7 @@ window.GBCam = (() => {
     PHOTO_COUNT,
     parseSav,
     decodePhoto,
+    decodeFirstPhoto,
     renderToCanvas,
   };
 })();

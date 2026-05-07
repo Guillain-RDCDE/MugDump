@@ -788,9 +788,10 @@ input[type="range"] {
 
 .save-item {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   margin-bottom: 8px;
@@ -800,6 +801,40 @@ input[type="range"] {
 
 .save-item:hover { border-color: var(--accent); }
 .save-item.selected { border-color: var(--accent); background: var(--accent-dim); }
+
+/* Preview thumbnail — rendered at 128×112, displayed at 64×56 */
+.save-preview-wrap {
+  flex-shrink: 0;
+  width: 64px;
+  height: 56px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #0F380F;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.save-preview {
+  display: block;
+  width: 64px;
+  height: 56px;
+  image-rendering: pixelated;
+}
+
+.save-preview-empty {
+  font-size: 18px;
+  color: var(--text-3);
+  line-height: 1;
+}
+
+.save-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
 
 .save-item .save-name {
   font-size: 13px;
