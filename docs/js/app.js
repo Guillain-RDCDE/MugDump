@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.33';
+const APP_VERSION = 'v0.9.34';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -4993,34 +4993,20 @@ function getPresets() {
 
 function savePreset(name) {
   if (!name) return;
-  // Capture the effective settings for the current photo (or global if nothing selected)
-  const idx = state.selectedIndex ?? (state.selectedPhotos.size > 0 ? [...state.selectedPhotos][0] : null);
-  const eff  = idx !== null ? getEffectiveSettings(idx) : {
-    activeFilters:   state.activeFilters,
+  // Always capture global state — presets are a darkroom "look" applied to all photos
+  const presets = getPresets();
+  presets[name] = {
+    activeFilters:   [...state.activeFilters],
     filterIntensity: state.filterIntensity,
     filterVariant:   state.filterVariant,
-    filterParams:    state.filterParams,
+    filterParams:    JSON.parse(JSON.stringify(state.filterParams)),
     brightness:      state.brightness,
     contrast:        state.contrast,
     toneIntensity:   state.toneIntensity,
     shadowColor:     state.shadowColor,
     highlightColor:  state.highlightColor,
     toneBalance:     state.toneBalance,
-    sectionEnabled:  state.sectionEnabled,
-  };
-  const presets = getPresets();
-  presets[name] = {
-    activeFilters:   [...eff.activeFilters],
-    filterIntensity: eff.filterIntensity,
-    filterVariant:   eff.filterVariant,
-    filterParams:    JSON.parse(JSON.stringify(eff.filterParams)),
-    brightness:      eff.brightness,
-    contrast:        eff.contrast,
-    toneIntensity:   eff.toneIntensity,
-    shadowColor:     eff.shadowColor,
-    highlightColor:  eff.highlightColor,
-    toneBalance:     eff.toneBalance,
-    sectionEnabled:  JSON.parse(JSON.stringify(eff.sectionEnabled ?? state.sectionEnabled)),
+    sectionEnabled:  JSON.parse(JSON.stringify(state.sectionEnabled)),
   };
   localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
   renderPresetList();
@@ -5032,58 +5018,63 @@ function loadPreset(name) {
   const p = presets[name];
   if (!p) return;
 
-  // Apply to selected photos if any, else globally
-  const targets = state.selectedPhotos.size > 0
-    ? [...state.selectedPhotos]
-    : state.selectedIndex !== null ? [state.selectedIndex] : null;
-
-  if (targets) {
-    for (const idx of targets) {
-      if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
-      const ps = state.photoSettings[idx];
-      ps.activeFilters   = [...(p.activeFilters || [])];
-      ps.filterIntensity = p.filterIntensity ?? 1.0;
-      ps.filterVariant   = p.filterVariant   ?? 'medium';
-      if (p.filterParams)   ps.filterParams   = JSON.parse(JSON.stringify(p.filterParams));
-      if (p.brightness      !== undefined) ps.brightness      = p.brightness;
-      if (p.contrast        !== undefined) ps.contrast        = p.contrast;
-      if (p.toneIntensity   !== undefined) ps.toneIntensity   = p.toneIntensity;
-      if (p.shadowColor     !== undefined) ps.shadowColor     = p.shadowColor;
-      if (p.highlightColor  !== undefined) ps.highlightColor  = p.highlightColor;
-      if (p.toneBalance     !== undefined) ps.toneBalance     = p.toneBalance;
-    }
-  } else {
-    state.activeFilters.clear();
-    (p.activeFilters || []).forEach(f => state.activeFilters.add(f));
-    state.filterIntensity = p.filterIntensity ?? 1.0;
-    state.filterVariant   = p.filterVariant   ?? 'medium';
-    if (p.filterParams)  Object.assign(state.filterParams, JSON.parse(JSON.stringify(p.filterParams)));
-    if (p.brightness     !== undefined) state.brightness     = p.brightness;
-    if (p.contrast       !== undefined) state.contrast       = p.contrast;
-    if (p.toneIntensity  !== undefined) state.toneIntensity  = p.toneIntensity;
-    if (p.shadowColor    !== undefined) state.shadowColor    = p.shadowColor;
-    if (p.highlightColor !== undefined) state.highlightColor = p.highlightColor;
-    if (p.toneBalance    !== undefined) state.toneBalance    = p.toneBalance;
+  // Always apply to global state — presets are a darkroom "look" for all photos
+  state.activeFilters.clear();
+  (p.activeFilters || []).forEach(f => state.activeFilters.add(f));
+  state.filterIntensity = p.filterIntensity ?? 1.0;
+  state.filterVariant   = p.filterVariant   ?? 'medium';
+  if (p.filterParams) {
+    // Merge into existing filterParams so unlisted filters keep their defaults
+    Object.assign(state.filterParams, JSON.parse(JSON.stringify(p.filterParams)));
   }
+  if (p.brightness     !== undefined) state.brightness     = p.brightness;
+  if (p.contrast       !== undefined) state.contrast       = p.contrast;
+  if (p.toneIntensity  !== undefined) state.toneIntensity  = p.toneIntensity;
+  if (p.shadowColor    !== undefined) state.shadowColor    = p.shadowColor;
+  if (p.highlightColor !== undefined) state.highlightColor = p.highlightColor;
+  if (p.toneBalance    !== undefined) state.toneBalance    = p.toneBalance;
 
-  // Restore section enabled state if saved, otherwise auto-enable what's needed
+  // Restore section enabled state
   if (p.sectionEnabled) {
     Object.assign(state.sectionEnabled, p.sectionEnabled);
   } else {
     _autoEnableEffectsSection();
   }
-  // Sync section checkboxes to updated state
   document.querySelectorAll('.section-check').forEach(cb => {
     cb.checked = state.sectionEnabled[cb.dataset.section] ?? false;
   });
 
+  // Sync all UI controls to the new global state
   updateFilterUI();
-  _refreshFilterParamPanel();
-  // Sync all sliders/pickers to the newly loaded values
-  const displayIdx = targets ? targets[0] : state.selectedIndex;
-  if (displayIdx !== null) syncControlsToEffectiveSettings(displayIdx);
+  // Sync tone/exposure sliders — pass global state directly as an eff-shaped object
+  const fakeEff = {
+    brightness: state.brightness, contrast: state.contrast,
+    toneIntensity: state.toneIntensity, shadowColor: state.shadowColor,
+    highlightColor: state.highlightColor, toneBalance: state.toneBalance,
+    activeFilters: state.activeFilters, filterIntensity: state.filterIntensity,
+    filterVariant: state.filterVariant, filterParams: state.filterParams,
+    palette: state.palette,
+  };
+  // Update tone sliders manually
+  const setSlider = (id, val, fmt) => {
+    const el = document.getElementById(id);
+    const vl = document.getElementById(id + '-val');
+    if (el) el.value = val;
+    if (vl) vl.textContent = fmt(val);
+  };
+  setSlider('tone-brightness', state.brightness, v => v > 0 ? `+${v}` : String(v));
+  setSlider('tone-contrast',   state.contrast,   v => v > 0 ? `+${v}` : String(v));
+  setSlider('tone-intensity',  state.toneIntensity, v => `${v}%`);
+  setSlider('tone-balance',    state.toneBalance,   v => v > 0 ? `+${v}` : String(v));
+  const scEl = document.getElementById('tone-shadow-color');
+  if (scEl) { scEl.value = state.shadowColor; syncColorSwatchBtn(scEl, state.shadowColor); }
+  const hcEl = document.getElementById('tone-highlight-color');
+  if (hcEl) { hcEl.value = state.highlightColor; syncColorSwatchBtn(hcEl, state.highlightColor); }
+
+  syncFilterAccordion(fakeEff);
   repaintGrid();
   updateSidebarPreview();
+  if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
   showToast(`Preset "${name}" loaded`);
 }
 
