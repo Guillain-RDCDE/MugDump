@@ -2773,8 +2773,7 @@ input[type="range"] {
   #tb-export-sav,
   #tb-reload-sav { display: none !important; }
 
-  /* At 1280px only hide the detail text; keep the version number visible */
-  .app-subtitle-detail { display: none; }
+  /* At 1280px tighten — keep subtitle fully visible */
 
   /* Tighten the sidebar a touch */
   #detail-panel { width: 300px; }
@@ -2792,8 +2791,7 @@ input[type="range"] {
   /* On tablet, keep only Open .sav + sidebar toggle */
   #tb-open-pocket { display: none; }
 
-  /* Hide the version/subtitle entirely at tablet — titlebar is very tight */
-  .app-subtitle { display: none; }
+  /* Keep subtitle visible at all widths — version + link never disappear */
 
   /* Show the sidebar toggle button */
   #btn-sidebar-toggle { display: inline-flex; }
