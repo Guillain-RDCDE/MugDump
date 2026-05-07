@@ -54,13 +54,11 @@ html, body {
   border-bottom: 1px solid var(--border-dim);
   -webkit-app-region: drag;
   flex-shrink: 0;
-  overflow-x: auto;   /* scroll horizontally rather than clip at any width */
-  scrollbar-width: none;
+  /* overflow must stay visible so the Tools dropdown can escape the bar */
 }
-#titlebar::-webkit-scrollbar { display: none; }
 /* Prevent buttons from shrinking and disappearing; spacer can still flex */
 #titlebar > * { flex-shrink: 0; }
-#titlebar .spacer { flex-shrink: 1; min-width: 8px; }
+#titlebar .spacer { flex: 1; min-width: 8px; }
 
 #titlebar .app-name-btn {
   font-size: 14px;
@@ -1956,10 +1954,8 @@ input[type="range"] {
   padding: 8px 16px;
   border-bottom: 1px solid var(--border-dim);
   flex-shrink: 0;
-  overflow-x: auto;   /* scroll rather than clip on narrow grids */
-  scrollbar-width: none;
+  /* overflow must stay visible so the Actions dropdown can escape the bar */
 }
-#grid-header::-webkit-scrollbar { display: none; }
 #grid-header > * { flex-shrink: 0; }
 #grid-header .ctrl-label { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
 #grid-header #thumb-size-slider { flex: 1; max-width: 100px; accent-color: var(--accent); cursor: pointer; }
@@ -2703,11 +2699,12 @@ input[type="range"] {
 
 /* ── Responsive: Small Laptop (≤1280px) ─────────────────────────────────── */
 @media (max-width: 1280px) {
-  /* Hide low-priority titlebar buttons; keep Open .sav + Open Pocket */
+  /* Hide low-priority titlebar buttons; keep Open .sav + Open Pocket.
+     Must use !important to beat the .has-file .file-only { display: flex !important } rule. */
   #tb-open-project,
   #tb-save-project,
   #tb-export-sav,
-  #tb-reload-sav { display: none; }
+  #tb-reload-sav { display: none !important; }
 
   /* Hide subtitle text to save room */
   .app-subtitle { display: none; }
@@ -2801,6 +2798,8 @@ body.web #titlebar { padding-left: 16px; }
   padding: 4px;
   z-index: 600;
   min-width: 190px;
+  max-height: 320px;
+  overflow-y: auto;
   box-shadow: 0 8px 28px rgba(0,0,0,0.55);
   -webkit-app-region: no-drag;
 }
