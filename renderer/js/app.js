@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.17';
+const APP_VERSION = 'v0.9.18';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -1682,14 +1682,14 @@ function wireButtons() {
     });
   }
 
-  // Randomise filters button
-  document.getElementById('btn-randomise')?.addEventListener('click', () => {
+  // Randomise FX only
+  document.getElementById('btn-randomise-fx')?.addEventListener('click', () => {
     randomiseFilters();
-    const btn = document.getElementById('btn-randomise');
-    if (btn) btn.title = 'Filters randomised!';
-    setTimeout(() => {
-      if (btn) btn.title = 'Randomise filter settings';
-    }, 2000);
+  });
+
+  // Randomise All — filters + a random palette
+  document.getElementById('btn-randomise-all')?.addEventListener('click', () => {
+    randomiseAll();
   });
 
   // Deselect button
@@ -1815,6 +1815,8 @@ function wireButtons() {
   document.getElementById('palette-grid-close').addEventListener('click', closePaletteGrid);
 
   // GIF toolbar
+  document.getElementById('btn-gif-clear')?.addEventListener('click', clearGifFrames);
+
   document.getElementById('gif-cancel').addEventListener('click', () => {
     setExportFormat('png');
     // Reset format buttons
@@ -5088,6 +5090,46 @@ function randomiseFilters() {
   repaintGrid();
   updateSidebarPreview();
   showToast(`Randomised ${selected.length} filters`);
+}
+
+function clearGifFrames() {
+  if (state.gifFrameOrder.length === 0) return;
+  state.gifFrameOrder = [];
+  state.gifSelection.clear();
+  dom.photoGrid.querySelectorAll('.photo-slot').forEach(el => {
+    el.classList.remove('selected-for-gif');
+    el.removeAttribute('data-gif-frame');
+  });
+  updateGifCount();
+  renderGifFrameStrip();
+  updateGifPreview();
+  showToast('Frames cleared');
+}
+
+function randomiseAll() {
+  // Randomise filters + pick a random palette for target photo(s) / global
+  randomiseFilters();
+  const paletteIds = Object.keys(PALETTES);
+  const randomId = paletteIds[Math.floor(Math.random() * paletteIds.length)];
+  // setPalette already calls pushUndo — randomiseFilters called it first, so skip the double-undo:
+  // Just apply the palette directly without another pushUndo
+  const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
+  if (targets) {
+    targets.forEach(i => {
+      if (!state.photoSettings[i]) state.photoSettings[i] = {};
+      state.photoSettings[i].paletteId = randomId;
+    });
+  } else if (state.selectedIndex !== null) {
+    if (!state.photoSettings[state.selectedIndex]) state.photoSettings[state.selectedIndex] = {};
+    state.photoSettings[state.selectedIndex].paletteId = randomId;
+  } else {
+    state.palette = PALETTES[randomId];
+  }
+  addRecentPalette(randomId);
+  updatePalettePickerBtn(getEffectiveSettings(state.selectedIndex)?.palette || state.palette);
+  repaintGrid();
+  updateSidebarPreview();
+  showToast(`Randomised everything · ${PALETTES[randomId]?.name || randomId}`);
 }
 
 function updateFilterOrder(repaint = false) {
