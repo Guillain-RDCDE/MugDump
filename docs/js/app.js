@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.52';
+const APP_VERSION = 'v0.9.53';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -6059,24 +6059,24 @@ function setupOverflowMenus() {
     let _ghRaf = null;
     const checkGridOverflow = () => {
       _ghRaf = null;
-      // Temporarily reveal all items so we can measure their natural combined width.
-      // We must do this before reading scrollWidth, otherwise hidden items
-      // don't contribute to the measured content width.
+      // 1. Reveal all action items so they contribute to the measured width.
       gridHeader.classList.remove('overflow-active');
-      // Double-rAF: first frame lets the browser process the class removal and
-      // perform layout; second frame reads the settled dimensions.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          // scrollWidth captures the full content width including any items that
-          // spill past the element's layout edge (flex-shrink:0 children overflow
-          // visually when the container is too narrow).
-          const isOverflowing = gridHeader.scrollWidth > gridHeader.clientWidth;
-          if (isOverflowing !== lastOverflow) {
-            lastOverflow = isOverflowing;
-            gridHeader.classList.toggle('overflow-active', isOverflowing);
-          }
-        });
-      });
+      // 2. Temporarily set overflow:hidden.
+      //    IMPORTANT: with overflow:visible (the normal state), browsers report
+      //    scrollWidth === clientWidth even when flex children overflow visually —
+      //    the scroll area is not extended for overflow:visible elements. Setting
+      //    overflow:hidden forces the browser to track the full content extent in
+      //    scrollWidth. Reading scrollWidth immediately after forces a synchronous
+      //    reflow that picks up both the class removal and the overflow change.
+      gridHeader.style.overflow = 'hidden';
+      const isOverflowing = gridHeader.scrollWidth > gridHeader.clientWidth;
+      // 3. Restore overflow:visible so the Actions dropdown can escape the bar.
+      gridHeader.style.overflow = '';
+      // 4. Apply or remove overflow-active.
+      if (isOverflowing !== lastOverflow) {
+        lastOverflow = isOverflowing;
+        gridHeader.classList.toggle('overflow-active', isOverflowing);
+      }
     };
     const scheduleGhCheck = () => {
       if (_ghRaf) return;
