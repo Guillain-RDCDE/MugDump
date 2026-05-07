@@ -1049,12 +1049,16 @@ input[type="range"] {
   color: var(--text);
 }
 
-/* Collapsed state: sidebar folds to zero, tab is the only thing visible */
-#app.sidebar-collapsed #detail-panel {
-  width: 0;
-  min-width: 0;
-  overflow: hidden;
-  border-left: none;
+/* Collapsed state: sidebar folds to zero — desktop only.
+   At ≤1024px the sidebar uses the overlay system; applying width:0 there
+   would conflict with sidebar-open and make the overlay invisible. */
+@media (min-width: 1025px) {
+  #app.sidebar-collapsed #detail-panel {
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    border-left: none;
+  }
 }
 /* Hide the tab at tablet/mobile — overlay sidebar uses #btn-sidebar-toggle */
 @media (max-width: 1024px) {

@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.49';
+const APP_VERSION = 'v0.9.50';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -2101,16 +2101,23 @@ function setupSidebarCollapse() {
 
   const STORED_KEY = 'gbcam_sidebar_collapsed';
 
+  const isDesktop = () => window.innerWidth > 1024;
+
   function doCollapse(save = true) {
+    // Clear any inline width set by drag-resize so the CSS class rule can take effect
+    panel.style.width = '';
+    panel.style.flex  = '';
     app.classList.add('sidebar-collapsed');
     btn.textContent = '›';
     btn.title = 'Expand sidebar';
     if (handle) handle.style.cursor = 'default';
     if (save) localStorage.setItem(STORED_KEY, '1');
-    // Notify grid header that available width changed
     setTimeout(() => window.dispatchEvent(new Event('resize')), 200);
   }
   function doExpand(save = true) {
+    // Clear any inline width so the panel returns to its CSS-defined width
+    panel.style.width = '';
+    panel.style.flex  = '';
     app.classList.remove('sidebar-collapsed');
     btn.textContent = '‹';
     btn.title = 'Collapse sidebar';
@@ -2119,8 +2126,23 @@ function setupSidebarCollapse() {
     setTimeout(() => window.dispatchEvent(new Event('resize')), 200);
   }
 
-  // Restore persisted state
-  if (localStorage.getItem(STORED_KEY) === '1') doCollapse(false);
+  // Restore persisted state (only at desktop — tablet overlay ignores this)
+  if (isDesktop() && localStorage.getItem(STORED_KEY) === '1') doCollapse(false);
+
+  // When crossing the 1024px breakpoint, sync the collapsed class appropriately
+  let _wasDesktop = isDesktop();
+  window.addEventListener('resize', () => {
+    const nowDesktop = isDesktop();
+    if (nowDesktop === _wasDesktop) return;
+    _wasDesktop = nowDesktop;
+    if (!nowDesktop) {
+      // Going tablet: remove sidebar-collapsed so overlay system isn't blocked
+      app.classList.remove('sidebar-collapsed');
+    } else {
+      // Going desktop: restore from storage
+      if (localStorage.getItem(STORED_KEY) === '1') doCollapse(false);
+    }
+  });
 
   // Stop the mousedown on the button from triggering a resize drag
   btn.addEventListener('mousedown', e => e.stopPropagation());
@@ -3066,7 +3088,7 @@ function renderFavPalettes() {
   const favs = loadFavPalettes().filter(id => PALETTES[id]);
   const total = favs.length;
   const visible = Math.min(_favVisibleCount, FAV_PAGE_SIZE);
-  const hasWheel = total > visible;
+  const hasWheel = total > visible && visible > 0;
 
   // ‹ left arrow
   if (hasWheel) {
@@ -6089,24 +6111,31 @@ function setupOverflowMenus() {
   bindToggle('btn-grid-actions', 'grid-actions-dropdown');
   wireItems('grid-actions-dropdown');
 
-  // ResizeObserver: detect when grid-header children overflow available width
-  const gridHeader = document.getElementById('grid-header');
-  const gridActionsWrap = document.getElementById('grid-actions-wrap');
-  if (gridHeader && gridActionsWrap && window.ResizeObserver) {
+  // ResizeObserver: detect when grid-header children overflow available width.
+  // We observe #grid-panel (the parent) because it's what changes width on window
+  // resize — #grid-header fills its width via flex stretch, so observing only the
+  // header itself can miss window-resize events when the panel width changes.
+  const gridHeader  = document.getElementById('grid-header');
+  const gridPanel   = document.getElementById('grid-panel');
+  if (gridHeader && gridPanel && window.ResizeObserver) {
     let lastOverflow = null;
     let _ghRaf = null;
     const checkGridOverflow = () => {
       _ghRaf = null;
-      // Step 1: remove overflow-active so all action items become visible for measurement
+      // Reveal all items so we can measure their true positions
       gridHeader.classList.remove('overflow-active');
-      gridActionsWrap.style.visibility = 'hidden'; // keep in flow but invisible
-      // Step 2: temporarily clip so scrollWidth reflects overflow reliably
-      // (without overflow-x:auto, visible content doesn't always inflate scrollWidth)
-      gridHeader.style.overflow = 'hidden';
-      const isOverflowing = gridHeader.scrollWidth > gridHeader.clientWidth + 4;
-      gridHeader.style.overflow = '';
-      // Step 3: restore
-      gridActionsWrap.style.visibility = '';
+      // getBoundingClientRect reflects real layout positions — check if any
+      // visible action item's right edge exceeds the header's right edge
+      const headerRight = gridHeader.getBoundingClientRect().right;
+      const items = gridHeader.querySelectorAll('.grid-action-item');
+      let isOverflowing = false;
+      for (const item of items) {
+        if (item.offsetWidth === 0) continue; // display:none or zero-size — skip
+        if (item.getBoundingClientRect().right > headerRight + 4) {
+          isOverflowing = true;
+          break;
+        }
+      }
       if (isOverflowing !== lastOverflow) {
         lastOverflow = isOverflowing;
         gridHeader.classList.toggle('overflow-active', isOverflowing);
@@ -6116,10 +6145,13 @@ function setupOverflowMenus() {
       if (_ghRaf) return;
       _ghRaf = requestAnimationFrame(checkGridOverflow);
     };
-    new ResizeObserver(scheduleGhCheck).observe(gridHeader);
-    // Also watch the detail panel — sidebar collapse changes grid-panel width
+    // Watch grid-panel (parent that changes width on window resize)
+    new ResizeObserver(scheduleGhCheck).observe(gridPanel);
+    // Also watch detail-panel — sidebar collapse/expand changes grid-panel width
     const detailPanel = document.getElementById('detail-panel');
     if (detailPanel) new ResizeObserver(scheduleGhCheck).observe(detailPanel);
+    // Belt-and-suspenders: also catch raw window resize events
+    window.addEventListener('resize', scheduleGhCheck);
   }
 
   // ── Fav Palettes menu ────────────────────────────────────────────────────────
