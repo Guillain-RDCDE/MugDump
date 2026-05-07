@@ -136,6 +136,9 @@
           <div class="ctrl-group collapsible" id="preview-group">
             <div class="tone-header section-header">
               <div class="ctrl-label section-label">Preview</div>
+              <label class="section-check-wrap preview-effects-wrap" title="Show effects in preview (P)">
+                <input type="checkbox" id="effects-preview-check" checked>
+              </label>
             </div>
             <div id="sidebar-preview-wrap">
               <canvas id="sidebar-preview-canvas" width="256" height="224"></canvas>
@@ -242,9 +245,8 @@
           <div class="ctrl-group collapsible" id="effects-controls" data-default-collapsed="true">
             <div class="ctrl-header-row section-header">
               <div class="ctrl-label section-label">Effects &amp; Filters</div>
-              <button id="effects-preview-btn" class="btn btn-ghost btn-xs" title="Toggle effects preview mode (P)">Preview</button>
-              <button id="btn-randomise" class="btn btn-ghost btn-xs" title="Randomise filter settings">Randomise</button>
-              <button id="btn-reset-effects" class="btn btn-ghost btn-xs" title="Reset all effects">Reset</button>
+              <button id="btn-randomise" class="btn btn-ghost btn-xs" title="Randomise filter settings">Rnd</button>
+              <button id="btn-reset-effects" class="btn btn-ghost btn-xs btn-icon" title="Reset all effects">↺</button>
               <label class="section-check-wrap" title="Enable effects and filters">
                 <input type="checkbox" class="section-check" data-section="effects">
               </label>
