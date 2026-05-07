@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.15';
+const APP_VERSION = 'v0.9.16';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -1460,58 +1460,63 @@ function setGifLoop(mode) {
 
 async function exportGif() {
   if (state.gifFrameOrder.length === 0) {
-    showToast('Select at least one photo');
+    showToast('Add frames first');
     return;
   }
 
-  // Resolve numeric scale (custom mode → pixel ratio)
-  const scale = state.exportScale === 'custom'
-    ? Math.max(1, Math.round((parseInt(document.getElementById('custom-width')?.value) || 512) / GBCam.PHOTO_WIDTH))
-    : state.exportScale;
+  try {
+    // Resolve numeric scale (custom mode → pixel ratio)
+    const scale = state.exportScale === 'custom'
+      ? Math.max(1, Math.round((parseInt(document.getElementById('custom-width')?.value) || 512) / GBCam.PHOTO_WIDTH))
+      : state.exportScale;
 
-  // Build the frame sequence from gifFrameOrder — apply bounce (ping-pong) if selected
-  const baseFrames = state.gifFrameOrder;
-  let sequence = baseFrames;
-  if (state.gifLoop === 'bounce' && baseFrames.length > 2) {
-    // Forward + reversed middle (exclude duplicate endpoints)
-    const mid = [...baseFrames].reverse().slice(1, baseFrames.length - 1);
-    sequence = [...baseFrames, ...mid];
-  }
+    // Build the frame sequence from gifFrameOrder — apply bounce (ping-pong) if selected
+    const baseFrames = state.gifFrameOrder;
+    let sequence = baseFrames;
+    if (state.gifLoop === 'bounce' && baseFrames.length > 2) {
+      // Forward + reversed middle (exclude duplicate endpoints)
+      const mid = [...baseFrames].reverse().slice(1, baseFrames.length - 1);
+      sequence = [...baseFrames, ...mid];
+    }
 
-  const frames = [];
+    const frames = [];
 
-  for (const frame of sequence) {
-    const photo = state.photos[frame.photoIndex];
-    if (!photo || photo.isEmpty) continue;
-    // Per-frame palette override — fall back to global palette
-    const pal = (frame.paletteId && PALETTES[frame.paletteId]) || state.palette;
-    frames.push({
-      indices: Array.from(photo.pixels),
-      palette: paletteToRGB(pal),
-      width:  GBCam.PHOTO_WIDTH,
-      height: GBCam.PHOTO_HEIGHT,
+    for (const frame of sequence) {
+      const photo = state.photos[frame.photoIndex];
+      if (!photo || photo.isEmpty) continue;
+      // Per-frame override → per-photo effective palette → global palette
+      const eff = getEffectiveSettings(frame.photoIndex);
+      const pal = (frame.paletteId && PALETTES[frame.paletteId]) || eff.palette;
+      frames.push({
+        indices: Array.from(photo.pixels),
+        palette: paletteToRGB(pal),
+        width:   GBCam.PHOTO_WIDTH,
+        height:  GBCam.PHOTO_HEIGHT,
+      });
+    }
+
+    if (frames.length === 0) { showToast('No valid frames'); return; }
+
+    const loopTag = state.gifLoop !== 'infinite' ? `_${state.gifLoop}` : '';
+    const defaultName = `darkroom_anim_${scale}x${loopTag}.gif`;
+
+    const result = await window.api.saveGif({
+      frames,
+      delay:  state.gifDelay,
+      scale,
+      loop:   state.gifLoop,   // 'infinite' | 'once' | 'bounce'
+      defaultName,
     });
-  }
 
-  if (frames.length === 0) { showToast('No valid frames'); return; }
+    if (!result) return; // user canceled save dialog
+    if (result.error) { showToast(`GIF error: ${result.error}`); return; }
 
-  const loopTag = state.gifLoop !== 'infinite' ? `_${state.gifLoop}` : '';
-  const defaultName = `gbcam_anim_${scale}x${loopTag}.gif`;
-
-  const result = await window.api.saveGif({
-    frames,
-    delay:  state.gifDelay,
-    scale,
-    loop:   state.gifLoop,   // 'infinite' | 'once' | 'bounce'
-    defaultName,
-  });
-
-  if (result && !result.error) {
     const fLabel = `${frames.length} frame${frames.length !== 1 ? 's' : ''}`;
-    const lLabel = state.gifLoop === 'once' ? '· plays once' : state.gifLoop === 'bounce' ? '· bounce' : '';
-    showToast(`GIF saved (${fLabel} ${lLabel})`);
-  } else if (result?.error) {
-    showToast(`Error: ${result.error}`);
+    const lLabel = state.gifLoop === 'once' ? '· once' : state.gifLoop === 'bounce' ? '· bounce' : '';
+    showToast(`GIF saved (${fLabel}${lLabel ? ' ' + lLabel : ''})`);
+  } catch (e) {
+    console.error('[exportGif]', e);
+    showToast(`Export failed: ${e.message}`);
   }
 }
 
