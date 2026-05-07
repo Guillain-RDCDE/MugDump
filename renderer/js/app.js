@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.56';
+const APP_VERSION = 'v0.9.57';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -6060,36 +6060,16 @@ function setupOverflowMenus() {
     const slider = document.getElementById('thumb-size-slider');
     const checkGridOverflow = () => {
       _ghRaf = null;
-      // Reveal all action items so their widths are measurable.
+      // Remove the class so all action buttons are revealed and contribute
+      // their full natural widths to scrollWidth.
       gridHeader.classList.remove('overflow-active');
-      // Force a synchronous reflow so offsetWidth values are up-to-date.
+      // Force a synchronous reflow — without this, scrollWidth may reflect
+      // the previous layout state before the class was removed.
       void gridHeader.offsetHeight;
-
-      // Directly sum offsetWidth of every visible direct child,
-      // excluding the slider (variable-width) and the overflow wrap itself.
-      // This approach is immune to flex absorption — we measure raw element
-      // widths before the layout algorithm compresses them.
-      const GAP = 8; // matches CSS gap:8px on #grid-header
-      let fixedW = 0;
-      let childCount = 0;
-      for (const child of gridHeader.children) {
-        if (child === slider) continue;
-        if (child.id === 'grid-actions-wrap') continue;
-        // Skip children that are display:none (offsetWidth === 0 and offsetParent === null)
-        if (child.offsetWidth === 0 && !child.offsetParent) continue;
-        fixedW += child.offsetWidth;
-        childCount++;
-      }
-
-      // Available width = header clientWidth minus its 16px left+right padding.
-      const PADDING = 32;
-      const SLIDER_MIN = 60;
-      // Gaps: between each fixed child, plus one gap before slider, one after.
-      const totalGaps = Math.max(0, childCount - 1) * GAP + (childCount > 0 ? 2 * GAP : 0);
-      const totalRequired = fixedW + totalGaps + SLIDER_MIN;
-      const availW = gridHeader.clientWidth - PADDING;
-
-      const isOverflowing = totalRequired > availW;
+      // #grid-header > * { flex-shrink: 0 } prevents items from compressing,
+      // so when buttons overflow the container their total width is accurately
+      // captured in scrollWidth. No overflow:hidden trick needed.
+      const isOverflowing = gridHeader.scrollWidth > gridHeader.clientWidth;
       if (isOverflowing !== lastOverflow) {
         lastOverflow = isOverflowing;
         gridHeader.classList.toggle('overflow-active', isOverflowing);
