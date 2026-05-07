@@ -2409,6 +2409,93 @@ input[type="range"] {
 }
 .preset-chip-rm:hover { color: var(--text); }
 
+/* ── Section headings (Exposure, Split Tone, Effects & Filters) ──────────── */
+
+.section-header {
+  cursor: default !important;
+}
+
+.section-label {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  flex: 1;
+}
+
+/* Section enable/disable checkbox */
+.section-check-wrap {
+  display: flex;
+  align-items: center;
+  margin-right: 5px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.section-check {
+  width: 13px;
+  height: 13px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ── Filter accordion ────────────────────────────────────────────────────── */
+
+.filter-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+.filter-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-item .filter-btn {
+  /* Override any pill style — full-width left-aligned toggle */
+  width: 100%;
+  text-align: left;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 400;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+.filter-item .filter-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.filter-item .filter-btn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.filter-inline {
+  padding: 8px 8px 8px 10px;
+  margin: 2px 0 4px;
+  background: var(--surface-2);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.filter-inline .range-wrap {
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
+.filter-inline .fp-row + * {
+  margin-top: 6px;
+}
+
 /* ── gif-preview-info inside preview wrap ───────────────────────────────── */
 #gif-preview-info {
   font-size: 11px;

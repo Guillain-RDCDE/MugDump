@@ -174,9 +174,12 @@
           </div>
 
           <!-- Exposure controls (brightness, contrast) -->
-          <div class="ctrl-group" id="exposure-controls">
-            <div class="tone-header">
-              <div class="ctrl-label">Exposure</div>
+          <div class="ctrl-group collapsible" id="exposure-controls">
+            <div class="tone-header section-header">
+              <label class="section-check-wrap">
+                <input type="checkbox" class="section-check" data-section="exposure" checked>
+              </label>
+              <div class="ctrl-label section-label">Exposure</div>
               <button id="exposure-reset" class="btn btn-ghost btn-xs" title="Reset exposure adjustments">Reset</button>
             </div>
             <div class="range-wrap">
@@ -196,9 +199,12 @@
           </div>
 
           <!-- Split Tone controls -->
-          <div class="ctrl-group" id="split-tone-controls">
-            <div class="tone-header">
-              <div class="ctrl-label">Split Tone</div>
+          <div class="ctrl-group collapsible" id="split-tone-controls">
+            <div class="tone-header section-header">
+              <label class="section-check-wrap">
+                <input type="checkbox" class="section-check" data-section="splitTone" checked>
+              </label>
+              <div class="ctrl-label section-label">Split Tone</div>
               <button id="split-tone-reset" class="btn btn-ghost btn-xs" title="Reset split toning">Reset</button>
             </div>
             <div class="range-wrap">
@@ -230,85 +236,76 @@
           </div>
 
           <!-- Effects / filters -->
-          <div class="ctrl-group">
-            <div class="ctrl-header-row">
-              <div class="ctrl-label">Effects &amp; Filters</div>
+          <div class="ctrl-group collapsible" id="effects-controls">
+            <div class="ctrl-header-row section-header">
+              <label class="section-check-wrap">
+                <input type="checkbox" class="section-check" data-section="effects" checked>
+              </label>
+              <div class="ctrl-label section-label">Effects &amp; Filters</div>
               <div class="ctrl-header-actions">
-                <button id="btn-copy-effects" class="btn btn-ghost btn-xs" title="Copy current effects">Copy</button>
+                <button id="btn-copy-effects" class="btn btn-ghost btn-xs" title="Copy effects from selected photo">Copy</button>
                 <button id="btn-paste-effects" class="btn btn-ghost btn-xs" title="Paste effects to selected photos" disabled>Paste</button>
               </div>
             </div>
 
-            <!-- Checkbox filter list -->
-            <div class="filter-list">
-              <div class="filter-row" data-filter="crt">
-                <input type="checkbox" class="filter-check" id="filter-check-crt" data-filter="crt">
-                <label for="filter-check-crt" class="filter-name">CRT Scanlines</label>
-                <button class="filter-settings-btn" data-filter="crt" title="Settings">⚙</button>
-              </div>
-              <div class="filter-row" data-filter="lcd">
-                <input type="checkbox" class="filter-check" id="filter-check-lcd" data-filter="lcd">
-                <label for="filter-check-lcd" class="filter-name">LCD</label>
-                <button class="filter-settings-btn" data-filter="lcd" title="Settings">⚙</button>
-              </div>
-              <div class="filter-row" data-filter="dot">
-                <input type="checkbox" class="filter-check" id="filter-check-dot" data-filter="dot">
-                <label for="filter-check-dot" class="filter-name">Dot Matrix</label>
-                <button class="filter-settings-btn" data-filter="dot" title="Settings">⚙</button>
-              </div>
-              <div class="filter-row" data-filter="glow">
-                <input type="checkbox" class="filter-check" id="filter-check-glow" data-filter="glow">
-                <label for="filter-check-glow" class="filter-name">Phosphor Glow</label>
-                <button class="filter-settings-btn" data-filter="glow" title="Settings">⚙</button>
-              </div>
-              <div class="filter-row" data-filter="chroma">
-                <input type="checkbox" class="filter-check" id="filter-check-chroma" data-filter="chroma">
-                <label for="filter-check-chroma" class="filter-name">Chromatic Aberration</label>
-                <button class="filter-settings-btn" data-filter="chroma" title="Settings">⚙</button>
-              </div>
-              <div class="filter-row" data-filter="grid">
-                <input type="checkbox" class="filter-check" id="filter-check-grid" data-filter="grid">
-                <label for="filter-check-grid" class="filter-name">Pixel Grid</label>
-                <button class="filter-settings-btn" data-filter="grid" title="Settings">⚙</button>
-              </div>
-              <div class="filter-row" data-filter="vignette">
-                <input type="checkbox" class="filter-check" id="filter-check-vignette" data-filter="vignette">
-                <label for="filter-check-vignette" class="filter-name">Vignette</label>
-                <button class="filter-settings-btn" data-filter="vignette" title="Settings">⚙</button>
-              </div>
-              <div class="filter-row" data-filter="halftone">
-                <input type="checkbox" class="filter-check" id="filter-check-halftone" data-filter="halftone">
-                <label for="filter-check-halftone" class="filter-name">Halftone</label>
-                <button class="filter-settings-btn" data-filter="halftone" title="Settings">⚙</button>
-              </div>
-              <div class="filter-row" data-filter="jitter">
-                <input type="checkbox" class="filter-check" id="filter-check-jitter" data-filter="jitter">
-                <label for="filter-check-jitter" class="filter-name">Scanline Jitter</label>
-                <button class="filter-settings-btn" data-filter="jitter" title="Settings">⚙</button>
-              </div>
-            </div>
+            <!-- Filter accordion — each item is a toggle button + inline params -->
+            <div class="filter-accordion">
 
-            <!-- Filter settings panel — shown when a filter is focused -->
-            <div id="filter-settings" style="display:none;">
-              <div class="range-wrap" style="margin-top:8px;">
-                <div class="range-header">
-                  <span class="ctrl-label">Intensity <span id="filter-focused-label"></span></span>
-                  <span class="range-val" id="filter-intensity-val">100%</span>
-                </div>
-                <input type="range" id="filter-intensity" min="0" max="100" step="5" value="100">
+              <div class="filter-item" data-filter="crt">
+                <button class="filter-btn" data-filter="crt">CRT Scanlines</button>
+                <div class="filter-inline" id="fp-crt" data-filter="crt" style="display:none;"></div>
               </div>
-              <!-- Per-filter granular controls — populated dynamically by JS -->
-              <div id="filter-params"></div>
-              <div id="crt-variant-wrap" style="display:none; margin-top:8px;">
-                <div class="ctrl-label" style="margin-bottom:4px;">Scanlines</div>
-                <div class="seg-control">
-                  <button class="seg-btn crt-variant-btn" data-variant="fine">Fine</button>
-                  <button class="seg-btn crt-variant-btn active" data-variant="medium">Medium</button>
-                  <button class="seg-btn crt-variant-btn" data-variant="thick">Thick</button>
-                  <button class="seg-btn crt-variant-btn" data-variant="wide">Wide</button>
-                </div>
+
+              <div class="filter-item" data-filter="lcd">
+                <button class="filter-btn" data-filter="lcd">LCD</button>
+                <div class="filter-inline" id="fp-lcd" data-filter="lcd" style="display:none;"></div>
               </div>
-            </div>
+
+              <div class="filter-item" data-filter="dot">
+                <button class="filter-btn" data-filter="dot">Dot Matrix</button>
+                <div class="filter-inline" id="fp-dot" data-filter="dot" style="display:none;"></div>
+              </div>
+
+              <div class="filter-item" data-filter="glow">
+                <button class="filter-btn" data-filter="glow">Phosphor Glow</button>
+                <div class="filter-inline" id="fp-glow" data-filter="glow" style="display:none;"></div>
+              </div>
+
+              <div class="filter-item" data-filter="chroma">
+                <button class="filter-btn" data-filter="chroma">Chromatic Aberration</button>
+                <div class="filter-inline" id="fp-chroma" data-filter="chroma" style="display:none;"></div>
+              </div>
+
+              <div class="filter-item" data-filter="grid">
+                <button class="filter-btn" data-filter="grid">Pixel Grid</button>
+                <div class="filter-inline" id="fp-grid" data-filter="grid" style="display:none;"></div>
+              </div>
+
+              <div class="filter-item" data-filter="vignette">
+                <button class="filter-btn" data-filter="vignette">Vignette</button>
+                <div class="filter-inline" id="fp-vignette" data-filter="vignette" style="display:none;"></div>
+              </div>
+
+              <div class="filter-item" data-filter="halftone">
+                <button class="filter-btn" data-filter="halftone">Halftone</button>
+                <div class="filter-inline" id="fp-halftone" data-filter="halftone" style="display:none;"></div>
+              </div>
+
+              <div class="filter-item" data-filter="jitter">
+                <button class="filter-btn" data-filter="jitter">Scanline Jitter</button>
+                <div class="filter-inline" id="fp-jitter" data-filter="jitter" style="display:none;"></div>
+              </div>
+
+              <div class="filter-item" data-filter="border">
+                <button class="filter-btn" data-filter="border">Border</button>
+                <div class="filter-inline" id="fp-border" data-filter="border" style="display:none;"></div>
+              </div>
+
+            </div><!-- /filter-accordion -->
+
+            <!-- Fallback global params container (used if inline panel not found) -->
+            <div id="filter-params" style="display:none;"></div>
+            <div id="filter-settings" style="display:none;"></div>
 
             <!-- Presets -->
             <div class="preset-section">

@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.8.0';
+const APP_VERSION = 'v0.9.0';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -158,7 +158,7 @@ function syncColorSwatchBtn(input, hex) {
   if (input._cpBtn) input._cpBtn.style.background = hex;
 }
 
-const THUMB_SCALE = 2; // grid thumbnails rendered at 2× for filter clarity
+const THUMB_SCALE = 4; // grid thumbnails rendered at 4× for CRT scanline clarity
 
 // ── State ──────────────────────────────────────────────────────────────────
 
@@ -177,13 +177,13 @@ const state = {
   filterVariant:   'medium', // crt only: 'fine'|'medium'|'thick'|'wide'
   filterParams: {           // per-filter granular parameters
     crt:      { phosphor: 'green', curve: 'none' }, // phosphor: 'none'|'green'|'amber'; curve: 'none'|'mild'|'strong'
-    lcd:      { subpixel: 10 },        // 0–20 %
+    lcd:      { subpixel: 30 },        // 0–80 %
     dot:      { radius: 44 },          // 20–80 % of scale
     glow:     { blur: 110, phosphor: 'green' }, // 50–300 % of scale; phosphor: 'none'|'green'|'amber'
     chroma:   { shift: 75 },           // 25–300 % of scale
     jitter:   { amount: 40 },          // 5–100 % of scale
     grid:     { opacity: 30 },         // 10–60 %
-    vignette: { falloff: 'medium' },   // 'soft'|'medium'|'hard'
+    vignette: { falloff: 50 },         // 0–100 continuous
     halftone: { radius: 38 },          // 20–60 % of scale
     border:   { thickness: 'medium' }, // 'thin'|'medium'|'thick'
   },
@@ -197,6 +197,7 @@ const state = {
   gifDelay: 250,           // ms per frame
   gifLoop: 'infinite',     // 'infinite' | 'once' | 'bounce'
   activeFilters:   new Set(),        // active filter names for stackable effects
+  sectionEnabled:  { exposure: true, splitTone: true, effects: true }, // per-section on/off
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
   lightboxOpen: false,     // lightbox overlay visible
   viewMode: 'grid',        // 'grid' | 'solo'
@@ -283,6 +284,7 @@ function getEffectiveSettings(index) {
       filterIntensity:state.filterIntensity,
       filterVariant:  state.filterVariant,
       filterParams:   state.filterParams,
+      activeFilters:  new Set(state.activeFilters),
       brightness:     state.brightness,
       contrast:       state.contrast,
       toneIntensity:  state.toneIntensity,
@@ -297,6 +299,7 @@ function getEffectiveSettings(index) {
     filterIntensity:ps.filterIntensity ?? state.filterIntensity,
     filterVariant:  ps.filterVariant  ?? state.filterVariant,
     filterParams:   ps.filterParams   ?? state.filterParams,
+    activeFilters:  ps.activeFilters ? new Set(ps.activeFilters) : new Set(state.activeFilters),
     brightness:     ps.brightness     ?? state.brightness,
     contrast:       ps.contrast       ?? state.contrast,
     toneIntensity:  ps.toneIntensity  ?? state.toneIntensity,
@@ -372,6 +375,8 @@ function resetAllEdits() {
     if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
     if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
     if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
+    updateFilterUI();
+    _refreshFilterParamPanel();
     showToast(`Reset ${targets.length} photo${targets.length > 1 ? 's' : ''}`);
   } else {
     // Nothing selected — reset everything global
@@ -385,13 +390,13 @@ function resetAllEdits() {
     state.toneBalance     = 0;
     state.filterParams    = {
       crt:      { phosphor: 'green', curve: 'none' },
-      lcd:      { subpixel: 10 },
+      lcd:      { subpixel: 30 },
       dot:      { radius: 44 },
       glow:     { blur: 110 },
       chroma:   { shift: 75 },
       jitter:   { amount: 40 },
       grid:     { opacity: 30 },
-      vignette: { falloff: 'medium' },
+      vignette: { falloff: 50 },
       halftone: { radius: 38 },
       border:   { thickness: 'medium' },
     };
@@ -433,7 +438,7 @@ function syncControlsToEffectiveSettings(index) {
 
   // Filter buttons — reflect active stacked filters
   document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.classList.toggle('active', state.activeFilters.has(btn.dataset.filter));
+    btn.classList.toggle('active', eff.activeFilters.has(btn.dataset.filter));
   });
 
   // Intensity slider
@@ -442,13 +447,8 @@ function syncControlsToEffectiveSettings(index) {
   if (intSlider) intSlider.value = Math.round(eff.filterIntensity * 100);
   if (intVal)    intVal.textContent = `${Math.round(eff.filterIntensity * 100)}%`;
 
-  // CRT variant buttons
-  document.querySelectorAll('.crt-variant-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.variant === eff.filterVariant);
-  });
-
-  // Rebuild filter param UI — pass display values so no photoSettings entry is created just for display
-  buildFilterParams(eff.exportFilter, eff.filterParams?.[eff.exportFilter] || {});
+  // Rebuild filter param inline panels to reflect effective settings for this photo
+  _refreshFilterParamPanel();
 
   // Tone controls
   const bEl  = document.getElementById('tone-brightness');
@@ -634,9 +634,9 @@ function renderGrid() {
       const effThumb = getEffectiveSettings(photo.index);
       renderPhotoWithTransform(ctx, photo, effThumb.palette, THUMB_SCALE, photo.index);
       applyToneAdjustments(ctx, canvas.width, canvas.height, effThumb);
-      if (state.activeFilters.size > 0) {
+      if (effThumb.activeFilters.size > 0) {
         applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
-                           effThumb.filterIntensity, effThumb.filterVariant, effThumb.filterParams);
+                           effThumb.filterIntensity, effThumb.filterVariant, effThumb.filterParams, effThumb.activeFilters);
       }
       slot.appendChild(canvas);
 
@@ -718,9 +718,9 @@ function repaintGridSlot(index) {
   }
   renderPhotoWithTransform(ctx, photo, eff.palette, THUMB_SCALE, index);
   applyToneAdjustments(ctx, canvas.width, canvas.height, eff);
-  if (state.activeFilters.size > 0) {
+  if (eff.activeFilters.size > 0) {
     applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
-                       eff.filterIntensity, eff.filterVariant, eff.filterParams);
+                       eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters);
   }
   // Slot badge — photo-specific settings override indicator
   slot.classList.toggle('has-photo-settings', hasPhotoOverride(index));
@@ -845,8 +845,8 @@ function renderSoloView(index) {
   renderPhotoWithTransform(ctx, photo, effSolo.palette, SOLO_SCALE, index);
 
   const w = dom.soloCanvas.width, h = dom.soloCanvas.height;
-  if (state.activeFilters.size > 0) {
-    applyActiveEffects(ctx, w, h, SOLO_SCALE, effSolo.filterIntensity, effSolo.filterVariant, effSolo.filterParams);
+  if (effSolo.activeFilters.size > 0) {
+    applyActiveEffects(ctx, w, h, SOLO_SCALE, effSolo.filterIntensity, effSolo.filterVariant, effSolo.filterParams, effSolo.activeFilters);
   }
   applyToneAdjustments(ctx, w, h, effSolo);
 
@@ -909,8 +909,8 @@ function renderLightbox(index) {
   renderPhotoWithTransform(ctx, photo, effLb.palette, PREVIEW_SCALE, index);
 
   const w = dom.lbCanvas.width, h = dom.lbCanvas.height;
-  if (state.activeFilters.size > 0) {
-    applyActiveEffects(ctx, w, h, PREVIEW_SCALE, effLb.filterIntensity, effLb.filterVariant, effLb.filterParams);
+  if (effLb.activeFilters.size > 0) {
+    applyActiveEffects(ctx, w, h, PREVIEW_SCALE, effLb.filterIntensity, effLb.filterVariant, effLb.filterParams, effLb.activeFilters);
   }
   applyToneAdjustments(ctx, w, h, effLb);
 
@@ -1069,13 +1069,13 @@ async function exportSinglePng() {
   renderPhotoWithTransform(ctx, photo, effExp.palette, scale, index);
 
   const { width, height } = { width: canvas.width, height: canvas.height };
-  if (state.activeFilters.size > 0) {
-    applyActiveEffects(ctx, width, height, scale, effExp.filterIntensity, effExp.filterVariant, effExp.filterParams);
+  if (effExp.activeFilters.size > 0) {
+    applyActiveEffects(ctx, width, height, scale, effExp.filterIntensity, effExp.filterVariant, effExp.filterParams, effExp.activeFilters);
   }
   applyToneAdjustments(ctx, width, height, effExp);
 
   const dataUrl = canvas.toDataURL('image/png');
-  const filterTag = state.activeFilters.size > 0 ? `_${[...state.activeFilters].join('+')}` : '';
+  const filterTag = effExp.activeFilters.size > 0 ? `_${[...effExp.activeFilters].join('+')}` : '';
   const scaleTag = state.exportScale === 'custom' ? `${width}px` : `${state.exportScale}x`;
   const defaultName = `gbcam_${String(index + 1).padStart(2, '0')}_${effExp.palette.id}_${scaleTag}${filterTag}.png`;
 
@@ -1094,20 +1094,20 @@ async function exportBatchPng() {
   const batch = [];
 
   const batchScale = state.exportScale === 'custom' ? Math.max(1, Math.round(width / GBCam.PHOTO_WIDTH)) : state.exportScale;
-  const filterTag  = state.activeFilters.size > 0 ? `_${[...state.activeFilters].join('+')}` : '';
 
   for (const photo of photos) {
     const canvas = document.createElement('canvas');
     const ctx    = canvas.getContext('2d');
     const effBatch = getEffectiveSettings(photo.index);
     renderPhotoWithTransform(ctx, photo, effBatch.palette, batchScale, photo.index);
-    if (state.activeFilters.size > 0) {
+    if (effBatch.activeFilters.size > 0) {
       applyActiveEffects(ctx, canvas.width, canvas.height, batchScale,
-        effBatch.filterIntensity, effBatch.filterVariant, effBatch.filterParams);
+        effBatch.filterIntensity, effBatch.filterVariant, effBatch.filterParams, effBatch.activeFilters);
     }
     applyToneAdjustments(ctx, canvas.width, canvas.height, effBatch);
     const dataUrl = canvas.toDataURL('image/png');
-    const name = `gbcam_${String(photo.index + 1).padStart(2, '0')}_${effBatch.palette.id}_${scaleTag}${filterTag}.png`;
+    const batchFilterTag = effBatch.activeFilters.size > 0 ? `_${[...effBatch.activeFilters].join('+')}` : '';
+    const name = `gbcam_${String(photo.index + 1).padStart(2, '0')}_${effBatch.palette.id}_${scaleTag}${batchFilterTag}.png`;
     batch.push({ dataUrl, name });
   }
 
@@ -1209,9 +1209,9 @@ function renderGifFrameStrip() {
       const tctx = tmp.getContext('2d');
       GBCam.renderToCanvas(tctx, photo.pixels, pal, 1);
       applyToneAdjustments(tctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, eff);
-      if (state.activeFilters.size > 0) {
+      if (eff.activeFilters.size > 0) {
         applyActiveEffects(tctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, 1,
-          eff.filterIntensity, eff.filterVariant, eff.filterParams);
+          eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters);
       }
       canvas.getContext('2d').drawImage(tmp, 0, 0, GIF_THUMB_W, GIF_THUMB_H);
     }
@@ -1595,30 +1595,8 @@ function wireButtons() {
     });
   });
 
-  // Checkbox-style filter rows
-  document.querySelectorAll('.filter-check').forEach(cb => {
-    cb.addEventListener('change', () => {
-      toggleFilter(cb.dataset.filter);
-      repaintGrid();
-      if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
-      if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
-      updateSidebarPreview();
-    });
-  });
-  document.querySelectorAll('.filter-settings-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const f = btn.dataset.filter;
-      if (!state.activeFilters.has(f)) {
-        state.activeFilters.add(f);
-        updateFilterUI();
-        repaintGrid();
-        if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
-        updateSidebarPreview();
-      }
-      state.focusedFilter = f;
-      _refreshFilterParamPanel();
-    });
-  });
+  // Note: filter-check and filter-settings-btn are removed (accordion design has no checkboxes).
+  // filter-btn click is wired above; inline params are injected by buildFilterParams.
 
   // Copy / Paste effects
   const copyBtn  = document.getElementById('btn-copy-effects');
@@ -1638,26 +1616,21 @@ function wireButtons() {
   // Render preset list on load
   renderPresetList();
 
-  // Filter intensity slider
-  const intensitySlider = document.getElementById('filter-intensity');
-  const intensityVal    = document.getElementById('filter-intensity-val');
-  if (intensitySlider) {
-    intensitySlider.addEventListener('input', () => {
-      setScopedSetting('filterIntensity', intensitySlider.value / 100);
-      if (intensityVal) intensityVal.textContent = `${intensitySlider.value}%`;
+  // Section enable/disable checkboxes
+  document.querySelectorAll('.section-check').forEach(cb => {
+    const section = cb.dataset.section;
+    cb.checked = state.sectionEnabled[section] ?? true;
+    cb.addEventListener('change', () => {
+      state.sectionEnabled[section] = cb.checked;
       repaintGrid();
-    });
-  }
-
-  // CRT scanline variant buttons
-  document.querySelectorAll('.crt-variant-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      setScopedSetting('filterVariant', btn.dataset.variant);
-      document.querySelectorAll('.crt-variant-btn').forEach(b =>
-        b.classList.toggle('active', b.dataset.variant === btn.dataset.variant));
-      repaintGrid();
+      if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+      if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+      updateSidebarPreview();
     });
   });
+
+  // Note: intensity slider and CRT variant buttons are now injected dynamically
+  // by buildFilterParams into each filter's inline panel — no static wiring needed.
 
   // Lightbox
   document.getElementById('lb-close').addEventListener('click', closeLightbox);
@@ -2625,9 +2598,9 @@ function updateGifPreview() {
     const effGif = getEffectiveSettings(frameObj.photoIndex);
     const pal = frameObj.paletteId ? PALETTES[frameObj.paletteId] : effGif.palette;
     GBCam.renderToCanvas(frameCtx, photo.pixels, pal, PREVIEW_SCALE);
-    if (state.activeFilters.size > 0) {
+    if (effGif.activeFilters.size > 0) {
       applyActiveEffects(frameCtx, canvas.width, canvas.height, PREVIEW_SCALE,
-        effGif.filterIntensity, effGif.filterVariant, effGif.filterParams);
+        effGif.filterIntensity, effGif.filterVariant, effGif.filterParams, effGif.activeFilters);
     }
     applyToneAdjustments(frameCtx, canvas.width, canvas.height, effGif);
 
@@ -2986,10 +2959,60 @@ function setExportFilter(filter) {
  *  syncing controls to effective settings without creating a photoSettings entry).
  *  Omit to use the normal writable path (getWritableFilterParams). */
 function buildFilterParams(filter, displayParams) {
-  const container = document.getElementById('filter-params');
+  const container = document.getElementById('fp-' + filter) || document.getElementById('filter-params');
   if (!container) return;
   container.innerHTML = '';
   if (!filter || filter === 'none') return;
+
+  // ── Intensity slider (always shown first in inline panel) ────────────────
+  {
+    const eff = state.selectedIndex !== null ? getEffectiveSettings(state.selectedIndex) : null;
+    const curIntensity = Math.round((eff?.filterIntensity ?? state.filterIntensity) * 100);
+    const wrap = document.createElement('div');
+    wrap.className = 'range-wrap fp-row';
+    wrap.innerHTML = `
+      <div class="range-header">
+        <span class="ctrl-label">Intensity</span>
+        <span class="range-val" id="filter-intensity-val">${curIntensity}%</span>
+      </div>
+      <input type="range" id="filter-intensity" min="0" max="100" step="5" value="${curIntensity}">`;
+    container.appendChild(wrap);
+    const sl = wrap.querySelector('#filter-intensity');
+    const vl = wrap.querySelector('#filter-intensity-val');
+    sl.addEventListener('input', () => {
+      const v = parseFloat(sl.value) / 100;
+      vl.textContent = `${sl.value}%`;
+      setScopedSetting('filterIntensity', v);
+      repaintGrid();
+      updateSidebarPreview();
+    });
+  }
+
+  // ── CRT variant buttons (injected only for CRT) ─────────────────────────
+  if (filter === 'crt') {
+    const eff = state.selectedIndex !== null ? getEffectiveSettings(state.selectedIndex) : null;
+    const curVariant = eff?.filterVariant ?? state.filterVariant ?? 'medium';
+    const vWrap = document.createElement('div');
+    vWrap.id = 'crt-variant-wrap';
+    vWrap.style.marginTop = '6px';
+    vWrap.innerHTML = `
+      <div class="ctrl-label" style="margin-bottom:4px;">Scanlines</div>
+      <div class="seg-control">
+        <button class="seg-btn crt-variant-btn${curVariant==='fine'?' active':''}" data-variant="fine">Fine</button>
+        <button class="seg-btn crt-variant-btn${curVariant==='medium'?' active':''}" data-variant="medium">Medium</button>
+        <button class="seg-btn crt-variant-btn${curVariant==='thick'?' active':''}" data-variant="thick">Thick</button>
+        <button class="seg-btn crt-variant-btn${curVariant==='wide'?' active':''}" data-variant="wide">Wide</button>
+      </div>`;
+    container.appendChild(vWrap);
+    vWrap.querySelectorAll('.crt-variant-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setScopedSetting('filterVariant', btn.dataset.variant);
+        vWrap.querySelectorAll('.crt-variant-btn').forEach(b => b.classList.toggle('active', b === btn));
+        repaintGrid();
+        updateSidebarPreview();
+      });
+    });
+  }
 
   // displayParams = values to show; writable ref is obtained lazily on interaction.
   const initP = displayParams || getWritableFilterParams(filter);
@@ -3040,7 +3063,7 @@ function buildFilterParams(filter, displayParams) {
     addSeg('Phosphor tint', 'phosphor', [['none','None'],['green','Green'],['amber','Amber']]);
     addSeg('Screen shape',  'curve',    [['none','Flat'],['mild','Mild'],['strong','Strong']]);
   } else if (filter === 'lcd') {
-    addSlider('Sub-pixel tint', 'subpixel', 0, 20, 1, v => `${v}%`);
+    addSlider('Sub-pixel tint', 'subpixel', 0, 80, 5, v => `${v}%`);
   } else if (filter === 'dot') {
     addSlider('Dot size', 'radius', 20, 80, 2, v => `${v}%`);
   } else if (filter === 'glow') {
@@ -3051,9 +3074,9 @@ function buildFilterParams(filter, displayParams) {
   } else if (filter === 'jitter') {
     addSlider('Jitter amount', 'amount', 5, 100, 5, v => `${v}%`);
   } else if (filter === 'grid') {
-    addSlider('Grid opacity', 'opacity', 10, 60, 5, v => `${v}%`);
+    addSlider('Grid opacity', 'opacity', 10, 100, 5, v => `${v}%`);
   } else if (filter === 'vignette') {
-    addSeg('Falloff', 'falloff', [['soft','Soft'],['medium','Medium'],['hard','Hard']]);
+    addSlider('Falloff', 'falloff', 0, 100, 5, v => `${v}%`);
   } else if (filter === 'halftone') {
     addSlider('Dot size', 'radius', 20, 60, 2, v => `${v}%`);
   } else if (filter === 'border') {
@@ -3078,7 +3101,10 @@ function buildFilterParams(filter, displayParams) {
 
 function applyToneAdjustments(ctx, width, height, settings) {
   const s = settings || state;
-  const { brightness, contrast, toneIntensity, shadowColor, highlightColor, toneBalance } = s;
+  const brightness   = (state.sectionEnabled?.exposure   ?? true) ? (s.brightness   ?? 0) : 0;
+  const contrast     = (state.sectionEnabled?.exposure   ?? true) ? (s.contrast     ?? 0) : 0;
+  const toneIntensity= (state.sectionEnabled?.splitTone  ?? true) ? (s.toneIntensity?? 0) : 0;
+  const { shadowColor, highlightColor, toneBalance } = s;
   if (brightness === 0 && contrast === 0 && toneIntensity === 0) return;
 
   const imageData = ctx.getImageData(0, 0, width, height);
@@ -3156,8 +3182,8 @@ function applyExportFilter(ctx, width, height, scale, filter,
     };
     const cfg = cfgs[variant] || cfgs.medium;
     const rowH    = Math.max(1, s);
-    const gapH    = Math.max(1, Math.round(rowH * cfg.gap));
-    const brightH = Math.max(0, rowH - gapH);
+    const gapH    = Math.min(Math.max(1, Math.round(rowH * cfg.gap)), rowH - 1);
+    const brightH = Math.max(1, rowH - gapH);
 
     // Draw dark gaps at the bottom of each GB pixel row
     for (let row = 0; row < GBCam.PHOTO_HEIGHT; row++) {
@@ -3249,11 +3275,14 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
 
   } else if (filter === 'vignette') {
-    const falloff = (filterParams.vignette || {}).falloff ?? 'medium';
+    const _fv = (filterParams.vignette || {}).falloff ?? 50;
+    const _t  = (typeof _fv === 'string'
+      ? ({ soft: 20, medium: 50, hard: 80 }[_fv] ?? 50)
+      : _fv) / 100; // 0..1
     const cx = width / 2, cy = height / 2;
-    const innerMult = { soft: 0.40, medium: 0.28, hard: 0.10 }[falloff] ?? 0.28;
-    const outerMult = { soft: 0.95, medium: 0.82, hard: 0.65 }[falloff] ?? 0.82;
-    const darkMax   = { soft: 0.55, medium: 0.72, hard: 0.88 }[falloff] ?? 0.72;
+    const innerMult = 0.45 - _t * 0.35; // 0.45 (soft) → 0.10 (hard)
+    const outerMult = 0.95 - _t * 0.20; // 0.95 (soft) → 0.75 (hard)
+    const darkMax   = 0.40 + _t * 0.50; // 0.40 (soft) → 0.90 (hard)
     const inner = Math.min(width, height) * innerMult;
     const outer = Math.max(width, height) * outerMult;
     const grad = ec.createRadialGradient(cx, cy, inner, cx, cy, outer);
@@ -3710,9 +3739,9 @@ function renderPresentation() {
   const ctx = dom.presCanvas.getContext('2d');
   const effPres = getEffectiveSettings(_presIndex);
   renderPhotoWithTransform(ctx, photo, effPres.palette, scale, _presIndex);
-  if (state.activeFilters.size > 0) {
+  if (effPres.activeFilters.size > 0) {
     applyActiveEffects(ctx, dom.presCanvas.width, dom.presCanvas.height, scale,
-      effPres.filterIntensity, effPres.filterVariant, effPres.filterParams);
+      effPres.filterIntensity, effPres.filterVariant, effPres.filterParams, effPres.activeFilters);
   }
   applyToneAdjustments(ctx, dom.presCanvas.width, dom.presCanvas.height, effPres);
 
@@ -3759,9 +3788,9 @@ async function exportContactSheet() {
     const tctx = tmp.getContext('2d');
     const effSheet = getEffectiveSettings(photo.index);
     renderPhotoWithTransform(tctx, photo, effSheet.palette, 4, photo.index);
-    if (state.activeFilters.size > 0) {
+    if (effSheet.activeFilters.size > 0) {
       applyActiveEffects(tctx, tmp.width, tmp.height, 4,
-        effSheet.filterIntensity, effSheet.filterVariant, effSheet.filterParams);
+        effSheet.filterIntensity, effSheet.filterVariant, effSheet.filterParams, effSheet.activeFilters);
     }
     applyToneAdjustments(tctx, tmp.width, tmp.height, effSheet);
     sc.drawImage(tmp, x, y);
@@ -4100,19 +4129,17 @@ function setupCollapsibleSections() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...collapsed])); } catch(_) {}
   }
 
-  document.querySelectorAll('#export-controls .ctrl-group').forEach(group => {
-    // Find the header: a direct .ctrl-label child, or a .tone-header child
-    const directLabel = group.querySelector(':scope > .ctrl-label');
-    const toneHeader  = group.querySelector(':scope > .tone-header');
-    if (!directLabel && !toneHeader) return; // no identifiable header (e.g. export buttons row)
+  document.querySelectorAll('#export-controls .ctrl-group.collapsible').forEach(group => {
+    // Find the header: .tone-header, .ctrl-header-row, or a direct .ctrl-label child
+    const clickTarget = group.querySelector(':scope > .tone-header')
+                     || group.querySelector(':scope > .ctrl-header-row')
+                     || group.querySelector(':scope > .ctrl-label');
+    if (!clickTarget) return;
 
-    const clickTarget = directLabel || toneHeader;
-    const labelEl     = clickTarget.classList.contains('ctrl-label')
-                          ? clickTarget
-                          : clickTarget.querySelector('.ctrl-label');
-    const sectionId   = labelEl ? labelEl.textContent.trim() : 'section';
-
-    group.classList.add('collapsible');
+    const labelEl  = clickTarget.classList.contains('ctrl-label')
+                       ? clickTarget
+                       : clickTarget.querySelector('.section-label, .ctrl-label');
+    const sectionId = labelEl ? labelEl.textContent.trim() : (group.id || 'section');
     group.dataset.sectionId = sectionId;
 
     // Inject chevron before the label text
@@ -4141,12 +4168,12 @@ function setupCollapsibleSections() {
     // Restore saved state
     if (collapsed.has(sectionId)) group.classList.add('collapsed');
 
-    // Toggle on click — ignore clicks on buttons inside the header (e.g. tone-reset)
+    // Toggle on click — ignore clicks on buttons and checkboxes inside the header
     clickTarget.style.cursor = 'pointer';
     clickTarget.addEventListener('click', e => {
+      if (e.target.closest('button, input, .section-check-wrap')) return;
       if (e.target !== clickTarget && e.target !== labelEl &&
-          e.target !== labelEl?.querySelector('.section-chevron') &&
-          e.target.closest('button')) return;
+          !e.target.classList.contains('section-chevron')) return;
       const nowCollapsed = group.classList.toggle('collapsed');
       if (nowCollapsed) collapsed.add(sectionId);
       else collapsed.delete(sectionId);
@@ -4187,8 +4214,8 @@ function updateSidebarPreview() {
   const eff = getEffectiveSettings(idx);
   renderPhotoWithTransform(tmpCtx, photo, eff.palette, SCALE, idx);
   applyToneAdjustments(tmpCtx, W, H, eff);
-  if (state.activeFilters.size > 0) {
-    applyActiveEffects(tmpCtx, W, H, SCALE, eff.filterIntensity, eff.filterVariant, eff.filterParams);
+  if (eff.activeFilters.size > 0) {
+    applyActiveEffects(tmpCtx, W, H, SCALE, eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters);
   }
 
   const ctx = canvas.getContext('2d');
@@ -4225,15 +4252,30 @@ function loadPreset(name) {
   const presets = getPresets();
   const p = presets[name];
   if (!p) return;
-  state.activeFilters.clear();
-  (p.activeFilters || []).forEach(f => state.activeFilters.add(f));
-  state.filterIntensity = p.filterIntensity ?? 1.0;
-  state.filterVariant   = p.filterVariant   ?? 'medium';
-  if (p.filterParams) Object.assign(state.filterParams, JSON.parse(JSON.stringify(p.filterParams)));
+  // Apply to selected photos if any, else globally
+  const targets = state.selectedPhotos.size > 0
+    ? [...state.selectedPhotos]
+    : state.selectedIndex !== null ? [state.selectedIndex] : null;
+  if (targets) {
+    for (const idx of targets) {
+      if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+      const ps = state.photoSettings[idx];
+      ps.activeFilters   = [...(p.activeFilters || [])];
+      ps.filterIntensity = p.filterIntensity ?? 1.0;
+      ps.filterVariant   = p.filterVariant   ?? 'medium';
+      if (p.filterParams) ps.filterParams = JSON.parse(JSON.stringify(p.filterParams));
+    }
+  } else {
+    state.activeFilters.clear();
+    (p.activeFilters || []).forEach(f => state.activeFilters.add(f));
+    state.filterIntensity = p.filterIntensity ?? 1.0;
+    state.filterVariant   = p.filterVariant   ?? 'medium';
+    if (p.filterParams) Object.assign(state.filterParams, JSON.parse(JSON.stringify(p.filterParams)));
+  }
   updateFilterUI();
   _refreshFilterParamPanel();
-  syncControlsToEffectiveSettings(state.selectedIndex);
   repaintGrid();
+  updateSidebarPreview();
   showToast(`Preset "${name}" loaded`);
 }
 
@@ -4276,11 +4318,13 @@ function renderPresetList() {
 // ── Effect copy / paste ──────────────────────────────────────────────────────
 
 function copyEffects() {
+  const _cpTgt = state.selectedIndex;
+  const _cpEff = _cpTgt !== null ? getEffectiveSettings(_cpTgt) : null;
   state.effectClipboard = {
-    activeFilters:   [...state.activeFilters],
-    filterIntensity: state.filterIntensity,
-    filterVariant:   state.filterVariant,
-    filterParams:    JSON.parse(JSON.stringify(state.filterParams)),
+    activeFilters:   _cpEff ? [..._cpEff.activeFilters] : [...state.activeFilters],
+    filterIntensity: _cpEff ? _cpEff.filterIntensity : state.filterIntensity,
+    filterVariant:   _cpEff ? _cpEff.filterVariant   : state.filterVariant,
+    filterParams:    JSON.parse(JSON.stringify(_cpEff ? _cpEff.filterParams : state.filterParams)),
   };
   const pasteBtn = document.getElementById('btn-paste-effects');
   if (pasteBtn) pasteBtn.disabled = false;
@@ -4302,9 +4346,11 @@ function pasteEffects() {
     ps.filterVariant   = cb.filterVariant;
     ps.filterParams    = JSON.parse(JSON.stringify(cb.filterParams));
   }
-  // Also update global active filters (they apply to all)
-  state.activeFilters.clear();
-  cb.activeFilters.forEach(f => state.activeFilters.add(f));
+  // Write activeFilters per-photo for each target
+  for (const idx of targets) {
+    if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+    state.photoSettings[idx].activeFilters = [...cb.activeFilters];
+  }
   updateFilterUI();
   _refreshFilterParamPanel();
   syncControlsToEffectiveSettings(state.selectedIndex);
@@ -4314,11 +4360,13 @@ function pasteEffects() {
 
 // ── Stackable effects ────────────────────────────────────────────────────────
 
-function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVariant, filterParams) {
-  if (state.activeFilters.size === 0) return;
+function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVariant, filterParams, activeFilters) {
+  if (state.sectionEnabled?.effects === false) return;
+  const af = activeFilters || state.activeFilters;
+  if (af.size === 0) return;
   const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'border', 'dot', 'glow', 'chroma', 'jitter'];
   for (const filterName of filterOrder) {
-    if (state.activeFilters.has(filterName)) {
+    if (af.has(filterName)) {
       applyExportFilter(ctx, width, height, scale, filterName, filterIntensity, filterVariant, filterParams);
     }
   }
@@ -4327,47 +4375,97 @@ function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVa
 // ── Filter UI management ───────────────────────────────────────────────────
 
 function updateFilterUI() {
-  // Sync old-style buttons (if any remain)
+  // Get effective activeFilters for current photo (or global if none selected)
+  const _uiTgt = state.selectedPhotos.size > 0
+    ? [...state.selectedPhotos][0]
+    : state.selectedIndex;
+  const af = (_uiTgt !== null && _uiTgt !== undefined)
+    ? getEffectiveSettings(_uiTgt).activeFilters
+    : state.activeFilters;
+
   document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.classList.toggle('active', state.activeFilters.has(btn.dataset.filter));
+    btn.classList.toggle('active', af.has(btn.dataset.filter));
   });
-  // Sync new checkbox-style filter rows
   document.querySelectorAll('.filter-check').forEach(cb => {
-    cb.checked = state.activeFilters.has(cb.dataset.filter);
+    cb.checked = af.has(cb.dataset.filter);
   });
   document.querySelectorAll('.filter-row').forEach(row => {
     const f = row.dataset.filter;
-    row.classList.toggle('filter-row-active', state.activeFilters.has(f));
+    row.classList.toggle('filter-row-active', af.has(f));
     row.classList.toggle('filter-row-focused', state.focusedFilter === f);
+  });
+  // Show/hide inline param panels
+  document.querySelectorAll('.filter-inline').forEach(panel => {
+    const f = panel.dataset.filter;
+    panel.style.display = (f && af.has(f) && state.focusedFilter === f) ? '' : 'none';
   });
 }
 
 function toggleFilter(filterName) {
-  if (state.activeFilters.has(filterName)) {
-    state.activeFilters.delete(filterName);
-    // If we just removed the focused filter, focus the next active one
-    if (state.focusedFilter === filterName) {
-      state.focusedFilter = [...state.activeFilters].pop() || null;
+  const targets = state.selectedPhotos.size > 0
+    ? [...state.selectedPhotos]
+    : state.selectedIndex !== null ? [state.selectedIndex] : null;
+
+  if (targets) {
+    // Per-photo toggle
+    const firstPs = state.photoSettings[targets[0]];
+    const firstAf = firstPs?.activeFilters
+      ? new Set(firstPs.activeFilters)
+      : new Set(state.activeFilters);
+    const adding = !firstAf.has(filterName);
+    for (const idx of targets) {
+      if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+      const ps = state.photoSettings[idx];
+      const cur = ps.activeFilters ? new Set(ps.activeFilters) : new Set(state.activeFilters);
+      if (adding) cur.add(filterName); else cur.delete(filterName);
+      ps.activeFilters = [...cur];
+    }
+    if (adding) {
+      state.focusedFilter = filterName;
+    } else if (state.focusedFilter === filterName) {
+      const remaining = new Set(state.photoSettings[targets[0]]?.activeFilters || []);
+      state.focusedFilter = [...remaining].pop() || null;
     }
   } else {
-    state.activeFilters.add(filterName);
-    state.focusedFilter = filterName; // focus the newly added filter
+    // Global toggle (no photo selected)
+    if (state.activeFilters.has(filterName)) {
+      state.activeFilters.delete(filterName);
+      if (state.focusedFilter === filterName) {
+        state.focusedFilter = [...state.activeFilters].pop() || null;
+      }
+    } else {
+      state.activeFilters.add(filterName);
+      state.focusedFilter = filterName;
+    }
   }
   updateFilterUI();
   _refreshFilterParamPanel();
 }
 
 function _refreshFilterParamPanel() {
-  const settingsEl = document.getElementById('filter-settings');
-  const variantEl  = document.getElementById('crt-variant-wrap');
   const f = state.focusedFilter;
-  // Refresh focused-row styling
   document.querySelectorAll('.filter-row').forEach(row => {
     row.classList.toggle('filter-row-focused', row.dataset.filter === f);
   });
-  if (settingsEl) settingsEl.style.display = (f && state.activeFilters.has(f)) ? '' : 'none';
-  if (variantEl)  variantEl.style.display  = (f === 'crt') ? '' : 'none';
-  buildFilterParams(f || 'none');
+  const _rpTgt = state.selectedPhotos.size > 0
+    ? [...state.selectedPhotos][0]
+    : state.selectedIndex;
+  const af = (_rpTgt !== null && _rpTgt !== undefined)
+    ? getEffectiveSettings(_rpTgt).activeFilters
+    : state.activeFilters;
+  // Hide all inline panels first
+  document.querySelectorAll('.filter-inline').forEach(panel => { panel.style.display = 'none'; });
+  // Show and populate focused filter's inline panel
+  if (f && af.has(f)) {
+    const inlinePanel = document.getElementById('fp-' + f);
+    if (inlinePanel) {
+      inlinePanel.style.display = '';
+      buildFilterParams(f);
+    }
+  }
+  // Hide legacy global settings panel (kept for fallback)
+  const settingsEl = document.getElementById('filter-settings');
+  if (settingsEl) settingsEl.style.display = 'none';
 }
 
 function init() {
