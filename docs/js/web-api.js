@@ -47,7 +47,7 @@ async function scanDirForSavFiles(dirHandle, volumeName, saves, depth = 0) {
         if (scanDirs.includes(lower)) {
           await scanDirForSavFiles(handle, volumeName, saves, depth + 1);
         }
-      } else if (handle.kind === 'file' && name.toLowerCase().endsWith('.sav')) {
+      } else if (handle.kind === 'file' && ['sav','srm'].includes(name.toLowerCase().split('.').pop())) {
         try {
           const file = await handle.getFile();
           if (file.size === 131072) {
@@ -77,7 +77,7 @@ window.api = {
     if ('showOpenFilePicker' in window) {
       try {
         const [handle] = await showOpenFilePicker({
-          types: [{ description: 'Game Boy Camera Save', accept: { 'application/octet-stream': ['.sav', '.SAV'] } }],
+          types: [{ description: 'Game Boy Camera Save', accept: { 'application/octet-stream': ['.sav', '.SAV', '.srm', '.SRM'] } }],
           multiple: false,
         });
         const file = await handle.getFile();
@@ -96,7 +96,7 @@ window.api = {
     // Fallback: plain file input (Firefox, Safari)
     return new Promise(resolve => {
       const input = Object.assign(document.createElement('input'), {
-        type: 'file', accept: '.sav,.SAV',
+        type: 'file', accept: '.sav,.SAV,.srm,.SRM',
       });
       input.onchange = async () => {
         const file = input.files[0];

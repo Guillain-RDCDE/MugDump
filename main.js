@@ -167,7 +167,7 @@ ipcMain.handle('open-sav-file', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
     title: 'Open Game Boy Camera .sav file',
     filters: [
-      { name: 'SAV files', extensions: ['sav', 'SAV'] },
+      { name: 'Game Boy Camera Save', extensions: ['sav', 'SAV', 'srm', 'SRM'] },
       { name: 'All files', extensions: ['*'] },
     ],
     properties: ['openFile'],
@@ -221,7 +221,7 @@ ipcMain.handle('detect-pocket', async () => {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         collectSavFiles(fullPath, volumeName, out, depth + 1);
-      } else if (entry.name.toLowerCase().endsWith('.sav')) {
+      } else if (['sav','srm'].includes(entry.name.toLowerCase().split('.').pop())) {
         try {
           if (fs.statSync(fullPath).size === 131072) {
             out.push({ path: fullPath, name: entry.name, volume: volumeName });
