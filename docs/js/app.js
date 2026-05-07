@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.35';
+const APP_VERSION = 'v0.9.36';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -162,7 +162,7 @@ const THUMB_SCALE = 4; // grid thumbnails rendered at 4× for CRT scanline clari
 
 // Pixel-dense effects that look garbled / shift on mouseover at thumbnail scale.
 // These are skipped during grid repaint — they'll still apply in solo/export views.
-const THUMBNAIL_SKIP_FILTERS = new Set(['crt', 'lcd', 'grid', 'halftone', 'dot', 'jitter', 'interlace', 'bayer', 'floyd']);
+const THUMBNAIL_SKIP_FILTERS = new Set(); // all filters render in thumbnails (4× scale is sufficient)
 
 // ── Filter definitions (single source of truth for UI + defaults) ─────────
 
@@ -397,13 +397,31 @@ function getEffectiveSettings(index) {
   };
 }
 
-/** Write a setting to global state. Sidebar controls always write globally so all thumbnails update. */
+/** Write a setting to the selected photos' per-photo overrides, or globally if nothing is selected. */
 function setScopedSetting(key, value) {
-  state[key] = value;
+  const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
+  if (targets) {
+    for (const idx of targets) {
+      if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+      state.photoSettings[idx][key] = value;
+    }
+  } else {
+    state[key] = value;
+  }
 }
 
-/** Returns the filterParams object that event handlers should mutate. Always global — sidebar edits apply to all photos. */
+/** Returns the filterParams object for the current scope. Per-photo when a photo is selected, global otherwise. */
 function getWritableFilterParams(filter) {
+  const idx = state.selectedPhotos.size > 0 ? [...state.selectedPhotos][0] : state.selectedIndex;
+  if (idx !== null && idx !== undefined) {
+    if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+    if (!state.photoSettings[idx].filterParams) {
+      state.photoSettings[idx].filterParams = JSON.parse(JSON.stringify(state.filterParams));
+    }
+    const fp = state.photoSettings[idx].filterParams;
+    if (!fp[filter]) fp[filter] = {};
+    return fp[filter];
+  }
   if (!state.filterParams[filter]) state.filterParams[filter] = {};
   return state.filterParams[filter];
 }
@@ -782,8 +800,13 @@ function repaintInteractive() {
   _interactiveRAF = requestAnimationFrame(() => {
     _interactiveRAF = null;
     repaintDetailOnly();
-    // Sidebar edits always write to global state, so all thumbnails need to update.
-    scheduleGridRepaint();
+    if (state.selectedPhotos.size > 0) {
+      // Per-photo edit — only repaint affected thumbnails immediately
+      for (const idx of state.selectedPhotos) repaintGridSlot(idx);
+    } else {
+      // Global edit — repaint all thumbnails (debounced)
+      scheduleGridRepaint();
+    }
   });
 }
 
@@ -5304,17 +5327,38 @@ function updateFilterUI() {
 
 function toggleFilter(filterName) {
   pushUndo();
-  // Always toggle globally — filter changes apply to all photos so the entire grid updates.
-  // Per-photo filter differences are only set via preset load.
-  if (state.activeFilters.has(filterName)) {
-    state.activeFilters.delete(filterName);
-    if (state.focusedFilter === filterName) {
-      state.focusedFilter = [...state.activeFilters].pop() || null;
+  const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
+  if (targets) {
+    // Per-photo toggle — apply to selected photos only
+    const firstPs = state.photoSettings[targets[0]];
+    const firstAf = firstPs?.activeFilters ? new Set(firstPs.activeFilters) : new Set(state.activeFilters);
+    const adding = !firstAf.has(filterName);
+    for (const idx of targets) {
+      if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+      const ps = state.photoSettings[idx];
+      const cur = ps.activeFilters ? new Set(ps.activeFilters) : new Set(state.activeFilters);
+      if (adding) cur.add(filterName); else cur.delete(filterName);
+      ps.activeFilters = [...cur];
+    }
+    if (adding) {
+      state.focusedFilter = filterName;
+      _autoEnableEffectsSection();
+    } else if (state.focusedFilter === filterName) {
+      const remaining = new Set(state.photoSettings[targets[0]]?.activeFilters || []);
+      state.focusedFilter = [...remaining].pop() || null;
     }
   } else {
-    state.activeFilters.add(filterName);
-    state.focusedFilter = filterName;
-    _autoEnableEffectsSection();
+    // Global toggle — no photo selected, applies to all
+    if (state.activeFilters.has(filterName)) {
+      state.activeFilters.delete(filterName);
+      if (state.focusedFilter === filterName) {
+        state.focusedFilter = [...state.activeFilters].pop() || null;
+      }
+    } else {
+      state.activeFilters.add(filterName);
+      state.focusedFilter = filterName;
+      _autoEnableEffectsSection();
+    }
   }
   updateFilterUI();
   repaintGrid();
@@ -5620,7 +5664,7 @@ function init() {
   setupCollapsibleSections();
   setupFilterAccordion();
   setStatus('No file loaded');
-  setExportScale(8);
+  setExportScale(20);
   setThumbnailSize(120); // default: ~120px thumbnails (auto-fill)
 }
 
