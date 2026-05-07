@@ -245,7 +245,8 @@
           <div class="ctrl-group collapsible" id="effects-controls" data-default-collapsed="true">
             <div class="ctrl-header-row section-header">
               <div class="ctrl-label section-label">Effects &amp; Filters</div>
-              <button id="btn-randomise" class="btn btn-ghost btn-xs" title="Randomise filter settings">Rnd</button>
+              <button id="btn-randomise-fx" class="btn btn-ghost btn-xs" title="Randomise filters only">Rnd FX</button>
+              <button id="btn-randomise-all" class="btn btn-ghost btn-xs" title="Randomise filters + palette">Rnd All</button>
               <button id="btn-reset-effects" class="btn btn-ghost btn-xs btn-icon" title="Reset all effects">↺</button>
               <label class="section-check-wrap" title="Enable effects and filters">
                 <input type="checkbox" class="section-check" data-section="effects">
@@ -306,6 +307,7 @@
     </div>
     <span class="spacer"></span>
     <span id="gif-count">0 frames</span>
+    <button id="btn-gif-clear" class="btn btn-ghost btn-sm" title="Remove all frames">Clear</button>
     <button id="btn-export-gif" class="btn btn-primary btn-sm">Export GIF</button>
     <button id="gif-cancel" class="btn btn-ghost btn-sm">Cancel</button>
   </div>
