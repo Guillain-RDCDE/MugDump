@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.28';
+const APP_VERSION = 'v0.9.29';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -1787,10 +1787,8 @@ function wireButtons() {
     if (name && name.trim()) savePreset(name.trim());
   });
 
-  document.getElementById('btn-load-preset')?.addEventListener('click', () => {
-    const sel = document.getElementById('preset-select');
-    if (sel?.value) loadPreset(sel.value);
-    else showToast('Select a preset first');
+  document.getElementById('preset-select')?.addEventListener('change', (e) => {
+    if (e.target.value) loadPreset(e.target.value);
   });
 
   document.getElementById('btn-delete-preset')?.addEventListener('click', () => {
