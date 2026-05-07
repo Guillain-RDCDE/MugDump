@@ -2650,3 +2650,98 @@ input[type="range"] {
   padding: 3px 0 0;
   font-family: var(--font-mono);
 }
+
+/* ── Sidebar overlay backdrop (tablet) ──────────────────────────────────── */
+#sidebar-backdrop {
+  display: none; /* shown only at ≤1024px when sidebar is open */
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 199;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+
+/* Sidebar toggle — hidden on desktop, shown at tablet */
+#btn-sidebar-toggle {
+  display: none;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ── Responsive: Small Laptop (≤1280px) ─────────────────────────────────── */
+@media (max-width: 1280px) {
+  /* Hide low-priority titlebar buttons; keep Open .sav + Open Pocket */
+  #tb-open-project,
+  #tb-save-project,
+  #tb-export-sav,
+  #tb-reload-sav { display: none; }
+
+  /* Hide subtitle text to save room */
+  .app-subtitle { display: none; }
+
+  /* Tighten the sidebar a touch */
+  #detail-panel { width: 300px; }
+
+  /* Copy/Paste settings buttons wrap awkwardly — hide in grid header */
+  .btn-copy-effects,
+  .btn-paste-effects { display: none; }
+}
+
+/* ── Responsive: Tablet (≤1024px) ──────────────────────────────────────── */
+@media (max-width: 1024px) {
+  /* Titlebar: no traffic-light gap needed; tighten padding */
+  #titlebar { padding: 0 12px; gap: 8px; }
+
+  /* On tablet, keep only Open .sav + sidebar toggle */
+  #tb-open-pocket { display: none; }
+
+  /* Show the sidebar toggle button */
+  #btn-sidebar-toggle { display: inline-flex; }
+
+  /* Palette bar: hide favourites strip to save horizontal space */
+  #fav-palettes { display: none; }
+
+  /* Resize handle hidden — sidebar is an overlay, not inline */
+  #panel-resize-handle { display: none; }
+
+  /* Grid fills full width */
+  #grid-panel { flex: 1; width: 100%; }
+
+  /* Tighten grid padding */
+  #photo-grid { padding: 10px; gap: 6px; }
+  #grid-header { gap: 6px; padding: 6px 10px 4px; }
+
+  /* Contact sheet export button — too wide for condensed header */
+  #btn-contact-sheet { display: none; }
+
+  /* Detail panel: slide-in overlay from the right */
+  #detail-panel {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 320px;
+    max-width: 88vw;
+    flex-shrink: 0;
+    z-index: 200;
+    transform: translateX(101%); /* start off-screen */
+    transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -6px 0 32px rgba(0,0,0,0.55);
+    overflow-y: auto;
+  }
+
+  /* Show sidebar when app has .sidebar-open class */
+  #app.sidebar-open #detail-panel { transform: translateX(0); }
+
+  /* Backdrop: only shown at this breakpoint */
+  #sidebar-backdrop { display: block; }
+  #app.sidebar-open #sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* Web version: no macOS traffic lights, so drop the 80px left padding */
+body.web #titlebar { padding-left: 16px; }

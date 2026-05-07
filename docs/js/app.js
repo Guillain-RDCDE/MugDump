@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.36';
+const APP_VERSION = 'v0.9.37';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -1985,6 +1985,28 @@ function setThumbnailSize(px) {
 }
 
 // ── Panel resize (drag handle between grid and detail panel) ─────────────────
+
+// ── Sidebar overlay toggle (tablet ≤1024px) ──────────────────────────────────
+
+function setupSidebarToggle() {
+  const toggleBtn = document.getElementById('btn-sidebar-toggle');
+  const backdrop  = document.getElementById('sidebar-backdrop');
+  const app       = document.getElementById('app');
+  if (!toggleBtn || !backdrop || !app) return;
+
+  const open  = () => { app.classList.add('sidebar-open');    toggleBtn.textContent = '‹ Close'; };
+  const close = () => { app.classList.remove('sidebar-open'); toggleBtn.textContent = 'Edit ›'; };
+
+  toggleBtn.addEventListener('click', () => {
+    app.classList.contains('sidebar-open') ? close() : open();
+  });
+  backdrop.addEventListener('click', close);
+
+  // Auto-close when viewport expands back to desktop size
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 1024) close();
+  });
+}
 
 function setupPanelResize() {
   const handle = document.getElementById('panel-resize-handle');
@@ -5660,6 +5682,7 @@ function init() {
   wireButtonsPaletteEditor();
   setupDragDrop();
   setupPanelResize();
+  setupSidebarToggle();
   setupKeyboard();
   setupCollapsibleSections();
   setupFilterAccordion();
