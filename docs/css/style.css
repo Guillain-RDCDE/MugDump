@@ -2466,16 +2466,14 @@ input[type="range"] {
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-sm);
-  overflow: hidden;
 }
-
-.fi-item + .fi-item { margin-top: 1px; }
+.fi-item + .fi-item { margin-top: 2px; }
 
 .fi-header {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 6px 5px 4px;
+  gap: 6px;
+  padding: 6px 6px 6px 4px;
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition: background 0.1s;
@@ -2483,15 +2481,18 @@ input[type="range"] {
 .fi-header:hover { background: var(--surface-2); }
 
 .fi-chevron {
-  font-size: 14px;
+  font-size: 17px;
   color: var(--text-3);
   flex-shrink: 0;
-  transition: transform 0.15s, color 0.15s;
-  margin-right: 1px;
+  transition: transform 0.15s ease, color 0.15s;
+  line-height: 1;
 }
+/* Collapsed = chevron points right; open = points down */
+.fi-item:not(.fi-open) .fi-chevron { transform: rotate(-90deg); }
+.fi-item.fi-open        .fi-chevron { transform: rotate(0deg); }
 
 .fi-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   color: var(--text-2);
   flex: 1;
@@ -2505,41 +2506,72 @@ input[type="range"] {
   flex-shrink: 0;
   cursor: pointer;
   margin-left: auto;
+  padding-left: 6px;
 }
 
 /* Active state — filter is enabled */
-.fi-item.fi-active .fi-label  { color: var(--accent); font-weight: 500; }
+.fi-item.fi-active .fi-label   { color: var(--accent); font-weight: 500; }
 .fi-item.fi-active .fi-chevron { color: var(--accent); }
 .fi-item.fi-active .fi-header  { background: var(--accent-dim); }
 
-/* Collapsed body — hide params */
+/* Body — collapsed by default; fi-open shows it */
 .fi-body-outer {
   display: grid;
-  grid-template-rows: 1fr;
+  grid-template-rows: 0fr;
   transition: grid-template-rows 0.18s ease;
+}
+.fi-item.fi-open .fi-body-outer { grid-template-rows: 1fr; }
+
+.fi-body-inner {
   overflow: hidden;
-}
-.fi-body-outer .fi-body-inner {
   min-height: 0;
-  padding: 4px 8px 8px 14px;
+  padding: 4px 8px 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
+.fi-body-inner .range-wrap { margin-top: 0; margin-bottom: 0; }
+.fi-body-inner .fp-row     { margin-top: 0; }
 
-/* Items not active AND not manually expanded: collapse body */
-.fi-item:not(.fi-active) .fi-body-outer,
-.fi-item.fi-collapsed    .fi-body-outer {
-  grid-template-rows: 0fr;
-}
-/* But if manually collapsed, even active items collapse */
-.fi-item.fi-active.fi-collapsed .fi-body-outer {
-  grid-template-rows: 0fr;
-}
-/* Active items without fi-collapsed: show body */
-.fi-item.fi-active:not(.fi-collapsed) .fi-body-outer {
-  grid-template-rows: 1fr;
-}
+/* ── Custom orange/black checkboxes ─────────────────────────────────────── */
 
-.fi-body-inner .range-wrap { margin-top: 0; margin-bottom: 6px; }
-.fi-body-inner .fp-row + * { margin-top: 6px; }
+.section-check-wrap input[type="checkbox"],
+.fi-check-wrap      input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  border: 1.5px solid var(--border);
+  background: var(--surface-3);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.12s, border-color 0.12s;
+  vertical-align: middle;
+}
+.section-check-wrap input[type="checkbox"]:hover,
+.fi-check-wrap      input[type="checkbox"]:hover {
+  border-color: var(--text-3);
+}
+.section-check-wrap input[type="checkbox"]:checked,
+.fi-check-wrap      input[type="checkbox"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.section-check-wrap input[type="checkbox"]:checked::after,
+.fi-check-wrap      input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 4px;
+  height: 8px;
+  border: 2px solid #000;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
+}
 
 /* ── Legacy filter-item / filter-btn / filter-inline (kept for compat) ──── */
 
