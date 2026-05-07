@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.46';
+const APP_VERSION = 'v0.9.47';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -243,6 +243,18 @@ const FILTER_DEFS = [
   ]},
   { id: 'chswap',    label: 'Channel Swap',         params: [
     { type: 'seg',   key: 'mode',      label: 'Mode',             def: 'rgb',        opts: [['rgb','RGB'],['rbg','RBG'],['grb','GRB'],['gbr','GBR'],['brg','BRG'],['bgr','BGR']] },
+  ]},
+  { id: 'rgbplanes', label: 'RGB Planes',           params: [
+    { type: 'range', key: 'shift',     label: 'Channel split',    def: 50,  min: 1, max: 300, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'scatter',   label: 'Row scatter',      def: 40,  min: 0, max: 100, step: 1, fmt: v => `${v}%` },
+  ]},
+  { id: 'colcorrupt', label: 'Color Corrupt',       params: [
+    { type: 'range', key: 'density',   label: 'Density',          def: 35,  min: 1, max: 100, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'strength',  label: 'Strength',         def: 65,  min: 1, max: 100, step: 1, fmt: v => `${v}%` },
+  ]},
+  { id: 'signalwarp', label: 'Signal Warp',         params: [
+    { type: 'range', key: 'amount',    label: 'Warp amount',      def: 40,  min: 1, max: 100, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'frequency', label: 'Frequency',        def: 30,  min: 1, max: 100, step: 1, fmt: v => `${v}%` },
   ]},
 ];
 
@@ -3533,15 +3545,19 @@ function applyExportFilter(ctx, width, height, scale, filter,
   } else if (filter === 'lcd') {
     const spStr    = ((filterParams.lcd || {}).subpixel ?? 30) / 100;
     const lcdBleed = ((filterParams.lcd || {}).bleed    ?? 0)  / 100;
+    // Scale separator lines proportionally so they look the same at any render scale.
+    // Target ~15% of the cell; clamp to at least 1px.
+    const sepH = Math.max(1, Math.round(s * 0.15));
+    const sepW = Math.max(1, Math.round(s * 0.12));
     // Row gaps
-    for (let y = s - 1; y < height; y += s) {
+    for (let y = s - sepH; y < height; y += s) {
       ec.fillStyle = 'rgba(0,0,0,0.38)';
-      ec.fillRect(0, y, width, 1);
+      ec.fillRect(0, y, width, sepH);
     }
     // Column separators
     for (let x = s; x < width; x += s) {
       ec.fillStyle = 'rgba(0,0,0,0.22)';
-      ec.fillRect(x - 1, 0, 1, height);
+      ec.fillRect(x - sepW, 0, sepW, height);
     }
     // RGB sub-pixel tint columns (strength from slider)
     if (s >= 4 && spStr > 0) {
@@ -3571,8 +3587,11 @@ function applyExportFilter(ctx, width, height, scale, filter,
   } else if (filter === 'grid') {
     // Pixel grid — draws lines on GB pixel boundaries so each pixel has a clear border.
     // Only meaningful when each GB pixel occupies ≥ 2 screen pixels.
+    // Weight slider is in "units at 4×", scaled proportionally so the visual weight
+    // stays consistent at any render scale (1 unit ≈ 1px at 4×, 5px at 20×, etc.).
     const gridOpacity = ((filterParams.grid || {}).opacity ?? 30) / 100;
-    const lineW       = ((filterParams.grid || {}).weight ?? 1);
+    const lineWBase   = ((filterParams.grid || {}).weight ?? 1);
+    const lineW       = Math.max(1, Math.round(lineWBase * s / 4));
     if (s >= 2) {
       ec.strokeStyle = `rgba(0,0,0,${gridOpacity})`;
       ec.lineWidth = lineW;
@@ -4240,6 +4259,158 @@ function applyExportFilter(ctx, width, height, scale, filter,
       }
     }
     ctx.putImageData(imageData, 0, 0);
+    return;
+
+  } else if (filter === 'rgbplanes') {
+    // ── RGB Planes ─────────────────────────────────────────────────────────
+    // Separates R, G, B channels into independently displaced planes. Per-row
+    // offsets vary by scanline using a seeded hash — creates the prism/rainbow
+    // horizontal-strip channel-split look characteristic of analogue signal corruption.
+    const shiftPct   = ((filterParams.rgbplanes || {}).shift   ?? 50) / 100;
+    const scatterPct = ((filterParams.rgbplanes || {}).scatter ?? 40) / 100;
+    const maxShift   = Math.max(1, Math.round(width * shiftPct * 0.28));
+
+    const src = ctx.getImageData(0, 0, width, height);
+    const sd  = src.data;
+    const out = new Uint8ClampedArray(sd.length);
+    for (let i = 3; i < out.length; i += 4) out[i] = 255;
+
+    for (let y = 0; y < height; y++) {
+      // Per-row seeded scatter — low scatter = parallel strips, high = chaotic
+      const rowNoise = (_seededRand(photoSeed, y * 1337 + 7) - 0.5);
+      const rowBase  = _seededRand(photoSeed, y * 91 + 3);
+
+      // R shifts right, B shifts left; scatter adds per-row variation to both
+      const rOff = Math.round((0.35 + rowNoise * scatterPct) * maxShift);
+      const gOff = Math.round(rowNoise * scatterPct * maxShift * 0.25);
+      const bOff = Math.round((0.35 - rowNoise * scatterPct) * maxShift);
+
+      for (let x = 0; x < width; x++) {
+        const i  = (y * width + x) * 4;
+        const rx = Math.min(width - 1, Math.max(0, x - rOff));
+        const gx = Math.min(width - 1, Math.max(0, x - gOff));
+        const bx = Math.min(width - 1, Math.max(0, x + bOff));
+        out[i]   = sd[(y * width + rx) * 4];
+        out[i+1] = sd[(y * width + gx) * 4 + 1];
+        out[i+2] = sd[(y * width + bx) * 4 + 2];
+        out[i+3] = 255;
+      }
+    }
+    const trp = Math.min(1, Math.max(0, intensity));
+    if (trp < 1) {
+      for (let i = 0; i < out.length; i += 4) {
+        out[i]   = Math.round(sd[i]   * (1 - trp) + out[i]   * trp);
+        out[i+1] = Math.round(sd[i+1] * (1 - trp) + out[i+1] * trp);
+        out[i+2] = Math.round(sd[i+2] * (1 - trp) + out[i+2] * trp);
+      }
+    }
+    ctx.putImageData(new ImageData(out, width, height), 0, 0);
+    return;
+
+  } else if (filter === 'colcorrupt') {
+    // ── Color Corrupt ──────────────────────────────────────────────────────
+    // Randomly selected GB pixel rows get their colour channels scrambled:
+    // channel swap, inversion, hue rotation, or saturation crush — mimics
+    // corrupted video data or damaged tape read errors.
+    const densityPct  = ((filterParams.colcorrupt || {}).density  ?? 35) / 100;
+    const strengthPct = ((filterParams.colcorrupt || {}).strength ?? 65) / 100;
+
+    const src = ctx.getImageData(0, 0, width, height);
+    const sd  = src.data;
+    const out = new Uint8ClampedArray(sd);
+
+    // Seeded RNG so corruption bands are stable across repaints
+    let _rngCC = (photoSeed * 1664525 + 1013904223) | 0;
+    const _randCC = () => { _rngCC = (_rngCC * 1664525 + 1013904223) | 0; return (_rngCC >>> 0) / 0x100000000; };
+
+    // Assign a corruption type per GB pixel row (stable per seed)
+    const gbH      = GBCam.PHOTO_HEIGHT;
+    const rowTypes = new Array(gbH);
+    for (let row = 0; row < gbH; row++) {
+      rowTypes[row] = _randCC() < densityPct ? Math.floor(_randCC() * 4) : -1;
+    }
+
+    for (let y = 0; y < height; y++) {
+      const gbRow = Math.min(gbH - 1, Math.floor(y / Math.max(1, s)));
+      const type  = rowTypes[gbRow];
+      if (type < 0) continue;
+
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const r = sd[i], g = sd[i+1], b = sd[i+2];
+        let nr = r, ng = g, nb = b;
+
+        if (type === 0) {
+          // Swap R ↔ B
+          nr = Math.round(r * (1 - strengthPct) + b * strengthPct);
+          nb = Math.round(b * (1 - strengthPct) + r * strengthPct);
+        } else if (type === 1) {
+          // Invert all channels
+          nr = Math.round(r * (1 - strengthPct) + (255 - r) * strengthPct);
+          ng = Math.round(g * (1 - strengthPct) + (255 - g) * strengthPct);
+          nb = Math.round(b * (1 - strengthPct) + (255 - b) * strengthPct);
+        } else if (type === 2) {
+          // Boost saturation — push each channel away from grey
+          const grey = (r + g + b) / 3;
+          nr = Math.min(255, Math.max(0, Math.round(r + (r - grey) * strengthPct * 2.5)));
+          ng = Math.min(255, Math.max(0, Math.round(g + (g - grey) * strengthPct * 2.5)));
+          nb = Math.min(255, Math.max(0, Math.round(b + (b - grey) * strengthPct * 2.5)));
+        } else {
+          // Channel cycle: R→G, G→B, B→R
+          nr = Math.round(r * (1 - strengthPct) + g * strengthPct);
+          ng = Math.round(g * (1 - strengthPct) + b * strengthPct);
+          nb = Math.round(b * (1 - strengthPct) + r * strengthPct);
+        }
+        out[i] = nr; out[i+1] = ng; out[i+2] = nb;
+      }
+    }
+    const tcc = Math.min(1, Math.max(0, intensity));
+    if (tcc < 1) {
+      for (let i = 0; i < out.length; i += 4) {
+        out[i]   = Math.round(sd[i]   * (1 - tcc) + out[i]   * tcc);
+        out[i+1] = Math.round(sd[i+1] * (1 - tcc) + out[i+1] * tcc);
+        out[i+2] = Math.round(sd[i+2] * (1 - tcc) + out[i+2] * tcc);
+      }
+    }
+    ctx.putImageData(new ImageData(out, width, height), 0, 0);
+    return;
+
+  } else if (filter === 'signalwarp') {
+    // ── Signal Warp ────────────────────────────────────────────────────────
+    // Per-scanline brightness warp: each row gets an independent exposure shift
+    // driven by a mix of smooth sine and seeded per-row noise. Produces the
+    // "unstable signal / bad antenna" banding look of deteriorating analogue video.
+    const amtPct  = ((filterParams.signalwarp || {}).amount    ?? 40) / 100;
+    const freqPct = ((filterParams.signalwarp || {}).frequency ?? 30) / 100;
+    const cycles  = 1 + freqPct * 9; // 1–10 full sine cycles across the image height
+
+    const src = ctx.getImageData(0, 0, width, height);
+    const sd  = src.data;
+    const out = new Uint8ClampedArray(sd);
+
+    for (let y = 0; y < height; y++) {
+      // Smooth sine component + per-row seeded noise blended 50/50
+      const sinVal  = Math.sin((y / height) * cycles * Math.PI * 2);
+      const noiseFn = (_seededRand(photoSeed, y * 23 + 11) - 0.5) * 2; // −1..+1
+      const warp    = (sinVal * 0.5 + noiseFn * 0.5) * amtPct * 180; // signed pixel offset
+
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        out[i]   = Math.min(255, Math.max(0, Math.round(sd[i]   + warp)));
+        out[i+1] = Math.min(255, Math.max(0, Math.round(sd[i+1] + warp)));
+        out[i+2] = Math.min(255, Math.max(0, Math.round(sd[i+2] + warp)));
+        out[i+3] = 255;
+      }
+    }
+    const tsw = Math.min(1, Math.max(0, intensity));
+    if (tsw < 1) {
+      for (let i = 0; i < out.length; i += 4) {
+        out[i]   = Math.round(sd[i]   * (1 - tsw) + out[i]   * tsw);
+        out[i+1] = Math.round(sd[i+1] * (1 - tsw) + out[i+1] * tsw);
+        out[i+2] = Math.round(sd[i+2] * (1 - tsw) + out[i+2] * tsw);
+      }
+    }
+    ctx.putImageData(new ImageData(out, width, height), 0, 0);
     return;
   }
 

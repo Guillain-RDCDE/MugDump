@@ -1,4 +1,4 @@
-<img src="docs/icon.png" width="80" alt="DMG DarkRoom">
+<img src="docs/icon.png" width="200" alt="DMG DarkRoom">
 
 # DMG DarkRoom
 
