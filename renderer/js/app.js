@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.14';
+const APP_VERSION = 'v0.9.15';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -4615,27 +4615,33 @@ function setupToneControls() {
   });
 
   resetBtn?.addEventListener('click', () => {
-    // Reset tone to defaults for the current scope target
-    setScopedSetting('brightness',    0);
-    setScopedSetting('contrast',      0);
-    setScopedSetting('toneIntensity', 0);
-    setScopedSetting('toneBalance',   0);
-    setScopedSetting('shadowColor',   '#0033aa');
-    setScopedSetting('highlightColor','#ff8800');
-
-    brightnessEl.value      = 0;
-    contrastEl.value        = 0;
-    intensityEl.value       = 0;
-    balanceEl.value         = 0;
-    shadowColorEl.value     = '#0033aa'; syncColorSwatchBtn(shadowColorEl, '#0033aa');
-    highlightColorEl.value  = '#ff8800'; syncColorSwatchBtn(highlightColorEl, '#ff8800');
-
-    brightnessVal.textContent = '0';
-    contrastVal.textContent   = '0';
-    intensityVal.textContent  = '0%';
-    balanceVal.textContent    = '0';
-
-    redrawDetail();
+    pushUndo();
+    const targets = state.selectedPhotos.size > 0
+      ? [...state.selectedPhotos]
+      : state.selectedIndex !== null ? [state.selectedIndex] : null;
+    if (targets) {
+      for (const idx of targets) {
+        if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+        const ps = state.photoSettings[idx];
+        ps.brightness     = 0;
+        ps.contrast       = 0;
+        ps.toneIntensity  = 0;
+        ps.toneBalance    = 0;
+        ps.shadowColor    = '#0033aa';
+        ps.highlightColor = '#ff8800';
+      }
+    } else {
+      state.brightness     = 0;
+      state.contrast       = 0;
+      state.toneIntensity  = 0;
+      state.toneBalance    = 0;
+      state.shadowColor    = '#0033aa';
+      state.highlightColor = '#ff8800';
+    }
+    if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
+    repaintGrid();
+    updateSidebarPreview();
+    showToast('Tone reset');
   });
 }
 
