@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.57';
+const APP_VERSION = 'v0.9.58';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -6060,16 +6060,23 @@ function setupOverflowMenus() {
     const slider = document.getElementById('thumb-size-slider');
     const checkGridOverflow = () => {
       _ghRaf = null;
-      // Remove the class so all action buttons are revealed and contribute
-      // their full natural widths to scrollWidth.
+      // Reveal all action items so their positions are measurable.
       gridHeader.classList.remove('overflow-active');
-      // Force a synchronous reflow — without this, scrollWidth may reflect
-      // the previous layout state before the class was removed.
+      // Force synchronous reflow so getBoundingClientRect values are current.
       void gridHeader.offsetHeight;
-      // #grid-header > * { flex-shrink: 0 } prevents items from compressing,
-      // so when buttons overflow the container their total width is accurately
-      // captured in scrollWidth. No overflow:hidden trick needed.
-      const isOverflowing = gridHeader.scrollWidth > gridHeader.clientWidth;
+      // Check if any .grid-action-item has its right edge past the header's
+      // right edge. getBoundingClientRect returns actual viewport coordinates
+      // regardless of overflow:visible or flex compression — it cannot be
+      // fooled by the layout engine. Even a 1px overflow is detectable.
+      const headerRight = gridHeader.getBoundingClientRect().right;
+      let isOverflowing = false;
+      for (const item of gridHeader.querySelectorAll('.grid-action-item')) {
+        if (item.offsetParent === null) continue; // display:none — not rendered
+        if (item.getBoundingClientRect().right > headerRight + 1) {
+          isOverflowing = true;
+          break;
+        }
+      }
       if (isOverflowing !== lastOverflow) {
         lastOverflow = isOverflowing;
         gridHeader.classList.toggle('overflow-active', isOverflowing);
