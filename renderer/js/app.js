@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.39';
+const APP_VERSION = 'v0.9.40';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -449,46 +449,36 @@ function deselectAll() {
   updateSidebarPreview();
 }
 
-/** Reset ALL edits — per-photo settings, transforms, global tone, and active filters. */
-function resetAllEdits() {
-  pushUndo();
+/** Clear edits on selected photos — removes tone, exposure, and filter overrides
+ *  but preserves each photo's palette choice. Requires at least one photo selected. */
+function clearEdits() {
   const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
-  if (targets) {
-    // Reset only selected photos
-    for (const idx of targets) {
-      delete state.photoSettings[idx];
-      delete state.photoTransforms[idx];
-      repaintGridSlot(idx);
-    }
-    if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
-    if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
-    if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
-    updateFilterUI();
-    _refreshFilterParamPanel();
-    showToast(`Reset ${targets.length} photo${targets.length > 1 ? 's' : ''}`);
-  } else {
-    // Nothing selected — reset everything global
-    state.photoSettings   = {};
-    state.photoTransforms = {};
-    state.brightness      = 0;
-    state.contrast        = 0;
-    state.toneIntensity   = 0;
-    state.shadowColor     = '#0033aa';
-    state.highlightColor  = '#ff8800';
-    state.toneBalance     = 0;
-    state.filterParams    = buildDefaultFilterParams();
-    state.activeFilters.clear();
-    state.focusedFilter = null;
-    state.palette = PALETTES.dmg;
-    updateFilterUI();
-    _refreshFilterParamPanel();
-    updatePalettePickerBtn(state.palette);
-    repaintGrid();
-    if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
-    showToast('All edits reset');
+  if (!targets) {
+    showToast('Select a photo first');
+    return;
   }
+  pushUndo();
+  for (const idx of targets) {
+    // Preserve per-photo palette; clear everything else
+    const savedPalette = state.photoSettings[idx]?.palette;
+    delete state.photoSettings[idx];
+    if (savedPalette) {
+      state.photoSettings[idx] = { palette: savedPalette };
+    }
+    delete state.photoTransforms[idx];
+    repaintGridSlot(idx);
+  }
+  if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+  if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+  if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
+  updateFilterUI();
+  _refreshFilterParamPanel();
+  const n = targets.length;
+  showToast(`Cleared edits on ${n} photo${n > 1 ? 's' : ''}`);
   updateSidebarPreview();
 }
+// Legacy alias (kept so any remaining references don't throw)
+const resetAllEdits = clearEdits;
 
 /** Returns the palette id that should be shown as "active" in the picker. */
 function getDisplayPaletteId() {
@@ -1892,8 +1882,8 @@ function wireButtons() {
   document.getElementById('btn-export-gif').addEventListener('click', exportGif);
   document.getElementById('btn-contact-sheet')?.addEventListener('click', exportContactSheet);
 
-  // Reset All button
-  document.getElementById('btn-reset-all')?.addEventListener('click', resetAllEdits);
+  // Clear Edits button
+  document.getElementById('btn-reset-all')?.addEventListener('click', clearEdits);
 
   // Select All button
   document.getElementById('btn-select-all')?.addEventListener('click', () => {
