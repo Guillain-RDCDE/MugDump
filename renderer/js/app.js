@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.16';
+const APP_VERSION = 'v0.9.17';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -4619,6 +4619,7 @@ function setupToneControls() {
     if ((eff?.toneIntensity ?? state.toneIntensity) > 0) redrawDetail();
   });
 
+  // Exposure reset — brightness + contrast only
   resetBtn?.addEventListener('click', () => {
     pushUndo();
     const targets = state.selectedPhotos.size > 0
@@ -4628,16 +4629,35 @@ function setupToneControls() {
       for (const idx of targets) {
         if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
         const ps = state.photoSettings[idx];
-        ps.brightness     = 0;
-        ps.contrast       = 0;
+        ps.brightness = 0;
+        ps.contrast   = 0;
+      }
+    } else {
+      state.brightness = 0;
+      state.contrast   = 0;
+    }
+    if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
+    repaintGrid();
+    updateSidebarPreview();
+    showToast('Exposure reset');
+  });
+
+  // Split Tone reset — toning fields only
+  document.getElementById('split-tone-reset')?.addEventListener('click', () => {
+    pushUndo();
+    const targets = state.selectedPhotos.size > 0
+      ? [...state.selectedPhotos]
+      : state.selectedIndex !== null ? [state.selectedIndex] : null;
+    if (targets) {
+      for (const idx of targets) {
+        if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+        const ps = state.photoSettings[idx];
         ps.toneIntensity  = 0;
         ps.toneBalance    = 0;
         ps.shadowColor    = '#0033aa';
         ps.highlightColor = '#ff8800';
       }
     } else {
-      state.brightness     = 0;
-      state.contrast       = 0;
       state.toneIntensity  = 0;
       state.toneBalance    = 0;
       state.shadowColor    = '#0033aa';
@@ -4646,7 +4666,7 @@ function setupToneControls() {
     if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
     repaintGrid();
     updateSidebarPreview();
-    showToast('Tone reset');
+    showToast('Split tone reset');
   });
 }
 
@@ -5337,9 +5357,43 @@ function setupFilterAccordion() {
     cb.dataset.filter = fd.id;
     checkWrap.appendChild(cb);
 
+    // Per-filter reset button — resets this filter's params to defaults
+    const resetBtn = document.createElement('button');
+    resetBtn.type = 'button';
+    resetBtn.className = 'btn btn-ghost btn-xs btn-icon fi-reset';
+    resetBtn.title = `Reset ${fd.label} to defaults`;
+    resetBtn.textContent = '↺';
+    resetBtn.addEventListener('click', e => {
+      e.stopPropagation(); // don't toggle collapse
+      pushUndo();
+      const defaults = buildDefaultFilterParams()[fd.id] || {};
+      const fp = getWritableFilterParams(fd.id);
+      Object.assign(fp, defaults);
+      // Sync sliders in this item's param panel
+      item.querySelectorAll('input[type="range"][data-fi-key]').forEach(slider => {
+        const key = slider.dataset.fiKey;
+        if (key in defaults) {
+          slider.value = defaults[key];
+          const valEl = slider.closest('.range-wrap')?.querySelector('.fi-val');
+          if (valEl && slider._fiFmt) valEl.textContent = slider._fiFmt(defaults[key]);
+        }
+      });
+      item.querySelectorAll('.seg-control[data-fi-key]').forEach(seg => {
+        const key = seg.dataset.fiKey;
+        if (key in defaults) {
+          seg.querySelectorAll('.seg-btn').forEach(b =>
+            b.classList.toggle('active', b.dataset.val === String(defaults[key]))
+          );
+        }
+      });
+      repaintGrid();
+      updateSidebarPreview();
+    });
+
     header.appendChild(dragHandle);
     header.appendChild(chevron);
     header.appendChild(lbl);
+    header.appendChild(resetBtn);
     header.appendChild(checkWrap);
 
     // ── Draggable reordering ────────────────────────────────────────────────
