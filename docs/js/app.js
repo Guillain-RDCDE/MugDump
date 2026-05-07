@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.4';
+const APP_VERSION = 'v0.9.5';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -164,50 +164,51 @@ const THUMB_SCALE = 4; // grid thumbnails rendered at 4× for CRT scanline clari
 
 const FILTER_DEFS = [
   { id: 'crt',      label: 'CRT Scanlines',       params: [
-    { type: 'seg',   key: 'variant',   label: 'Scanlines',       def: 'medium',      stateKey: 'filterVariant', opts: [['fine','Fine'],['medium','Medium'],['thick','Thick'],['wide','Wide']] },
-    { type: 'seg',   key: 'curve',     label: 'Screen shape',    def: 'none',        opts: [['none','Flat'],['mild','Mild'],['strong','Strong']] },
-    { type: 'range', key: 'noise',     label: 'Film noise',      def: 20, min: 0,   max: 80,  step: 5, fmt: v => `${v}%` },
-    { type: 'range', key: 'bleed',     label: 'Edge bleed',      def: 0,  min: 0,   max: 100, step: 5, fmt: v => `${v}%` },
+    { type: 'seg',   key: 'variant',   label: 'Scanlines',        def: 'medium',      stateKey: 'filterVariant', opts: [['fine','Fine'],['medium','Medium'],['thick','Thick'],['wide','Wide']] },
+    { type: 'seg',   key: 'curve',     label: 'Screen shape',     def: 'none',        opts: [['none','Flat'],['mild','Mild'],['strong','Strong']] },
   ]},
   { id: 'lcd',      label: 'LCD',                  params: [
-    { type: 'range', key: 'subpixel',  label: 'Sub-pixel tint',  def: 30, min: 0,   max: 80,  step: 5, fmt: v => `${v}%` },
-    { type: 'range', key: 'bleed',     label: 'Backlight bleed', def: 0,  min: 0,   max: 80,  step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'subpixel',  label: 'Sub-pixel tint',   def: 30, min: 0,   max: 80,  step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'bleed',     label: 'Backlight bleed',  def: 0,  min: 0,   max: 80,  step: 1, fmt: v => `${v}%` },
   ]},
   { id: 'glow',     label: 'Phosphor Glow',        params: [
-    { type: 'range', key: 'blur',      label: 'Bloom radius',    def: 110, min: 0,   max: 300, step: 10, fmt: v => `${v}%` },
-    { type: 'seg',   key: 'phosphor',  label: 'Phosphor colour', def: 'none',       opts: [['none','None'],['green','Green'],['amber','Amber'],['blue','Blue']] },
+    { type: 'range', key: 'intensity', label: 'Intensity',        def: 80, min: 0,   max: 100, step: 1,  fmt: v => `${v}%` },
+    { type: 'range', key: 'blur',      label: 'Bloom radius',     def: 110, min: 0,  max: 300, step: 5,  fmt: v => `${v}%` },
+    { type: 'seg',   key: 'phosphor',  label: 'Phosphor colour',  def: 'none',       opts: [['none','None'],['green','Green'],['amber','Amber'],['blue','Blue']] },
   ]},
   { id: 'vignette', label: 'Vignette',             params: [
-    { type: 'range', key: 'falloff',   label: 'Intensity',       def: 50, min: 0,   max: 100, step: 5, fmt: v => `${v}%` },
-    { type: 'range', key: 'shape',     label: 'Shape',           def: 0,  min: 0,   max: 100, step: 5, fmt: v => v <= 5 ? 'Round' : v >= 95 ? 'Square' : `${v}%` },
+    { type: 'range', key: 'falloff',   label: 'Intensity',        def: 50, min: 0,   max: 100, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'shape',     label: 'Shape',            def: 0,  min: 0,   max: 100, step: 1, fmt: v => v <= 5 ? 'Round' : v >= 95 ? 'Square' : `${v}%` },
   ]},
   { id: 'halftone', label: 'Halftone',             params: [
-    { type: 'range', key: 'radius',    label: 'Dot size',        def: 38, min: 20,  max: 60,  step: 2, fmt: v => `${v}%` },
+    { type: 'range', key: 'radius',    label: 'Dot size',         def: 38, min: 10,  max: 70,  step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'darkness',  label: 'Darkness',         def: 35, min: 0,   max: 100, step: 1, fmt: v => `${v}%` },
+    { type: 'seg',   key: 'shape',     label: 'Dot shape',        def: 'circle',     opts: [['circle','Round'],['square','Square'],['diamond','Diamond']] },
   ]},
   { id: 'dot',      label: 'Dot Matrix',           params: [
-    { type: 'range', key: 'radius',    label: 'Dot size',        def: 44, min: 20,  max: 80,  step: 2, fmt: v => `${v}%` },
-    { type: 'range', key: 'halation',  label: 'Halation',        def: 0,  min: 0,   max: 80,  step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'radius',    label: 'Dot size',         def: 44, min: 20,  max: 80,  step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'halation',  label: 'Halation',         def: 0,  min: 0,   max: 80,  step: 1, fmt: v => `${v}%` },
   ]},
   { id: 'chroma',   label: 'Chromatic Aberration', params: [
-    { type: 'range', key: 'shiftH',    label: 'Horizontal shift', def: 75, min: 0,  max: 500, step: 5, fmt: v => `${v}%` },
-    { type: 'range', key: 'shiftV',    label: 'Vertical shift',   def: 0,  min: 0,  max: 500, step: 5, fmt: v => `${v}%` },
-    { type: 'range', key: 'shiftR',    label: 'Radial shift',     def: 0,  min: 0,  max: 500, step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'shiftH',    label: 'Horizontal shift', def: 75, min: 0,   max: 500, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'shiftV',    label: 'Vertical shift',   def: 0,  min: 0,   max: 500, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'shiftR',    label: 'Radial shift',     def: 0,  min: -500, max: 500, step: 1, fmt: v => `${v}%` },
   ]},
   { id: 'grid',     label: 'Pixel Grid',           params: [
-    { type: 'range', key: 'opacity',   label: 'Grid opacity',    def: 30, min: 10,  max: 100, step: 5,   fmt: v => `${v}%` },
-    { type: 'range', key: 'weight',    label: 'Line weight',     def: 1,  min: 1,   max: 5,   step: 0.5, fmt: v => `${v}px` },
+    { type: 'range', key: 'opacity',   label: 'Grid opacity',     def: 30, min: 1,   max: 100, step: 1,   fmt: v => `${v}%` },
+    { type: 'range', key: 'weight',    label: 'Line weight',      def: 1,  min: 1,   max: 5,   step: 0.5, fmt: v => `${v}px` },
   ]},
   { id: 'jitter',   label: 'Scanline Jitter',      params: [
-    { type: 'range', key: 'amount',    label: 'Jitter amount',   def: 40, min: 5,   max: 100, step: 5, fmt: v => `${v}%` },
-    { type: 'range', key: 'frequency', label: 'Frequency',       def: 50, min: 10,  max: 100, step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'amount',    label: 'Jitter amount',    def: 40, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'frequency', label: 'Frequency',        def: 50, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
   ]},
   { id: 'noise',    label: 'Noise / Static',       params: [
-    { type: 'range', key: 'amount',    label: 'Amount',          def: 40, min: 5,   max: 100, step: 5, fmt: v => `${v}%` },
-    { type: 'seg',   key: 'type',      label: 'Type',            def: 'film',       opts: [['film','Film'],['static','Static'],['bands','Bands']] },
+    { type: 'range', key: 'amount',    label: 'Amount',           def: 40, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
+    { type: 'seg',   key: 'type',      label: 'Type',             def: 'film',       opts: [['film','Film'],['static','Static'],['bands','Bands']] },
   ]},
   { id: 'ghosting', label: 'VHS Ghosting',         params: [
-    { type: 'range', key: 'offset',    label: 'Echo offset',     def: 60, min: 10,  max: 150, step: 5, fmt: v => `${v}%` },
-    { type: 'range', key: 'fade',      label: 'Echo fade',       def: 70, min: 10,  max: 100, step: 5, fmt: v => `${v}%` },
+    { type: 'range', key: 'offset',    label: 'Echo offset',      def: 60, min: 1,   max: 150, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'fade',      label: 'Echo fade',        def: 70, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
   ]},
 ];
 
@@ -416,6 +417,7 @@ function deselectAll() {
 
 /** Reset ALL edits — per-photo settings, transforms, global tone, and active filters. */
 function resetAllEdits() {
+  pushUndo();
   const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
   if (targets) {
     // Reset only selected photos
@@ -983,9 +985,13 @@ function lightboxStep(dir) {
 // ── Palette ─────────────────────────────────────────────────────────────────
 
 function setPalette(id) {
-  if (state.applyScope === 'photo' && state.selectedIndex !== null) {
-    if (!state.photoSettings[state.selectedIndex]) state.photoSettings[state.selectedIndex] = {};
-    state.photoSettings[state.selectedIndex].paletteId = id;
+  pushUndo();
+  const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
+  if (targets) {
+    targets.forEach(i => {
+      if (!state.photoSettings[i]) state.photoSettings[i] = {};
+      state.photoSettings[i].paletteId = id;
+    });
   } else {
     state.palette = PALETTES[id];
   }
@@ -1635,12 +1641,9 @@ function wireButtons() {
   // Effects reset button
   document.getElementById('btn-reset-effects')?.addEventListener('click', resetEffects);
 
-  // Deselect All button
+  // Deselect button
   document.getElementById('btn-deselect-all')?.addEventListener('click', () => {
-    state.selectedPhotos.clear();
-    state.lastSelectedIndex = null;
-    repaintGrid();
-    syncControlsToEffectiveSettings(state.selectedIndex);
+    deselectAll();
   });
 
   // Save preset
@@ -3231,34 +3234,6 @@ function applyExportFilter(ctx, width, height, scale, filter,
       ec.fillRect(0, rowTop + brightH, width, gapH);
     }
 
-    // Film noise overlay
-    const crtNoise = ((filterParams.crt || {}).noise ?? 20);
-    if (crtNoise > 0) {
-      const noiseStr = crtNoise / 100;
-      const imgData  = ec.getImageData(0, 0, width, height);
-      const d = imgData.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const grain = (Math.random() - 0.5) * noiseStr * 200;
-        d[i]   = Math.min(255, Math.max(0, d[i]   + grain));
-        d[i+1] = Math.min(255, Math.max(0, d[i+1] + grain));
-        d[i+2] = Math.min(255, Math.max(0, d[i+2] + grain));
-      }
-      ec.putImageData(imgData, 0, 0);
-    }
-
-    // Edge bleed (vignette-style bloom from edges)
-    const crtBleed = ((filterParams.crt || {}).bleed ?? 0);
-    if (crtBleed > 0) {
-      const bleedStr = crtBleed / 100;
-      const edgeGrad = ec.createRadialGradient(width/2, height/2, Math.min(width,height)*0.2, width/2, height/2, Math.max(width,height)*0.8);
-      edgeGrad.addColorStop(0, 'rgba(255,255,255,0)');
-      edgeGrad.addColorStop(1, `rgba(255,255,255,${bleedStr * 0.25})`);
-      ec.globalCompositeOperation = 'screen';
-      ec.fillStyle = edgeGrad;
-      ec.fillRect(0, 0, width, height);
-      ec.globalCompositeOperation = 'source-over';
-    }
-
     // Screen curvature — edge darkening + specular highlight
     const curve = (filterParams.crt || {}).curve ?? 'none';
     if (curve !== 'none') {
@@ -3378,13 +3353,25 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
 
   } else if (filter === 'halftone') {
-    const htRad = ((filterParams.halftone || {}).radius ?? 38) / 100;
+    const htRad      = ((filterParams.halftone || {}).radius   ?? 38) / 100;
+    const htDarkness = ((filterParams.halftone || {}).darkness ?? 35) / 100;
+    const htShape    = (filterParams.halftone || {}).shape ?? 'circle';
     const r = Math.max(1, Math.round(s * htRad));
-    ec.fillStyle = 'rgba(0,0,0,0.35)';
+    ec.fillStyle = `rgba(0,0,0,${htDarkness.toFixed(2)})`;
     for (let y = Math.round(s * 0.5); y < height; y += s) {
       for (let x = Math.round(s * 0.5); x < width; x += s) {
         ec.beginPath();
-        ec.arc(x, y, r, 0, Math.PI * 2);
+        if (htShape === 'circle') {
+          ec.arc(x, y, r, 0, Math.PI * 2);
+        } else if (htShape === 'square') {
+          ec.rect(x - r, y - r, r * 2, r * 2);
+        } else if (htShape === 'diamond') {
+          ec.moveTo(x, y - r);
+          ec.lineTo(x + r, y);
+          ec.lineTo(x, y + r);
+          ec.lineTo(x - r, y);
+          ec.closePath();
+        }
         ec.fill();
       }
     }
@@ -3432,9 +3419,14 @@ function applyExportFilter(ctx, width, height, scale, filter,
     // ── Phosphor Glow ──────────────────────────────────────────────────────
     // Creates a coloured phosphor bloom: tint a copy of the source, blur it
     // heavily, then screen-blend it back so bright pixels glow outward.
-    const glowBlurPct = ((filterParams.glow || {}).blur ?? 110) / 100;
-    const ph          = (filterParams.glow || {}).phosphor ?? 'none';
-    const phColors    = { green: 'rgba(0,255,80,0.40)', amber: 'rgba(255,170,0,0.42)', blue: 'rgba(80,160,255,0.40)' };
+    const glowBlurPct  = ((filterParams.glow || {}).blur      ?? 110) / 100;
+    const glowIntensity = ((filterParams.glow || {}).intensity ?? 80)  / 100;
+    const ph           = (filterParams.glow || {}).phosphor ?? 'none';
+
+    // If intensity is zero and no phosphor tint, nothing to render
+    if (glowIntensity <= 0 && ph === 'none') return;
+
+    const phColors = { green: 'rgba(0,255,80,0.40)', amber: 'rgba(255,170,0,0.42)', blue: 'rgba(80,160,255,0.40)' };
 
     // Step 1: draw source image onto tinting canvas
     const bloomSrc = Object.assign(document.createElement('canvas'), { width, height });
@@ -3449,17 +3441,19 @@ function applyExportFilter(ctx, width, height, scale, filter,
       bsc.globalCompositeOperation = 'source-over';
     }
 
-    // Step 3: blur the tinted source — must be large to produce visible bloom
-    const blurPx = Math.max(8, Math.round(s * 3.5 * glowBlurPct));
+    // Step 3: blur the tinted source. At blur=0 skip blurring.
+    const blurPx = Math.round(s * 3.5 * glowBlurPct);
     const bloom  = Object.assign(document.createElement('canvas'), { width, height });
     const bc     = bloom.getContext('2d');
-    bc.filter    = `blur(${blurPx}px)`;
+    if (blurPx > 0) {
+      bc.filter = `blur(${blurPx}px)`;
+    }
     bc.drawImage(bloomSrc, 0, 0);
-    bc.filter    = 'none';
+    bc.filter = 'none';
 
     // Step 4: screen blend — bright pixels push toward white/colour with bloom aura
     ctx.save();
-    ctx.globalAlpha              = Math.min(1, Math.max(0, intensity));
+    ctx.globalAlpha              = Math.min(1, Math.max(0, glowIntensity));
     ctx.globalCompositeOperation = 'screen';
     ctx.drawImage(bloom, 0, 0);
     ctx.restore();
@@ -3979,6 +3973,27 @@ function setupKeyboard() {
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
+    // Cmd/Ctrl+Z — Undo
+    if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      performUndo();
+      return;
+    }
+
+    // Cmd/Ctrl+C — Copy settings
+    if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+      e.preventDefault();
+      copyEffects();
+      return;
+    }
+
+    // Cmd/Ctrl+V — Paste settings
+    if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
+      e.preventDefault();
+      pasteEffects();
+      return;
+    }
+
     // Cmd/Ctrl+A — Select All
     if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
       e.preventDefault();
@@ -4483,6 +4498,7 @@ function copyEffects() {
 
 function pasteEffects() {
   if (!state.effectClipboard) return;
+  pushUndo();
   const cb = state.effectClipboard;
   const targets = state.selectedPhotos.size > 0
     ? [...state.selectedPhotos]
@@ -4512,6 +4528,7 @@ function pasteEffects() {
 }
 
 function resetEffects() {
+  pushUndo();
   // Reset all filter state for selected photo(s), or global if none selected
   const targets = state.selectedPhotos.size > 0
     ? [...state.selectedPhotos]
@@ -4535,6 +4552,52 @@ function resetEffects() {
   repaintGrid();
   updateSidebarPreview();
   showToast('Effects reset');
+}
+
+// ── Undo ─────────────────────────────────────────────────────────────────────
+
+const MAX_UNDO = 30;
+const undoStack = [];
+
+/** Deep-clone the parts of state that we want to undo. */
+function captureState() {
+  return {
+    activeFilters:   new Set(state.activeFilters),
+    filterParams:    JSON.parse(JSON.stringify(state.filterParams)),
+    filterIntensity: state.filterIntensity,
+    filterVariant:   state.filterVariant,
+    palette:         state.palette ? { ...state.palette } : null,
+    tone:            JSON.parse(JSON.stringify(state.tone || {})),
+    photoSettings:   JSON.parse(JSON.stringify(state.photoSettings)),
+    transforms:      JSON.parse(JSON.stringify(state.transforms || {})),
+    sectionEnabled:  JSON.parse(JSON.stringify(state.sectionEnabled || {})),
+  };
+}
+
+/** Push the current state onto the undo stack before a destructive action. */
+function pushUndo() {
+  undoStack.push(captureState());
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+}
+
+/** Restore the most recent undo snapshot. */
+function performUndo() {
+  if (undoStack.length === 0) { showToast('Nothing to undo'); return; }
+  const snap = undoStack.pop();
+  state.activeFilters   = snap.activeFilters;
+  state.filterParams    = snap.filterParams;
+  state.filterIntensity = snap.filterIntensity;
+  state.filterVariant   = snap.filterVariant;
+  state.palette         = snap.palette;
+  if (snap.tone)         state.tone         = snap.tone;
+  if (snap.photoSettings) state.photoSettings = snap.photoSettings;
+  if (snap.transforms)   state.transforms   = snap.transforms;
+  if (snap.sectionEnabled) state.sectionEnabled = snap.sectionEnabled;
+  updateFilterUI();
+  syncControlsToEffectiveSettings(state.selectedIndex);
+  repaintGrid();
+  updateSidebarPreview();
+  showToast('Undo');
 }
 
 // ── Stackable effects ────────────────────────────────────────────────────────
@@ -4565,6 +4628,7 @@ function updateFilterUI() {
 }
 
 function toggleFilter(filterName) {
+  pushUndo();
   const targets = state.selectedPhotos.size > 0
     ? [...state.selectedPhotos]
     : state.selectedIndex !== null ? [state.selectedIndex] : null;
@@ -4725,6 +4789,7 @@ function setupFilterAccordion() {
         slider._fiDef = p.def;
         slider._fiFmt = p.fmt;
 
+        slider.addEventListener('pointerdown', () => { pushUndo(); });
         slider.addEventListener('input', () => {
           const v = parseFloat(slider.value);
           pVal.textContent = p.fmt(v);
@@ -4762,6 +4827,7 @@ function setupFilterAccordion() {
           btn.textContent = optLabel;
           btn.dataset.val = optVal;
           btn.addEventListener('click', () => {
+            pushUndo();
             seg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
             if (p.stateKey) {
               setScopedSetting(p.stateKey, optVal);
