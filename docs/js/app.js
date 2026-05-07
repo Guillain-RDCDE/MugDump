@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.0';
+const APP_VERSION = 'v0.9.1';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -197,7 +197,7 @@ const state = {
   gifDelay: 250,           // ms per frame
   gifLoop: 'infinite',     // 'infinite' | 'once' | 'bounce'
   activeFilters:   new Set(),        // active filter names for stackable effects
-  sectionEnabled:  { exposure: true, splitTone: true, effects: true }, // per-section on/off
+  sectionEnabled:  { exposure: false, splitTone: false, effects: false }, // per-section on/off (off by default)
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
   lightboxOpen: false,     // lightbox overlay visible
   viewMode: 'grid',        // 'grid' | 'solo'
@@ -1619,7 +1619,7 @@ function wireButtons() {
   // Section enable/disable checkboxes
   document.querySelectorAll('.section-check').forEach(cb => {
     const section = cb.dataset.section;
-    cb.checked = state.sectionEnabled[section] ?? true;
+    cb.checked = state.sectionEnabled[section] ?? false;
     cb.addEventListener('change', () => {
       state.sectionEnabled[section] = cb.checked;
       repaintGrid();
@@ -4202,9 +4202,13 @@ function updateSidebarPreview() {
   if (emptyEl) emptyEl.style.display = 'none';
   hideGifPreviewInfo(); // hide GIF frame counter when showing static preview
 
-  const SCALE = 2; // 128×112 → 256×224
+  const SCALE = 4; // match THUMB_SCALE — ensures filter appearance matches grid thumbnails
   const W = GBCam.PHOTO_WIDTH  * SCALE;
   const H = GBCam.PHOTO_HEIGHT * SCALE;
+
+  // Update canvas resolution to match render scale
+  canvas.width  = W;
+  canvas.height = H;
 
   const tmp = document.createElement('canvas');
   tmp.width  = W;
@@ -4213,10 +4217,11 @@ function updateSidebarPreview() {
 
   const eff = getEffectiveSettings(idx);
   renderPhotoWithTransform(tmpCtx, photo, eff.palette, SCALE, idx);
-  applyToneAdjustments(tmpCtx, W, H, eff);
+  // Effects before tone — matches solo view, lightbox, and export rendering order
   if (eff.activeFilters.size > 0) {
     applyActiveEffects(tmpCtx, W, H, SCALE, eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters);
   }
+  applyToneAdjustments(tmpCtx, W, H, eff);
 
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;

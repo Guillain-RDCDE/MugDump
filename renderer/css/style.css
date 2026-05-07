@@ -532,12 +532,13 @@ html, body {
 
 .section-chevron {
   display: inline-block;
-  font-size: 13px;
-  color: var(--text-3);
-  margin-right: 4px;
+  font-size: 18px;
+  color: var(--text-2);
+  margin-right: 5px;
   transition: transform 0.15s ease;
   line-height: 1;
   font-weight: bold;
+  vertical-align: middle;
 }
 
 .ctrl-group.collapsed .section-chevron {
@@ -2411,8 +2412,11 @@ input[type="range"] {
 
 /* ── Section headings (Exposure, Split Tone, Effects & Filters) ──────────── */
 
+/* Section headers: label left, checkbox right next to label, action button(s) pushed far right */
 .section-header {
-  cursor: default !important;
+  cursor: pointer;
+  justify-content: flex-start !important;
+  gap: 6px;
 }
 
 .section-label {
@@ -2421,14 +2425,20 @@ input[type="range"] {
   color: var(--text) !important;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  flex: 1;
+  flex: none; /* natural width — don't grow so checkbox sits snug next to label */
+  cursor: pointer;
+}
+
+/* Push the trailing action buttons to the far right */
+.section-header > button,
+.section-header > .ctrl-header-actions {
+  margin-left: auto;
 }
 
 /* Section enable/disable checkbox */
 .section-check-wrap {
   display: flex;
   align-items: center;
-  margin-right: 5px;
   flex-shrink: 0;
   cursor: pointer;
 }
