@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.51';
+const APP_VERSION = 'v0.9.52';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -252,10 +252,6 @@ const FILTER_DEFS = [
     { type: 'range', key: 'density',   label: 'Density',          def: 35,  min: 1, max: 100, step: 1, fmt: v => `${v}%` },
     { type: 'range', key: 'strength',  label: 'Strength',         def: 65,  min: 1, max: 100, step: 1, fmt: v => `${v}%` },
   ]},
-  { id: 'signalwarp', label: 'Signal Warp',         params: [
-    { type: 'range', key: 'amount',    label: 'Warp amount',      def: 40,  min: 1, max: 100, step: 1, fmt: v => `${v}%` },
-    { type: 'range', key: 'frequency', label: 'Frequency',        def: 30,  min: 1, max: 100, step: 1, fmt: v => `${v}%` },
-  ]},
 ];
 
 function buildDefaultFilterParams() {
@@ -298,7 +294,7 @@ const state = {
   activeFilters:   new Set(),        // active filter names for stackable effects
   sectionEnabled:  { exposure: false, splitTone: false, effects: false }, // per-section on/off (off by default)
   effectsPreviewMode: false, // toggle before/after for effects; false = effects visible (normal rendering)
-  filterOrder: ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap', 'rgbplanes', 'colcorrupt', 'signalwarp'],
+  filterOrder: ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap', 'rgbplanes', 'colcorrupt'],
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
   lightboxOpen: false,     // lightbox overlay visible
   viewMode: 'grid',        // 'grid' | 'solo'
@@ -4491,43 +4487,6 @@ function applyExportFilter(ctx, width, height, scale, filter,
     ctx.putImageData(new ImageData(out, width, height), 0, 0);
     return;
 
-  } else if (filter === 'signalwarp') {
-    // ── Signal Warp ────────────────────────────────────────────────────────
-    // Per-scanline brightness warp: each row gets an independent exposure shift
-    // driven by a mix of smooth sine and seeded per-row noise. Produces the
-    // "unstable signal / bad antenna" banding look of deteriorating analogue video.
-    const amtPct  = ((filterParams.signalwarp || {}).amount    ?? 40) / 100;
-    const freqPct = ((filterParams.signalwarp || {}).frequency ?? 30) / 100;
-    const cycles  = 1 + freqPct * 9; // 1–10 full sine cycles across the image height
-
-    const src = ctx.getImageData(0, 0, width, height);
-    const sd  = src.data;
-    const out = new Uint8ClampedArray(sd);
-
-    for (let y = 0; y < height; y++) {
-      // Smooth sine component + per-row seeded noise blended 50/50
-      const sinVal  = Math.sin((y / height) * cycles * Math.PI * 2);
-      const noiseFn = (_seededRand(photoSeed, y * 23 + 11) - 0.5) * 2; // −1..+1
-      const warp    = (sinVal * 0.5 + noiseFn * 0.5) * amtPct * 180; // signed pixel offset
-
-      for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * 4;
-        out[i]   = Math.min(255, Math.max(0, Math.round(sd[i]   + warp)));
-        out[i+1] = Math.min(255, Math.max(0, Math.round(sd[i+1] + warp)));
-        out[i+2] = Math.min(255, Math.max(0, Math.round(sd[i+2] + warp)));
-        out[i+3] = 255;
-      }
-    }
-    const tsw = Math.min(1, Math.max(0, intensity));
-    if (tsw < 1) {
-      for (let i = 0; i < out.length; i += 4) {
-        out[i]   = Math.round(sd[i]   * (1 - tsw) + out[i]   * tsw);
-        out[i+1] = Math.round(sd[i+1] * (1 - tsw) + out[i+1] * tsw);
-        out[i+2] = Math.round(sd[i+2] * (1 - tsw) + out[i+2] * tsw);
-      }
-    }
-    ctx.putImageData(new ImageData(out, width, height), 0, 0);
-    return;
   }
 
   // Composite the effect onto the main canvas at the requested intensity
@@ -6100,24 +6059,24 @@ function setupOverflowMenus() {
     let _ghRaf = null;
     const checkGridOverflow = () => {
       _ghRaf = null;
-      // Reveal all items so we can measure their true positions
+      // Temporarily reveal all items so we can measure their natural combined width.
+      // We must do this before reading scrollWidth, otherwise hidden items
+      // don't contribute to the measured content width.
       gridHeader.classList.remove('overflow-active');
-      // getBoundingClientRect reflects real layout positions — check if any
-      // visible action item's right edge exceeds the header's right edge
-      const headerRight = gridHeader.getBoundingClientRect().right;
-      const items = gridHeader.querySelectorAll('.grid-action-item');
-      let isOverflowing = false;
-      for (const item of items) {
-        if (item.offsetWidth === 0) continue; // display:none or zero-size — skip
-        if (item.getBoundingClientRect().right > headerRight + 4) {
-          isOverflowing = true;
-          break;
-        }
-      }
-      if (isOverflowing !== lastOverflow) {
-        lastOverflow = isOverflowing;
-        gridHeader.classList.toggle('overflow-active', isOverflowing);
-      }
+      // Double-rAF: first frame lets the browser process the class removal and
+      // perform layout; second frame reads the settled dimensions.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          // scrollWidth captures the full content width including any items that
+          // spill past the element's layout edge (flex-shrink:0 children overflow
+          // visually when the container is too narrow).
+          const isOverflowing = gridHeader.scrollWidth > gridHeader.clientWidth;
+          if (isOverflowing !== lastOverflow) {
+            lastOverflow = isOverflowing;
+            gridHeader.classList.toggle('overflow-active', isOverflowing);
+          }
+        });
+      });
     };
     const scheduleGhCheck = () => {
       if (_ghRaf) return;
@@ -6130,6 +6089,8 @@ function setupOverflowMenus() {
     if (detailPanel) new ResizeObserver(scheduleGhCheck).observe(detailPanel);
     // Belt-and-suspenders: also catch raw window resize events
     window.addEventListener('resize', scheduleGhCheck);
+    // Run once on init so initial state is correct
+    scheduleGhCheck();
   }
 
   // ── Fav Palettes menu ────────────────────────────────────────────────────────
