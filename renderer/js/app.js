@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.20';
+const APP_VERSION = 'v0.9.21';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -759,44 +759,60 @@ function repaintDetailOnly() {
   updateSidebarPreview();
 }
 
-// Debounced full grid repaint — fires 160ms after the last call.
-// Called alongside repaintDetailOnly() during slider drag so the grid
-// catches up once the user pauses.
-let _gridRepaintTimer = null;
-function scheduleGridRepaint() {
-  clearTimeout(_gridRepaintTimer);
-  _gridRepaintTimer = setTimeout(() => {
-    const slots = dom.photoGrid.querySelectorAll('.photo-slot:not(.empty)');
-    for (const slot of slots) repaintGridSlot(parseInt(slot.dataset.index));
-    _gridRepaintTimer = null;
-  }, 160);
+// ── Async chunked grid repaint ───────────────────────────────────────────────
+//
+// Processing all 30 thumbnails synchronously with multiple active effects blocks
+// the main thread and makes the UI sluggish. Instead we spread the work across
+// animation frames (6 slots per frame), cancelling any in-progress batch when a
+// new repaint is requested so the final state is always correct.
+
+let _gridRAF      = null;  // rAF handle for current batch
+let _gridSlots    = [];    // flat slot list for current batch
+let _gridSlotIdx  = 0;     // next slot to process in current batch
+const GRID_CHUNK  = 6;     // thumbnails per animation frame
+
+function repaintGrid() {
+  // Cancel any in-progress batch — the new call supersedes it
+  if (_gridRAF !== null) { cancelAnimationFrame(_gridRAF); _gridRAF = null; }
+
+  // Snapshot the slot list at call time
+  _gridSlots   = Array.from(dom.photoGrid.querySelectorAll('.photo-slot:not(.empty)'));
+  _gridSlotIdx = 0;
+
+  // Immediate: update detail views (fast — no per-slot loop)
+  if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+  if (state.lightboxOpen       && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+  updateSidebarPreview();
+
+  function _doChunk() {
+    const end = Math.min(_gridSlotIdx + GRID_CHUNK, _gridSlots.length);
+    for (let i = _gridSlotIdx; i < end; i++) {
+      repaintGridSlot(parseInt(_gridSlots[i].dataset.index));
+    }
+    _gridSlotIdx = end;
+    if (_gridSlotIdx < _gridSlots.length) {
+      _gridRAF = requestAnimationFrame(_doChunk);
+    } else {
+      _gridRAF = null;
+      if (state.gifMode && state.gifSelection.size > 0) updateGifPreview();
+    }
+  }
+  _gridRAF = requestAnimationFrame(_doChunk);
 }
 
-// Use this instead of repaintGrid() in interactive (per-tick) handlers.
+// Debounced grid repaint — for interactive slider feedback.
+// Immediately updates detail views; schedules grid repaint 160 ms after last call.
+let _gridDebounceTimer = null;
+function scheduleGridRepaint() {
+  clearTimeout(_gridDebounceTimer);
+  _gridDebounceTimer = setTimeout(() => { _gridDebounceTimer = null; repaintGrid(); }, 160);
+}
+
+// Use this instead of repaintGrid() in per-tick interactive handlers (sliders etc.)
 // Gives immediate detail feedback while deferring the expensive grid repaint.
 function repaintInteractive() {
   repaintDetailOnly();
   scheduleGridRepaint();
-}
-
-// Re-render all canvases when palette/filter/tone changes (without rebuilding the DOM)
-function repaintGrid() {
-  const slots = dom.photoGrid.querySelectorAll('.photo-slot:not(.empty)');
-  for (const slot of slots) {
-    const index = parseInt(slot.dataset.index);
-    repaintGridSlot(index);
-  }
-  // Repaint live views
-  if (state.gifMode && state.gifSelection.size > 0) {
-    updateGifPreview();
-  }
-  if (state.viewMode === 'solo' && state.selectedIndex !== null) {
-    renderSoloView(state.selectedIndex);
-  }
-  if (state.lightboxOpen && state.selectedIndex !== null) {
-    renderLightbox(state.selectedIndex);
-  }
-  updateSidebarPreview();
 }
 
 // Re-render a single thumbnail slot (after palette or transform change)
@@ -5108,7 +5124,9 @@ function resetEffects() {
   showToast('Effects reset');
 }
 
-function randomiseFilters() {
+// opts.skipRepaint — skip repaintGrid() call (caller will do it)
+// opts.skipToast   — skip the toast (caller will show its own)
+function randomiseFilters({ skipRepaint = false, skipToast = false } = {}) {
   pushUndo();
   // Select 2-5 random filters and randomise their params
   const allFilterIds = FILTER_DEFS.map(fd => fd.id);
@@ -5165,9 +5183,8 @@ function randomiseFilters() {
   updateFilterUI();
   _refreshFilterParamPanel();
   syncControlsToEffectiveSettings(state.selectedIndex);
-  repaintGrid();
-  updateSidebarPreview();
-  showToast(`Randomised ${selected.length} filters`);
+  if (!skipRepaint) { repaintGrid(); updateSidebarPreview(); }
+  if (!skipToast) showToast(`Randomised ${selected.length} filters`);
 }
 
 function clearGifFrames() {
@@ -5185,29 +5202,41 @@ function clearGifFrames() {
 }
 
 function randomiseAll() {
-  // Randomise filters + pick a random palette for target photo(s) / global
-  randomiseFilters();
+  // Randomise filters (skip their repaint — we'll do one combined repaint at the end)
+  randomiseFilters({ skipRepaint: true, skipToast: true });
+
   const paletteIds = Object.keys(PALETTES);
-  const randomId = paletteIds[Math.floor(Math.random() * paletteIds.length)];
-  // setPalette already calls pushUndo — randomiseFilters called it first, so skip the double-undo:
-  // Just apply the palette directly without another pushUndo
-  const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
+  const targets    = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
+  let lastId;
+
   if (targets) {
-    targets.forEach(i => {
+    // Each selected photo gets its own independently random palette
+    for (const i of targets) {
+      const id = paletteIds[Math.floor(Math.random() * paletteIds.length)];
       if (!state.photoSettings[i]) state.photoSettings[i] = {};
-      state.photoSettings[i].paletteId = randomId;
-    });
+      state.photoSettings[i].paletteId = id;
+      addRecentPalette(id);
+      lastId = id;
+    }
   } else if (state.selectedIndex !== null) {
+    lastId = paletteIds[Math.floor(Math.random() * paletteIds.length)];
     if (!state.photoSettings[state.selectedIndex]) state.photoSettings[state.selectedIndex] = {};
-    state.photoSettings[state.selectedIndex].paletteId = randomId;
+    state.photoSettings[state.selectedIndex].paletteId = lastId;
+    addRecentPalette(lastId);
   } else {
-    state.palette = PALETTES[randomId];
+    lastId = paletteIds[Math.floor(Math.random() * paletteIds.length)];
+    state.palette = PALETTES[lastId];
+    addRecentPalette(lastId);
   }
-  addRecentPalette(randomId);
+
   updatePalettePickerBtn(getEffectiveSettings(state.selectedIndex)?.palette || state.palette);
   repaintGrid();
   updateSidebarPreview();
-  showToast(`Randomised everything · ${PALETTES[randomId]?.name || randomId}`);
+
+  const toastMsg = targets && targets.length > 1
+    ? `Randomised everything · ${targets.length} palettes`
+    : `Randomised everything · ${PALETTES[lastId]?.name || lastId}`;
+  showToast(toastMsg);
 }
 
 function updateFilterOrder(repaint = false) {
