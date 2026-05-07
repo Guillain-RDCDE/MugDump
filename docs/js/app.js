@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.7';
+const APP_VERSION = 'v0.9.8';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -3196,6 +3196,7 @@ function buildFilterParams(filter, displayParams) {
 // ── Tone adjustments (brightness / contrast / split toning) ─────────────────
 
 function applyToneAdjustments(ctx, width, height, settings) {
+  if (state.effectsPreviewMode) return;
   const s = settings || state;
   const brightness   = (state.sectionEnabled?.exposure   ?? true) ? (s.brightness   ?? 0) : 0;
   const contrast     = (state.sectionEnabled?.exposure   ?? true) ? (s.contrast     ?? 0) : 0;
@@ -5003,10 +5004,11 @@ function performUndo() {
 // ── Stackable effects ────────────────────────────────────────────────────────
 
 function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVariant, filterParams, activeFilters) {
+  if (state.effectsPreviewMode) return;
   if (state.sectionEnabled?.effects === false) return;
   const af = activeFilters || state.activeFilters;
   if (af.size === 0) return;
-  const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap'];
+  const filterOrder = state.filterOrder || ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap'];
   for (const filterName of filterOrder) {
     if (af.has(filterName)) {
       applyExportFilter(ctx, width, height, scale, filterName, filterIntensity, filterVariant, filterParams);
