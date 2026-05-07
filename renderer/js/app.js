@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.47';
+const APP_VERSION = 'v0.9.48';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -1996,8 +1996,8 @@ function setupSidebarToggle() {
   const app       = document.getElementById('app');
   if (!toggleBtn || !backdrop || !app) return;
 
-  const open  = () => { app.classList.add('sidebar-open');    toggleBtn.textContent = '‹ Close'; };
-  const close = () => { app.classList.remove('sidebar-open'); toggleBtn.textContent = 'Edit ›'; };
+  const open  = () => { app.classList.add('sidebar-open');    toggleBtn.textContent = '‹'; toggleBtn.title = 'Close editing panel'; };
+  const close = () => { app.classList.remove('sidebar-open'); toggleBtn.textContent = '›'; toggleBtn.title = 'Show editing panel'; };
 
   toggleBtn.addEventListener('click', () => {
     app.classList.contains('sidebar-open') ? close() : open();
@@ -2007,6 +2007,98 @@ function setupSidebarToggle() {
   // Auto-close when viewport expands back to desktop size
   window.addEventListener('resize', () => {
     if (window.innerWidth > 1024) close();
+  });
+}
+
+/** Responsive fav carousel: measures available width and adjusts visible chip count dynamically. */
+function setupFavCarouselResponsive() {
+  const container = document.getElementById('fav-palettes');
+  const btnMenu   = document.getElementById('btn-fav-menu');
+  if (!container || !btnMenu) return;
+
+  // Chip width: swatch (4 × 11px) + 2×padding(2px) + 2×border(2px) = 52px + 3px gap = 55px
+  const FAV_CHIP_PX  = 55;
+  // Two nav arrow buttons when wheel is active: 20px each + 3px gap each side = 46px
+  const NAV_ARROW_PX = 46;
+
+  let _lastCount = -1;
+  let _rafId = null;
+
+  function update() {
+    _rafId = null;
+    const favs  = loadFavPalettes().filter(id => PALETTES[id]);
+    const total = favs.length;
+
+    // Measure available width with menu button hidden (true remaining space)
+    const menuWasVisible = btnMenu.style.display !== 'none';
+    btnMenu.style.display = 'none';
+    const available = container.clientWidth;
+    if (menuWasVisible) btnMenu.style.display = ''; // restore to re-evaluate below
+
+    // Calculate visible count, accounting for nav arrows if needed
+    let count = Math.floor(available / FAV_CHIP_PX);
+    if (total > count && count > 0) {
+      // Arrows eat NAV_ARROW_PX — reduce count with arrow overhead
+      count = Math.max(0, Math.floor((available - NAV_ARROW_PX) / FAV_CHIP_PX));
+    }
+    count = Math.min(count, FAV_PAGE_SIZE);
+
+    const showMenu = count === 0 && total > 0;
+    btnMenu.style.display = showMenu ? 'inline-flex' : 'none';
+
+    if (count !== _lastCount) {
+      _lastCount = count;
+      _favVisibleCount = Math.max(0, count);
+      renderFavPalettes();
+    }
+  }
+
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => {
+      if (_rafId) return;
+      _rafId = requestAnimationFrame(update);
+    }).observe(container);
+  }
+
+  // Initial call after layout settles
+  requestAnimationFrame(update);
+}
+
+/** Sidebar collapse/expand tab — visible at desktop, hidden at tablet (overlay uses #btn-sidebar-toggle). */
+function setupSidebarCollapse() {
+  const btn    = document.getElementById('sidebar-collapse-btn');
+  const panel  = document.getElementById('detail-panel');
+  const handle = document.getElementById('panel-resize-handle');
+  const app    = document.getElementById('app');
+  if (!btn || !panel || !app) return;
+
+  const STORED_KEY = 'gbcam_sidebar_collapsed';
+
+  function doCollapse(save = true) {
+    app.classList.add('sidebar-collapsed');
+    btn.textContent = '›';
+    btn.title = 'Expand sidebar';
+    if (handle) handle.style.cursor = 'default';
+    if (save) localStorage.setItem(STORED_KEY, '1');
+    // Notify grid header that available width changed
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 200);
+  }
+  function doExpand(save = true) {
+    app.classList.remove('sidebar-collapsed');
+    btn.textContent = '‹';
+    btn.title = 'Collapse sidebar';
+    if (handle) handle.style.cursor = '';
+    if (save) localStorage.setItem(STORED_KEY, '0');
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 200);
+  }
+
+  // Restore persisted state
+  if (localStorage.getItem(STORED_KEY) === '1') doCollapse(false);
+
+  // Stop the mousedown on the button from triggering a resize drag
+  btn.addEventListener('mousedown', e => e.stopPropagation());
+  btn.addEventListener('click', () => {
+    app.classList.contains('sidebar-collapsed') ? doExpand() : doCollapse();
   });
 }
 
@@ -2893,8 +2985,9 @@ function renderRecentPalettes() { /* strip removed — see fav palettes */ }
 
 const FAV_PALETTES_KEY = 'gbcam_fav_palettes';
 const MAX_FAV_PALETTES = 64; // total you can star
-const FAV_PAGE_SIZE    = 16; // visible at once in the strip
+const FAV_PAGE_SIZE    = 16; // max visible at once (hard cap)
 let   favOffset        = 0;  // current wheel position
+let   _favVisibleCount = 16; // dynamically updated by setupFavCarouselResponsive
 
 function loadFavPalettes() {
   try { return JSON.parse(localStorage.getItem(FAV_PALETTES_KEY) || '[]'); }
@@ -2905,7 +2998,7 @@ function isFavPalette(id) { return loadFavPalettes().includes(id); }
 
 function shiftFavOffset(delta) {
   const favs = loadFavPalettes().filter(id => PALETTES[id]);
-  if (favs.length <= FAV_PAGE_SIZE) return;
+  if (favs.length <= _favVisibleCount) return;
   favOffset = ((favOffset + delta) % favs.length + favs.length) % favs.length;
   renderFavPalettes();
 }
@@ -2916,7 +3009,7 @@ function toggleFavPalette(id) {
     favs = favs.filter(f => f !== id);
     // clamp offset so it stays valid after removal
     const newLen = favs.filter(f => PALETTES[f]).length;
-    if (newLen <= FAV_PAGE_SIZE) favOffset = 0;
+    if (newLen <= _favVisibleCount) favOffset = 0;
     else favOffset = Math.min(favOffset, newLen - 1);
   } else {
     if (favs.length >= MAX_FAV_PALETTES) {
@@ -2945,20 +3038,21 @@ function renderFavPalettes() {
 
   const favs = loadFavPalettes().filter(id => PALETTES[id]);
   const total = favs.length;
-  const hasWheel = total > FAV_PAGE_SIZE;
+  const visible = Math.min(_favVisibleCount, FAV_PAGE_SIZE);
+  const hasWheel = total > visible;
 
   // ‹ left arrow
   if (hasWheel) {
     const left = document.createElement('button');
     left.className = 'fav-nav-btn';
-    left.title = 'Previous favourites';
+    left.title = 'Previous favourites (-)';
     left.textContent = '‹';
     left.addEventListener('click', () => shiftFavOffset(-1));
     container.appendChild(left);
   }
 
   // Visible window — wraps around
-  const count = Math.min(FAV_PAGE_SIZE, total);
+  const count = Math.min(visible, total);
   for (let i = 0; i < count; i++) {
     const id  = favs[(favOffset + i) % total];
     const pal = PALETTES[id];
@@ -2982,7 +3076,7 @@ function renderFavPalettes() {
   if (hasWheel) {
     const right = document.createElement('button');
     right.className = 'fav-nav-btn';
-    right.title = 'Next favourites';
+    right.title = 'Next favourites (+)';
     right.textContent = '›';
     right.addEventListener('click', () => shiftFavOffset(1));
     container.appendChild(right);
@@ -4940,6 +5034,15 @@ function setupKeyboard() {
     if (e.key === 'h')                { applyTransformAction(state.selectedIndex, 'flip-h');      _repaintAfterTransform(state.selectedIndex); }
     if (e.key === 'v')                { applyTransformAction(state.selectedIndex, 'flip-v');      _repaintAfterTransform(state.selectedIndex); }
   });
+
+  // Fav carousel navigation: - prev, + next (global, not photo-dependent)
+  document.addEventListener('keydown', e => {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === '-' || e.key === '_') { shiftFavOffset(-1); return; }
+    if (e.key === '+' || e.key === '=') { shiftFavOffset( 1); return; }
+  });
 }
 
 // ── Tone controls wiring ─────────────────────────────────────────────────────
@@ -5964,14 +6067,17 @@ function setupOverflowMenus() {
   const gridActionsWrap = document.getElementById('grid-actions-wrap');
   if (gridHeader && gridActionsWrap && window.ResizeObserver) {
     let lastOverflow = null;
+    let _ghRaf = null;
     const checkGridOverflow = () => {
-      // Step 1: remove overflow-active so all action items are "visible" for measurement
+      _ghRaf = null;
+      // Step 1: remove overflow-active so all action items become visible for measurement
       gridHeader.classList.remove('overflow-active');
       gridActionsWrap.style.visibility = 'hidden'; // keep in flow but invisible
-
-      // Step 2: measure — scrollWidth is reliable even with overflow-x:auto
+      // Step 2: temporarily clip so scrollWidth reflects overflow reliably
+      // (without overflow-x:auto, visible content doesn't always inflate scrollWidth)
+      gridHeader.style.overflow = 'hidden';
       const isOverflowing = gridHeader.scrollWidth > gridHeader.clientWidth + 4;
-
+      gridHeader.style.overflow = '';
       // Step 3: restore
       gridActionsWrap.style.visibility = '';
       if (isOverflowing !== lastOverflow) {
@@ -5979,7 +6085,14 @@ function setupOverflowMenus() {
         gridHeader.classList.toggle('overflow-active', isOverflowing);
       }
     };
-    new ResizeObserver(checkGridOverflow).observe(gridHeader);
+    const scheduleGhCheck = () => {
+      if (_ghRaf) return;
+      _ghRaf = requestAnimationFrame(checkGridOverflow);
+    };
+    new ResizeObserver(scheduleGhCheck).observe(gridHeader);
+    // Also watch the detail panel — sidebar collapse changes grid-panel width
+    const detailPanel = document.getElementById('detail-panel');
+    if (detailPanel) new ResizeObserver(scheduleGhCheck).observe(detailPanel);
   }
 
   // ── Fav Palettes menu ────────────────────────────────────────────────────────
@@ -6000,6 +6113,8 @@ function init() {
   setupSidebarToggle();
   setupOverflowMenus();
   setupKeyboard();
+  setupFavCarouselResponsive();
+  setupSidebarCollapse();
   setupCollapsibleSections();
   setupFilterAccordion();
   setStatus('No file loaded');
