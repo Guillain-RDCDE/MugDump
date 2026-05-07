@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.6';
+const APP_VERSION = 'v0.9.7';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -226,6 +226,18 @@ const FILTER_DEFS = [
   { id: 'zoomblur',  label: 'Zoom Blur',            params: [
     { type: 'range', key: 'amount',    label: 'Amount',           def: 30, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
   ]},
+  { id: 'bayer',    label: 'Bayer Dithering',      params: [
+    { type: 'range', key: 'levels',    label: 'Color levels',     def: 4,  min: 2,   max: 8,   step: 1, fmt: v => `${v}` },
+  ]},
+  { id: 'floyd',    label: 'Floyd-Steinberg',      params: [
+    { type: 'range', key: 'levels',    label: 'Color levels',     def: 4,  min: 2,   max: 8,   step: 1, fmt: v => `${v}` },
+  ]},
+  { id: 'interlace', label: 'Interlace',           params: [
+    { type: 'range', key: 'intensity', label: 'Intensity',        def: 60, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
+  ]},
+  { id: 'chswap',    label: 'Channel Swap',         params: [
+    { type: 'seg',   key: 'mode',      label: 'Mode',             def: 'rgb',        opts: [['rgb','RGB'],['rbg','RBG'],['grb','GRB'],['gbr','GBR'],['brg','BRG'],['bgr','BGR']] },
+  ]},
 ];
 
 function buildDefaultFilterParams() {
@@ -266,7 +278,9 @@ const state = {
   gifDelay: 250,           // ms per frame
   gifLoop: 'infinite',     // 'infinite' | 'once' | 'bounce'
   activeFilters:   new Set(),        // active filter names for stackable effects
-  sectionEnabled:  { exposure: false, splitTone: false, effects: false }, // per-section on/off (off by default)
+  sectionEnabled:  { exposure: true, splitTone: true, effects: true }, // per-section on/off (on by default)
+  effectsPreviewMode: false, // toggle before/after for effects
+  filterOrder: ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap'],
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
   lightboxOpen: false,     // lightbox overlay visible
   viewMode: 'grid',        // 'grid' | 'solo'
@@ -1656,6 +1670,30 @@ function wireButtons() {
 
   // Effects reset button
   document.getElementById('btn-reset-effects')?.addEventListener('click', resetEffects);
+
+  // Effects preview toggle button
+  document.getElementById('effects-preview-btn')?.addEventListener('click', () => {
+    state.effectsPreviewMode = !state.effectsPreviewMode;
+    const btn = document.getElementById('effects-preview-btn');
+    if (btn) {
+      btn.classList.toggle('active', state.effectsPreviewMode);
+      btn.title = state.effectsPreviewMode ? 'Effects preview enabled (P)' : 'Toggle effects preview mode (P)';
+    }
+    repaintGrid();
+    if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+    if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+    updateSidebarPreview();
+  });
+
+  // Randomise filters button
+  document.getElementById('btn-randomise')?.addEventListener('click', () => {
+    randomiseFilters();
+    const btn = document.getElementById('btn-randomise');
+    if (btn) btn.title = 'Filters randomised!';
+    setTimeout(() => {
+      if (btn) btn.title = 'Randomise filter settings';
+    }, 2000);
+  });
 
   // Deselect button
   document.getElementById('btn-deselect-all')?.addEventListener('click', () => {
@@ -3768,6 +3806,102 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
     ctx.globalAlpha = 1;
     return;
+  } else if (filter === 'bayer') {
+    // ── Bayer Dithering ────────────────────────────────────────────────────
+    // Ordered dithering using Bayer matrix, reduces color depth for retro effect.
+    const levels = ((filterParams.bayer || {}).levels ?? 4);
+    const bayerMatrix = [
+      [0, 8, 2, 10],
+      [12, 4, 14, 6],
+      [3, 11, 1, 9],
+      [15, 7, 13, 5]
+    ];
+    const step = Math.floor(256 / levels);
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const pixelIndex = i / 4;
+      const row = Math.floor(pixelIndex / width) % 4;
+      const col = pixelIndex % width % 4;
+      const threshold = (bayerMatrix[row][col] / 16) * 255;
+      for (let c = 0; c < 3; c++) {
+        const quantized = Math.floor(data[i + c] / step) * step;
+        data[i + c] = data[i + c] > quantized + threshold ? quantized + step : quantized;
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return;
+  } else if (filter === 'floyd') {
+    // ── Floyd-Steinberg Dithering ──────────────────────────────────────────
+    // Error diffusion dithering with 1/16 weighting to neighboring pixels.
+    const levels = ((filterParams.floyd || {}).levels ?? 4);
+    const step = Math.floor(256 / levels);
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    const errors = new Float32Array(width * height * 3);
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        for (let c = 0; c < 3; c++) {
+          const errIdx = (y * width + x) * 3 + c;
+          const val = data[idx + c] + errors[errIdx];
+          const quantized = Math.floor(val / step) * step;
+          const err = val - quantized;
+          data[idx + c] = quantized;
+
+          // Distribute error
+          if (x + 1 < width) errors[errIdx + 3] += err * 7/16;
+          if (y + 1 < height) {
+            if (x - 1 >= 0) errors[errIdx + width * 3 - 3] += err * 3/16;
+            errors[errIdx + width * 3] += err * 5/16;
+            if (x + 1 < width) errors[errIdx + width * 3 + 3] += err * 1/16;
+          }
+        }
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return;
+  } else if (filter === 'interlace') {
+    // ── Interlace ──────────────────────────────────────────────────────────
+    // Simulates interlaced video with alternating line darkening.
+    const intensity = ((filterParams.interlace || {}).intensity ?? 60) / 100;
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    for (let i = 0; i < data.length; i += 4) {
+      const pixelIndex = i / 4;
+      const row = Math.floor(pixelIndex / width);
+      if (row % 2 === 0) {
+        data[i] *= (1 - intensity * 0.3);
+        data[i + 1] *= (1 - intensity * 0.3);
+        data[i + 2] *= (1 - intensity * 0.3);
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return;
+  } else if (filter === 'chswap') {
+    // ── Channel Swap ───────────────────────────────────────────────────────
+    // Rearranges RGB channels (RGB, RBG, GRB, GBR, BRG, BGR).
+    const mode = ((filterParams.chswap || {}).mode ?? 'rgb');
+    const channelMap = {
+      'rgb': [0, 1, 2],
+      'rbg': [0, 2, 1],
+      'grb': [1, 0, 2],
+      'gbr': [1, 2, 0],
+      'brg': [2, 0, 1],
+      'bgr': [2, 1, 0]
+    };
+    const map = channelMap[mode] || [0, 1, 2];
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+    const tmp = new Uint8ClampedArray(data);
+    for (let i = 0; i < data.length; i += 4) {
+      data[i] = tmp[i + map[0]];
+      data[i + 1] = tmp[i + map[1]];
+      data[i + 2] = tmp[i + map[2]];
+    }
+    ctx.putImageData(imageData, 0, 0);
+    return;
   }
 
   // Composite the effect onto the main canvas at the requested intensity
@@ -4158,6 +4292,15 @@ function setupKeyboard() {
       return;
     }
 
+    // P — toggle effects preview (before/after)
+    if (e.key === 'p' || e.key === 'P') {
+      state.effectsPreviewMode = !state.effectsPreviewMode;
+      const previewBtn = document.getElementById('effects-preview-btn');
+      if (previewBtn) previewBtn.classList.toggle('active', state.effectsPreviewMode);
+      repaintGrid();
+      return;
+    }
+
     // Escape — close things (outermost layer first)
     if (e.key === 'Escape') {
       if (state.presentationMode)  { closePresentation(); return; }
@@ -4474,8 +4617,9 @@ function setupCollapsibleSections() {
     outer.appendChild(inner);
     group.appendChild(outer);
 
-    // Restore saved state
-    if (collapsed.has(sectionId)) group.classList.add('collapsed');
+    // Restore saved state, then apply DEFAULT_COLLAPSED if not in localStorage
+    const isCollapsed = collapsed.has(sectionId) || group.getAttribute('data-default-collapsed') === 'true';
+    if (isCollapsed) group.classList.add('collapsed');
 
     // Toggle on click — ignore clicks on buttons and checkboxes inside the header
     clickTarget.style.cursor = 'pointer';
@@ -4711,6 +4855,105 @@ function resetEffects() {
   showToast('Effects reset');
 }
 
+function randomiseFilters() {
+  pushUndo();
+  // Select 2-5 random filters and randomise their params
+  const allFilterIds = FILTER_DEFS.map(fd => fd.id);
+  const count = Math.floor(Math.random() * 4) + 2; // 2-5 filters
+  const shuffled = allFilterIds.sort(() => Math.random() - 0.5);
+  const selected = shuffled.slice(0, count);
+
+  const targets = state.selectedPhotos.size > 0
+    ? [...state.selectedPhotos]
+    : state.selectedIndex !== null ? [state.selectedIndex] : null;
+
+  // Reset, then enable random filters with random params
+  if (targets) {
+    for (const idx of targets) {
+      if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+      const ps = state.photoSettings[idx];
+      ps.activeFilters = selected;
+      ps.filterParams = buildDefaultFilterParams();
+      // Randomise each param for each selected filter
+      for (const filterId of selected) {
+        const def = FILTER_DEFS.find(fd => fd.id === filterId);
+        if (!def) continue;
+        for (const param of def.params) {
+          if (param.type === 'range') {
+            const range = param.max - param.min;
+            ps.filterParams[filterId][param.key] = param.min + Math.random() * range;
+          } else if (param.type === 'seg') {
+            ps.filterParams[filterId][param.key] = param.opts[Math.floor(Math.random() * param.opts.length)][0];
+          }
+        }
+      }
+      ps.filterIntensity = 0.5 + Math.random() * 0.5; // 0.5-1.0
+      ps.filterVariant = ['fine', 'medium', 'thick', 'wide'][Math.floor(Math.random() * 4)];
+    }
+  } else {
+    state.activeFilters = new Set(selected);
+    state.filterParams = buildDefaultFilterParams();
+    for (const filterId of selected) {
+      const def = FILTER_DEFS.find(fd => fd.id === filterId);
+      if (!def) continue;
+      for (const param of def.params) {
+        if (param.type === 'range') {
+          const range = param.max - param.min;
+          state.filterParams[filterId][param.key] = param.min + Math.random() * range;
+        } else if (param.type === 'seg') {
+          state.filterParams[filterId][param.key] = param.opts[Math.floor(Math.random() * param.opts.length)][0];
+        }
+      }
+    }
+    state.filterIntensity = 0.5 + Math.random() * 0.5;
+    state.filterVariant = ['fine', 'medium', 'thick', 'wide'][Math.floor(Math.random() * 4)];
+  }
+  updateFilterUI();
+  _refreshFilterParamPanel();
+  syncControlsToEffectiveSettings(state.selectedIndex);
+  repaintGrid();
+  updateSidebarPreview();
+  showToast(`Randomised ${selected.length} filters`);
+}
+
+function updateFilterOrder() {
+  // Capture the current DOM order of .fi-item elements and update state.filterOrder
+  const items = document.querySelectorAll('.fi-item');
+  const newOrder = Array.from(items).map(item => item.dataset.filter);
+  state.filterOrder = newOrder;
+  localStorage.setItem('filterOrder', JSON.stringify(newOrder));
+}
+
+function setFrameFilterSnapshot(frameIndex) {
+  // Capture current filter settings and store in gifFrameOrder[frameIndex]
+  if (frameIndex < 0 || frameIndex >= state.gifFrameOrder.length) return;
+  const frame = state.gifFrameOrder[frameIndex];
+  frame.filterSnapshot = {
+    activeFilters:   new Set(state.activeFilters),
+    filterParams:    JSON.parse(JSON.stringify(state.filterParams)),
+    filterIntensity: state.filterIntensity,
+    filterVariant:   state.filterVariant,
+  };
+}
+
+function getFrameFilterSnapshot(frameIndex) {
+  // Retrieve filter settings for a specific frame, or undefined if not set
+  if (frameIndex < 0 || frameIndex >= state.gifFrameOrder.length) return undefined;
+  return state.gifFrameOrder[frameIndex].filterSnapshot;
+}
+
+function applyFrameFilterSnapshot(frameIndex) {
+  // Apply the filter snapshot for a frame, if it exists
+  const snap = getFrameFilterSnapshot(frameIndex);
+  if (!snap) return;
+  state.activeFilters   = new Set(snap.activeFilters);
+  state.filterParams    = JSON.parse(JSON.stringify(snap.filterParams));
+  state.filterIntensity = snap.filterIntensity;
+  state.filterVariant   = snap.filterVariant;
+  updateFilterUI();
+  repaintGrid();
+}
+
 // ── Undo ─────────────────────────────────────────────────────────────────────
 
 const MAX_UNDO = 30;
@@ -4763,7 +5006,7 @@ function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVa
   if (state.sectionEnabled?.effects === false) return;
   const af = activeFilters || state.activeFilters;
   if (af.size === 0) return;
-  const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur'];
+  const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap'];
   for (const filterName of filterOrder) {
     if (af.has(filterName)) {
       applyExportFilter(ctx, width, height, scale, filterName, filterIntensity, filterVariant, filterParams);
@@ -4893,6 +5136,12 @@ function setupFilterAccordion() {
     chevron.setAttribute('aria-hidden', 'true');
     chevron.textContent = '▾';
 
+    const dragHandle = document.createElement('span');
+    dragHandle.className = 'fi-drag-handle';
+    dragHandle.setAttribute('aria-hidden', 'true');
+    dragHandle.textContent = '⋮⋮';
+    dragHandle.title = 'Drag to reorder';
+
     const lbl = document.createElement('span');
     lbl.className = 'fi-label';
     lbl.textContent = fd.label;
@@ -4906,9 +5155,45 @@ function setupFilterAccordion() {
     cb.dataset.filter = fd.id;
     checkWrap.appendChild(cb);
 
+    header.appendChild(dragHandle);
     header.appendChild(chevron);
     header.appendChild(lbl);
     header.appendChild(checkWrap);
+
+    // ── Draggable reordering ────────────────────────────────────────────────
+    item.draggable = true;
+    item.addEventListener('dragstart', e => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', item.innerHTML);
+      item.classList.add('fi-dragging');
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('fi-dragging');
+      document.querySelectorAll('.fi-item').forEach(el => el.classList.remove('fi-drag-over'));
+    });
+    item.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const dragging = document.querySelector('.fi-item.fi-dragging');
+      if (dragging && dragging !== item) {
+        item.classList.add('fi-drag-over');
+        const rect = item.getBoundingClientRect();
+        const midpoint = rect.top + rect.height / 2;
+        if (e.clientY < midpoint) {
+          item.parentNode.insertBefore(dragging, item);
+        } else {
+          item.parentNode.insertBefore(dragging, item.nextSibling);
+        }
+        updateFilterOrder();
+      }
+    });
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    item.addEventListener('dragleave', () => {
+      item.classList.remove('fi-drag-over');
+    });
     item.appendChild(header);
 
     // ── Params body ─────────────────────────────────────────────────────────
