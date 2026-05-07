@@ -342,11 +342,12 @@ html, body {
   cursor: pointer;
   overflow: hidden;
   background: var(--surface);
-  transition: border-color 0.1s ease;
+  transition: border-color 0.1s ease, transform 0.1s ease;
 }
 
 .photo-slot:hover {
   border-color: var(--border);
+  transform: scale(1.04);
 }
 
 .photo-slot.selected {
@@ -374,8 +375,10 @@ html, body {
   inset: 0;
   width: 100%;
   height: 100%;
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  /* Bilinear scaling: avoids pixel-shift artifacts when CSS hover scale is applied.
+     Thumbnails are small enough that smooth interpolation looks better than
+     nearest-neighbour aliasing at the fractional CSS scale. */
+  image-rendering: auto;
   display: block;
 }
 
@@ -2770,8 +2773,8 @@ input[type="range"] {
   #tb-export-sav,
   #tb-reload-sav { display: none !important; }
 
-  /* Hide subtitle text to save room */
-  .app-subtitle { display: none; }
+  /* At 1280px only hide the detail text; keep the version number visible */
+  .app-subtitle-detail { display: none; }
 
   /* Tighten the sidebar a touch */
   #detail-panel { width: 300px; }
@@ -2788,6 +2791,9 @@ input[type="range"] {
 
   /* On tablet, keep only Open .sav + sidebar toggle */
   #tb-open-pocket { display: none; }
+
+  /* Hide the version/subtitle entirely at tablet — titlebar is very tight */
+  .app-subtitle { display: none; }
 
   /* Show the sidebar toggle button */
   #btn-sidebar-toggle { display: inline-flex; }
