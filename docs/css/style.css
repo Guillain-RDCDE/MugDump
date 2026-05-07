@@ -2474,6 +2474,20 @@ input[type="range"] {
 }
 .fi-header:hover { background: var(--surface-2); }
 
+.fi-drag-handle {
+  font-size: 12px;
+  color: var(--text-3);
+  flex-shrink: 0;
+  cursor: grab;
+  transition: color 0.1s;
+  line-height: 1;
+  margin-right: 4px;
+}
+.fi-drag-handle:active { cursor: grabbing; }
+.fi-header:hover .fi-drag-handle { color: var(--text-2); }
+.fi-item.fi-dragging { opacity: 0.5; }
+.fi-item.fi-drag-over { background: var(--accent-dim); }
+
 .fi-chevron {
   font-size: 17px;
   color: var(--text-3);
