@@ -250,60 +250,8 @@
               </div>
             </div>
 
-            <!-- Filter accordion — each item is a toggle button + inline params -->
-            <div class="filter-accordion">
-
-              <div class="filter-item" data-filter="crt">
-                <button class="filter-btn" data-filter="crt">CRT Scanlines</button>
-                <div class="filter-inline" id="fp-crt" data-filter="crt" style="display:none;"></div>
-              </div>
-
-              <div class="filter-item" data-filter="lcd">
-                <button class="filter-btn" data-filter="lcd">LCD</button>
-                <div class="filter-inline" id="fp-lcd" data-filter="lcd" style="display:none;"></div>
-              </div>
-
-              <div class="filter-item" data-filter="dot">
-                <button class="filter-btn" data-filter="dot">Dot Matrix</button>
-                <div class="filter-inline" id="fp-dot" data-filter="dot" style="display:none;"></div>
-              </div>
-
-              <div class="filter-item" data-filter="glow">
-                <button class="filter-btn" data-filter="glow">Phosphor Glow</button>
-                <div class="filter-inline" id="fp-glow" data-filter="glow" style="display:none;"></div>
-              </div>
-
-              <div class="filter-item" data-filter="chroma">
-                <button class="filter-btn" data-filter="chroma">Chromatic Aberration</button>
-                <div class="filter-inline" id="fp-chroma" data-filter="chroma" style="display:none;"></div>
-              </div>
-
-              <div class="filter-item" data-filter="grid">
-                <button class="filter-btn" data-filter="grid">Pixel Grid</button>
-                <div class="filter-inline" id="fp-grid" data-filter="grid" style="display:none;"></div>
-              </div>
-
-              <div class="filter-item" data-filter="vignette">
-                <button class="filter-btn" data-filter="vignette">Vignette</button>
-                <div class="filter-inline" id="fp-vignette" data-filter="vignette" style="display:none;"></div>
-              </div>
-
-              <div class="filter-item" data-filter="halftone">
-                <button class="filter-btn" data-filter="halftone">Halftone</button>
-                <div class="filter-inline" id="fp-halftone" data-filter="halftone" style="display:none;"></div>
-              </div>
-
-              <div class="filter-item" data-filter="jitter">
-                <button class="filter-btn" data-filter="jitter">Scanline Jitter</button>
-                <div class="filter-inline" id="fp-jitter" data-filter="jitter" style="display:none;"></div>
-              </div>
-
-              <div class="filter-item" data-filter="border">
-                <button class="filter-btn" data-filter="border">Border</button>
-                <div class="filter-inline" id="fp-border" data-filter="border" style="display:none;"></div>
-              </div>
-
-            </div><!-- /filter-accordion -->
+            <!-- Filter accordion — built dynamically by setupFilterAccordion() in app.js -->
+            <div id="filter-accordion"></div>
 
             <!-- Fallback global params container (used if inline panel not found) -->
             <div id="filter-params" style="display:none;"></div>
