@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.21';
+const APP_VERSION = 'v0.9.22';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -2603,6 +2603,20 @@ function rebuildPalettePickerList() {
 
   refreshCustomPalettes();
 
+  // ── Random palette shortcut ─────────────────────────────────────────────
+  const randItem = document.createElement('div');
+  randItem.className = 'pal-item pal-item-random';
+  randItem.title = 'Pick a random palette';
+  randItem.innerHTML = '<span class="pal-item-random-icon">🎲</span><span class="pal-item-name">Random palette</span>';
+  randItem.addEventListener('click', () => {
+    const ids = Object.keys(PALETTES);
+    const id  = ids[Math.floor(Math.random() * ids.length)];
+    setPalette(id);
+    closePalettePicker();
+    showToast(`Random palette · ${PALETTES[id].name}`);
+  });
+  list.appendChild(randItem);
+
   // Bucket built-in palettes by group
   const grouped = {};
   for (const [id, pal] of Object.entries(PALETTES)) {
@@ -5152,7 +5166,7 @@ function randomiseFilters({ skipRepaint = false, skipToast = false } = {}) {
         for (const param of def.params) {
           if (param.type === 'range') {
             const range = param.max - param.min;
-            ps.filterParams[filterId][param.key] = param.min + Math.random() * range;
+            ps.filterParams[filterId][param.key] = Math.round(param.min + Math.random() * range);
           } else if (param.type === 'seg') {
             ps.filterParams[filterId][param.key] = param.opts[Math.floor(Math.random() * param.opts.length)][0];
           }
@@ -5170,7 +5184,7 @@ function randomiseFilters({ skipRepaint = false, skipToast = false } = {}) {
       for (const param of def.params) {
         if (param.type === 'range') {
           const range = param.max - param.min;
-          state.filterParams[filterId][param.key] = param.min + Math.random() * range;
+          state.filterParams[filterId][param.key] = Math.round(param.min + Math.random() * range);
         } else if (param.type === 'seg') {
           state.filterParams[filterId][param.key] = param.opts[Math.floor(Math.random() * param.opts.length)][0];
         }

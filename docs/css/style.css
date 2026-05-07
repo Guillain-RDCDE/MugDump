@@ -1152,6 +1152,13 @@ input[type="range"] {
 .pal-item.active { background: var(--accent-dim); }
 .pal-item.active .pal-item-name { color: var(--accent); }
 
+.pal-item-random {
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+}
+.pal-item-random-icon { font-size: 14px; line-height: 1; }
+
 .pal-item-name {
   font-size: 12px;
   color: var(--text);
