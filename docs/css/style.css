@@ -1267,6 +1267,26 @@ input[type="range"] {
 /* Name hidden — shown as title tooltip only */
 .fav-pal-label { display: none; }
 
+/* Wheel navigation arrows flanking the fav strip */
+.fav-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.12s, border-color 0.12s;
+}
+.fav-nav-btn:hover { color: var(--text); border-color: var(--border); }
+
 /* (fav-pal-star remove overlay removed — fav buttons activate palette only; unfav via dropdown pin) */
 
 /* Star button in picker dropdown */

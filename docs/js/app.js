@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.44';
+const APP_VERSION = 'v0.9.45';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -2880,7 +2880,9 @@ function renderRecentPalettes() { /* strip removed — see fav palettes */ }
 // ── Favourite palettes ─────────────────────────────────────────────────────
 
 const FAV_PALETTES_KEY = 'gbcam_fav_palettes';
-const MAX_FAV_PALETTES = 16;
+const MAX_FAV_PALETTES = 64; // total you can star
+const FAV_PAGE_SIZE    = 16; // visible at once in the strip
+let   favOffset        = 0;  // current wheel position
 
 function loadFavPalettes() {
   try { return JSON.parse(localStorage.getItem(FAV_PALETTES_KEY) || '[]'); }
@@ -2889,10 +2891,21 @@ function loadFavPalettes() {
 
 function isFavPalette(id) { return loadFavPalettes().includes(id); }
 
+function shiftFavOffset(delta) {
+  const favs = loadFavPalettes().filter(id => PALETTES[id]);
+  if (favs.length <= FAV_PAGE_SIZE) return;
+  favOffset = ((favOffset + delta) % favs.length + favs.length) % favs.length;
+  renderFavPalettes();
+}
+
 function toggleFavPalette(id) {
   let favs = loadFavPalettes();
   if (favs.includes(id)) {
     favs = favs.filter(f => f !== id);
+    // clamp offset so it stays valid after removal
+    const newLen = favs.filter(f => PALETTES[f]).length;
+    if (newLen <= FAV_PAGE_SIZE) favOffset = 0;
+    else favOffset = Math.min(favOffset, newLen - 1);
   } else {
     if (favs.length >= MAX_FAV_PALETTES) {
       showToast(`Favourites full (${MAX_FAV_PALETTES} max) — remove one first ★`);
@@ -2919,11 +2932,27 @@ function renderFavPalettes() {
   container.innerHTML = '';
 
   const favs = loadFavPalettes().filter(id => PALETTES[id]);
-  for (const id of favs) {
+  const total = favs.length;
+  const hasWheel = total > FAV_PAGE_SIZE;
+
+  // ‹ left arrow
+  if (hasWheel) {
+    const left = document.createElement('button');
+    left.className = 'fav-nav-btn';
+    left.title = 'Previous favourites';
+    left.textContent = '‹';
+    left.addEventListener('click', () => shiftFavOffset(-1));
+    container.appendChild(left);
+  }
+
+  // Visible window — wraps around
+  const count = Math.min(FAV_PAGE_SIZE, total);
+  for (let i = 0; i < count; i++) {
+    const id  = favs[(favOffset + i) % total];
     const pal = PALETTES[id];
     const btn = document.createElement('button');
-    btn.className = 'fav-pal-btn' + (state.palette.id === id ? ' active' : '');
-    btn.title = pal.name; // name shown as tooltip on hover
+    btn.className = 'fav-pal-btn' + (getDisplayPaletteId() === id ? ' active' : '');
+    btn.title = pal.name;
 
     const swatch = document.createElement('div');
     swatch.className = 'fav-pal-swatch';
@@ -2932,15 +2961,19 @@ function renderFavPalettes() {
       span.style.background = color;
       swatch.appendChild(span);
     }
-
     btn.appendChild(swatch);
-
-    btn.addEventListener('click', () => {
-      setPalette(id);
-      renderFavPalettes(); // refresh active state
-    });
-
+    btn.addEventListener('click', () => { setPalette(id); renderFavPalettes(); });
     container.appendChild(btn);
+  }
+
+  // › right arrow
+  if (hasWheel) {
+    const right = document.createElement('button');
+    right.className = 'fav-nav-btn';
+    right.title = 'Next favourites';
+    right.textContent = '›';
+    right.addEventListener('click', () => shiftFavOffset(1));
+    container.appendChild(right);
   }
 
   // Keep the fav dropdown in sync
