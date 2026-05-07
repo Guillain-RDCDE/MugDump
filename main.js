@@ -2,6 +2,61 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron')
 const path = require('path');
 const fs = require('fs');
 
+// ─── GB Camera 2bpp preview decoder ─────────────────────────────────────────
+// Inline port of the decode logic from renderer/js/gbcam.js (Node-safe, no DOM).
+// Returns a plain Array of pixel indices (0–3, length 14336) for the first
+// non-empty photo in the given save file, or null if decoding fails / all empty.
+
+function decodeFirstPhotoPreview(filePath) {
+  try {
+    const buf = fs.readFileSync(filePath);
+    if (buf.length !== 131072) return null;
+
+    const PHOTO_DATA_OFFSET = 0x2000;
+    const SLOT_SIZE         = 0x1000;
+    const BYTES_PER_PHOTO   = 3584;   // 224 tiles × 16 bytes
+    const PHOTO_WIDTH       = 128;
+    const PHOTO_HEIGHT      = 112;
+    const TILES_WIDE        = 16;
+    const TILES_TALL        = 14;
+    const BYTES_PER_TILE    = 16;
+
+    function isEmpty(idx) {
+      const off = PHOTO_DATA_OFFSET + idx * SLOT_SIZE;
+      const freq = new Uint32Array(256);
+      for (let i = 0; i < BYTES_PER_PHOTO; i++) freq[buf[off + i]]++;
+      return Math.max(...freq) / BYTES_PER_PHOTO > 0.96;
+    }
+
+    function decode(idx) {
+      const photoOff = PHOTO_DATA_OFFSET + idx * SLOT_SIZE;
+      const pixels   = new Uint8Array(PHOTO_WIDTH * PHOTO_HEIGHT);
+      for (let tr = 0; tr < TILES_TALL; tr++) {
+        for (let tc = 0; tc < TILES_WIDE; tc++) {
+          const tOff = photoOff + (tr * TILES_WIDE + tc) * BYTES_PER_TILE;
+          for (let row = 0; row < 8; row++) {
+            const lo = buf[tOff + row * 2];
+            const hi = buf[tOff + row * 2 + 1];
+            for (let col = 0; col < 8; col++) {
+              const bit = 7 - col;
+              pixels[(tr * 8 + row) * PHOTO_WIDTH + tc * 8 + col] =
+                ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
+            }
+          }
+        }
+      }
+      return pixels;
+    }
+
+    for (let i = 0; i < 30; i++) {
+      if (!isEmpty(i)) return Array.from(decode(i));
+    }
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
 // ─── Window ────────────────────────────────────────────────────────────────
 
 let mainWindow;
@@ -214,6 +269,11 @@ ipcMain.handle('detect-pocket', async () => {
   // Deduplicate by path (Memories root scan + Save States scan may overlap)
   const seen = new Set();
   const unique = saves.filter(s => { if (seen.has(s.path)) return false; seen.add(s.path); return true; });
+
+  // Attach a preview (first non-empty photo, pixel indices 0–3) to each save
+  for (const save of unique) {
+    save.previewPixels = decodeFirstPhotoPreview(save.path);
+  }
 
   return { saves: unique };
 });
