@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.11';
+const APP_VERSION = 'v0.9.12';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -5052,12 +5052,18 @@ function randomiseFilters() {
   showToast(`Randomised ${selected.length} filters`);
 }
 
-function updateFilterOrder() {
+function updateFilterOrder(repaint = false) {
   // Capture the current DOM order of .fi-item elements and update state.filterOrder
   const items = document.querySelectorAll('.fi-item');
   const newOrder = Array.from(items).map(item => item.dataset.filter);
   state.filterOrder = newOrder;
   localStorage.setItem('filterOrder', JSON.stringify(newOrder));
+  if (repaint) {
+    repaintGrid();
+    if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+    if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+    updateSidebarPreview();
+  }
 }
 
 function setFrameFilterSnapshot(frameIndex) {
@@ -5327,6 +5333,7 @@ function setupFilterAccordion() {
       item.draggable = false;
       item.classList.remove('fi-dragging');
       document.querySelectorAll('.fi-item').forEach(el => el.classList.remove('fi-drag-over'));
+      updateFilterOrder(true);
     });
     // Safety: release draggability if the mouse is released anywhere without a drop
     document.addEventListener('mouseup', () => { item.draggable = false; }, { passive: true });
