@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.9';
+const APP_VERSION = 'v0.9.10';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -166,6 +166,7 @@ const FILTER_DEFS = [
   { id: 'crt',      label: 'CRT Scanlines',       params: [
     { type: 'seg',   key: 'variant',   label: 'Scanlines',        def: 'medium',      stateKey: 'filterVariant', opts: [['fine','Fine'],['medium','Medium'],['thick','Thick'],['wide','Wide']] },
     { type: 'seg',   key: 'curve',     label: 'Screen shape',     def: 'none',        opts: [['none','Flat'],['mild','Mild'],['strong','Strong']] },
+    { type: 'range', key: 'mix',       label: 'Mix',              def: 100, min: 0,   max: 100, step: 1, fmt: v => `${v}%` },
   ]},
   { id: 'lcd',      label: 'LCD',                  params: [
     { type: 'range', key: 'subpixel',  label: 'Sub-pixel tint',   def: 30, min: 0,   max: 80,  step: 1, fmt: v => `${v}%` },
@@ -212,12 +213,13 @@ const FILTER_DEFS = [
   ]},
   { id: 'pixsort',   label: 'Pixel Sort',           params: [
     { type: 'range', key: 'threshold', label: 'Threshold',        def: 50, min: 0,   max: 100, step: 1, fmt: v => `${v}%` },
-    { type: 'seg',   key: 'direction', label: 'Direction',        def: 'vertical',   opts: [['vertical','Down'],['horizontal','Right']] },
+    { type: 'seg',   key: 'direction', label: 'Direction',        def: 'down',       opts: [['down','Down'],['up','Up'],['right','Right'],['left','Left']] },
   ]},
   { id: 'blkglitch', label: 'Block Glitch',         params: [
     { type: 'range', key: 'shift',     label: 'Shift amount',     def: 40, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
     { type: 'range', key: 'density',   label: 'Block count',      def: 30, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
     { type: 'range', key: 'size',      label: 'Block height',     def: 20, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'maxheight', label: 'Max height',       def: 30, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
   ]},
   { id: 'wavewarp',  label: 'Wave Warp',            params: [
     { type: 'range', key: 'amplitude', label: 'Amplitude',        def: 30, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
@@ -230,7 +232,7 @@ const FILTER_DEFS = [
     { type: 'range', key: 'levels',    label: 'Color levels',     def: 4,  min: 2,   max: 8,   step: 1, fmt: v => `${v}` },
   ]},
   { id: 'floyd',    label: 'Floyd-Steinberg',      params: [
-    { type: 'range', key: 'levels',    label: 'Color levels',     def: 4,  min: 2,   max: 8,   step: 1, fmt: v => `${v}` },
+    { type: 'range', key: 'levels',    label: 'Levels',           def: 2,  min: 2,   max: 8,   step: 1, fmt: v => `${v}` },
   ]},
   { id: 'interlace', label: 'Interlace',           params: [
     { type: 'range', key: 'intensity', label: 'Intensity',        def: 60, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
@@ -1671,28 +1673,19 @@ function wireButtons() {
   // Effects reset button
   document.getElementById('btn-reset-effects')?.addEventListener('click', resetEffects);
 
-  // Effects preview toggle button
-  // active = effects ARE visible (normal mode); inactive = effects hidden (original view)
-  const _previewBtn = document.getElementById('effects-preview-btn');
-  if (_previewBtn) {
-    _previewBtn.classList.add('active'); // default: effects visible → button active
-    _previewBtn.title = 'Click to hide effects and see original (P)';
+  // Effects preview checkbox — controls ALL effects (filters + tone/exposure/splitTone)
+  // Checked = effects visible (default); unchecked = original/before view
+  const _previewCb = document.getElementById('effects-preview-check');
+  if (_previewCb) {
+    _previewCb.checked = !state.effectsPreviewMode; // checked = showing effects
+    _previewCb.addEventListener('change', () => {
+      state.effectsPreviewMode = !_previewCb.checked;
+      repaintGrid();
+      if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+      if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+      updateSidebarPreview();
+    });
   }
-  document.getElementById('effects-preview-btn')?.addEventListener('click', () => {
-    state.effectsPreviewMode = !state.effectsPreviewMode;
-    const btn = document.getElementById('effects-preview-btn');
-    if (btn) {
-      // active = effects visible (effectsPreviewMode=false); inactive = effects hidden (effectsPreviewMode=true)
-      btn.classList.toggle('active', !state.effectsPreviewMode);
-      btn.title = state.effectsPreviewMode
-        ? 'Effects hidden — click to show (P)'
-        : 'Click to hide effects and see original (P)';
-    }
-    repaintGrid();
-    if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
-    if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
-    updateSidebarPreview();
-  });
 
   // Randomise filters button
   document.getElementById('btn-randomise')?.addEventListener('click', () => {
@@ -3286,7 +3279,8 @@ function applyExportFilter(ctx, width, height, scale, filter,
       thick:  { gap: 0.58, alpha: 0.84 },   // heavy scanlines
       wide:   { gap: 0.76, alpha: 0.94 },   // almost half the row is dark
     };
-    const cfg = cfgs[variant] || cfgs.medium;
+    const cfg    = cfgs[variant] || cfgs.medium;
+    const crtMix = ((filterParams.crt || {}).mix ?? 100) / 100; // 0–1 blend
     const rowH    = Math.max(1, s);
     const gapH    = Math.min(Math.max(1, Math.round(rowH * cfg.gap)), rowH - 1);
     const brightH = Math.max(1, rowH - gapH);
@@ -3294,7 +3288,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     // Draw dark gaps at the bottom of each GB pixel row
     for (let row = 0; row < GBCam.PHOTO_HEIGHT; row++) {
       const rowTop = row * rowH;
-      ec.fillStyle = `rgba(0,0,0,${cfg.alpha})`;
+      ec.fillStyle = `rgba(0,0,0,${cfg.alpha * crtMix})`;
       ec.fillRect(0, rowTop + brightH, width, gapH);
     }
 
@@ -3366,13 +3360,13 @@ function applyExportFilter(ctx, width, height, scale, filter,
     if (s >= 2) {
       ec.strokeStyle = `rgba(0,0,0,${gridOpacity})`;
       ec.lineWidth = lineW;
-      // Vertical lines between each GB pixel column
-      for (let col = 1; col < GBCam.PHOTO_WIDTH; col++) {
+      // Vertical lines at each GB pixel boundary (including right outer edge)
+      for (let col = 1; col <= GBCam.PHOTO_WIDTH; col++) {
         const x = col * s - lineW / 2;
         ec.beginPath(); ec.moveTo(x, 0); ec.lineTo(x, height); ec.stroke();
       }
-      // Horizontal lines between each GB pixel row
-      for (let row = 1; row < GBCam.PHOTO_HEIGHT; row++) {
+      // Horizontal lines at each GB pixel boundary (including bottom outer edge)
+      for (let row = 1; row <= GBCam.PHOTO_HEIGHT; row++) {
         const y = row * s - lineW / 2;
         ec.beginPath(); ec.moveTo(0, y); ec.lineTo(width, y); ec.stroke();
       }
@@ -3682,56 +3676,64 @@ function applyExportFilter(ctx, width, height, scale, filter,
     // them by brightness — dark-to-bright in direction of travel — creating
     // coloured streaks that drip or slide along the image.
     const threshPct = ((filterParams.pixsort || {}).threshold ?? 50) / 100;
-    const dir       = (filterParams.pixsort || {}).direction ?? 'vertical';
+    const dir       = (filterParams.pixsort || {}).direction ?? 'down';
     const src = ctx.getImageData(0, 0, width, height);
     const sd  = src.data;
     const out = new Uint8ClampedArray(sd); // start as identity copy
     const lum = i => (sd[i] * 0.299 + sd[i+1] * 0.587 + sd[i+2] * 0.114) / 255;
 
-    if (dir === 'vertical') {
+    // Helper: sort a run of pixels, write to out
+    const sortRun = (pixels, ascending, indices) => {
+      const run = pixels.map((i, j) => [lum(i), sd[i], sd[i+1], sd[i+2], sd[i+3]]);
+      run.sort((a, b) => ascending ? a[0] - b[0] : b[0] - a[0]);
+      for (let j = 0; j < run.length; j++) {
+        const ri = pixels[j];
+        out[ri] = run[j][1]; out[ri+1] = run[j][2]; out[ri+2] = run[j][3]; out[ri+3] = run[j][4];
+      }
+    };
+
+    if (dir === 'down' || dir === 'vertical') {
+      // Sort columns top→bottom, dark at top
       for (let x = 0; x < width; x++) {
-        let runStart = -1;
+        let run = [];
         for (let y = 0; y <= height; y++) {
           const i = (y * width + x) * 4;
           const l = y < height ? lum(i) : -1;
-          if (l >= threshPct && runStart === -1) {
-            runStart = y;
-          } else if ((l < threshPct || y === height) && runStart !== -1) {
-            const run = [];
-            for (let ry = runStart; ry < y; ry++) {
-              const ri = (ry * width + x) * 4;
-              run.push([lum(ri), sd[ri], sd[ri+1], sd[ri+2], sd[ri+3]]);
-            }
-            run.sort((a, b) => a[0] - b[0]);
-            for (let j = 0; j < run.length; j++) {
-              const ri = ((runStart + j) * width + x) * 4;
-              out[ri] = run[j][1]; out[ri+1] = run[j][2]; out[ri+2] = run[j][3]; out[ri+3] = run[j][4];
-            }
-            runStart = -1;
-          }
+          if (l >= threshPct) { run.push(i); }
+          else if (run.length > 0) { sortRun(run, true, null); run = []; }
         }
       }
-    } else {
+    } else if (dir === 'up') {
+      // Sort columns bottom→top, dark at bottom (bright streaks upward)
+      for (let x = 0; x < width; x++) {
+        let run = [];
+        for (let y = height - 1; y >= -1; y--) {
+          const i = (Math.max(0, y) * width + x) * 4;
+          const l = y >= 0 ? lum(i) : -1;
+          if (y >= 0 && l >= threshPct) { run.push(i); }
+          else if (run.length > 0) { sortRun(run, false, null); run = []; }
+        }
+      }
+    } else if (dir === 'right' || dir === 'horizontal') {
+      // Sort rows left→right, dark at left
       for (let y = 0; y < height; y++) {
-        let runStart = -1;
+        let run = [];
         for (let x = 0; x <= width; x++) {
           const i = (y * width + x) * 4;
           const l = x < width ? lum(i) : -1;
-          if (l >= threshPct && runStart === -1) {
-            runStart = x;
-          } else if ((l < threshPct || x === width) && runStart !== -1) {
-            const run = [];
-            for (let rx = runStart; rx < x; rx++) {
-              const ri = (y * width + rx) * 4;
-              run.push([lum(ri), sd[ri], sd[ri+1], sd[ri+2], sd[ri+3]]);
-            }
-            run.sort((a, b) => a[0] - b[0]);
-            for (let j = 0; j < run.length; j++) {
-              const ri = (y * width + (runStart + j)) * 4;
-              out[ri] = run[j][1]; out[ri+1] = run[j][2]; out[ri+2] = run[j][3]; out[ri+3] = run[j][4];
-            }
-            runStart = -1;
-          }
+          if (x < width && l >= threshPct) { run.push(i); }
+          else if (run.length > 0) { sortRun(run, true, null); run = []; }
+        }
+      }
+    } else if (dir === 'left') {
+      // Sort rows right→left, dark at right (bright streaks leftward)
+      for (let y = 0; y < height; y++) {
+        let run = [];
+        for (let x = width - 1; x >= -1; x--) {
+          const i = (y * width + Math.max(0, x)) * 4;
+          const l = x >= 0 ? lum(i) : -1;
+          if (x >= 0 && l >= threshPct) { run.push(i); }
+          else if (run.length > 0) { sortRun(run, false, null); run = []; }
         }
       }
     }
@@ -3742,14 +3744,15 @@ function applyExportFilter(ctx, width, height, scale, filter,
     // ── Block Glitch ──────────────────────────────────────────────────────
     // Picks random horizontal strips and shifts each one sideways with
     // wraparound — simulates corrupted video block data.
-    const shiftPct   = ((filterParams.blkglitch || {}).shift   ?? 40) / 100;
-    const densityPct = ((filterParams.blkglitch || {}).density ?? 30) / 100;
-    const sizePct    = ((filterParams.blkglitch || {}).size    ?? 20) / 100;
+    const shiftPct     = ((filterParams.blkglitch || {}).shift     ?? 40) / 100;
+    const densityPct   = ((filterParams.blkglitch || {}).density   ?? 30) / 100;
+    const sizePct      = ((filterParams.blkglitch || {}).size      ?? 20) / 100;
+    const maxHeightPct = ((filterParams.blkglitch || {}).maxheight ?? 30) / 100;
     const src = ctx.getImageData(0, 0, width, height);
     const sd  = src.data;
     const out = new Uint8ClampedArray(sd);
-    const maxShift  = Math.max(1, Math.round(width  * shiftPct  * 0.5));
-    const maxBlockH = Math.max(1, Math.round(height * sizePct   * 0.3));
+    const maxShift  = Math.max(1, Math.round(width  * shiftPct * 0.5));
+    const maxBlockH = Math.max(1, Math.round(height * maxHeightPct * sizePct));
     const numBlocks = Math.max(1, Math.round(densityPct * 25));
 
     for (let b = 0; b < numBlocks; b++) {
@@ -3797,21 +3800,27 @@ function applyExportFilter(ctx, width, height, scale, filter,
     // ── Zoom Blur ─────────────────────────────────────────────────────────
     // Composites multiple scaled copies of the image radiating outward from
     // the centre at decreasing opacity, producing a radial motion-blur effect.
+    // The original is always the base layer so brightness is preserved at all amounts.
     const zoomAmt = ((filterParams.zoomblur || {}).amount ?? 30) / 100;
-    const steps   = 10;
-    const maxExpand = 0.5; // at 100% the widest copy is 1.5× the canvas size
+    const steps   = 12;
+    const maxExpand = 0.6; // at 100% the outermost copy is 1.6× the canvas size
 
-    // Save the current canvas state before we clobber it
+    // Snapshot the current canvas before modifying it
     const tmp = Object.assign(document.createElement('canvas'), { width, height });
     tmp.getContext('2d').drawImage(ctx.canvas, 0, 0);
 
+    // Draw original at full opacity as the base
     ctx.clearRect(0, 0, width, height);
-    for (let i = steps - 1; i >= 0; i--) {
-      const t  = i / (steps - 1);
+    ctx.drawImage(tmp, 0, 0);
+
+    // Blend zoomed copies on top — each at low opacity, scaled with zoomAmt
+    const blendAlpha = Math.min(0.9, zoomAmt) / steps;
+    for (let i = 1; i <= steps; i++) {
+      const t  = i / steps;
       const sc = 1 + t * zoomAmt * maxExpand;
       const dx = (width  - width  * sc) / 2;
       const dy = (height - height * sc) / 2;
-      ctx.globalAlpha = 1 / steps;
+      ctx.globalAlpha = blendAlpha * (1 - t * 0.4); // fade off at outermost
       ctx.drawImage(tmp, dx, dy, width * sc, height * sc);
     }
     ctx.globalAlpha = 1;
@@ -3843,51 +3852,75 @@ function applyExportFilter(ctx, width, height, scale, filter,
     return;
   } else if (filter === 'floyd') {
     // ── Floyd-Steinberg Dithering ──────────────────────────────────────────
-    // Error diffusion dithering with 1/16 weighting to neighboring pixels.
-    const levels = ((filterParams.floyd || {}).levels ?? 4);
-    const step = Math.floor(256 / levels);
+    // Error diffusion dithering. Converts to luminance first so GB palette images
+    // (which are already 4-colour) still show pronounced halftoning. At levels=2
+    // this produces pure B&W dithering with classic dot-pattern halftone.
+    const levels = ((filterParams.floyd || {}).levels ?? 2);
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
-    const errors = new Float32Array(width * height * 3);
 
+    // Build luminance channel with error buffer, then quantise
+    const lums   = new Float32Array(width * height);
+    const errors = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+      lums[i] = data[i * 4] * 0.299 + data[i * 4 + 1] * 0.587 + data[i * 4 + 2] * 0.114;
+    }
+
+    const step = 255 / (levels - 1);
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const idx = (y * width + x) * 4;
-        for (let c = 0; c < 3; c++) {
-          const errIdx = (y * width + x) * 3 + c;
-          const val = data[idx + c] + errors[errIdx];
-          const quantized = Math.floor(val / step) * step;
-          const err = val - quantized;
-          data[idx + c] = quantized;
-
-          // Distribute error
-          if (x + 1 < width) errors[errIdx + 3] += err * 7/16;
-          if (y + 1 < height) {
-            if (x - 1 >= 0) errors[errIdx + width * 3 - 3] += err * 3/16;
-            errors[errIdx + width * 3] += err * 5/16;
-            if (x + 1 < width) errors[errIdx + width * 3 + 3] += err * 1/16;
-          }
+        const idx = y * width + x;
+        const val = Math.max(0, Math.min(255, lums[idx] + errors[idx]));
+        const quantized = Math.round(val / step) * step;
+        const err = val - quantized;
+        lums[idx] = quantized;
+        // Distribute error (Floyd-Steinberg weights)
+        if (x + 1 < width)                errors[idx + 1]           += err * 7/16;
+        if (y + 1 < height) {
+          if (x - 1 >= 0)                 errors[idx + width - 1]   += err * 3/16;
+                                           errors[idx + width]       += err * 5/16;
+          if (x + 1 < width)              errors[idx + width + 1]   += err * 1/16;
         }
       }
+    }
+
+    // Write quantised luminance back to all RGB channels (grayscale result)
+    for (let i = 0; i < width * height; i++) {
+      const v = Math.round(lums[i]);
+      data[i * 4]     = v;
+      data[i * 4 + 1] = v;
+      data[i * 4 + 2] = v;
     }
     ctx.putImageData(imageData, 0, 0);
     return;
   } else if (filter === 'interlace') {
     // ── Interlace ──────────────────────────────────────────────────────────
-    // Simulates interlaced video with alternating line darkening.
-    const intensity = ((filterParams.interlace || {}).intensity ?? 60) / 100;
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const pixelIndex = i / 4;
-      const row = Math.floor(pixelIndex / width);
-      if (row % 2 === 0) {
-        data[i] *= (1 - intensity * 0.3);
-        data[i + 1] *= (1 - intensity * 0.3);
-        data[i + 2] *= (1 - intensity * 0.3);
+    // Simulates interlaced video: odd fields are slightly shifted horizontally
+    // and alternating lines are darkened, mimicking CRT field interleaving.
+    const amt = ((filterParams.interlace || {}).intensity ?? 60) / 100;
+    const src = ctx.getImageData(0, 0, width, height);
+    const sd  = src.data;
+    const out = new Uint8ClampedArray(sd);
+
+    // Field offset in pixels (how much odd lines shift right)
+    const fieldOffset = Math.round(amt * s * 2); // 2 screen pixels at full
+    const darken      = 1 - amt * 0.65;          // odd lines darkened up to 65%
+
+    for (let y = 0; y < height; y++) {
+      const isOdd = (y % 2 === 1);
+      const dx    = isOdd ? fieldOffset : 0;
+      const dark  = isOdd ? darken : 1;
+      for (let x = 0; x < width; x++) {
+        const srcX = Math.min(width - 1, Math.max(0, x - dx));
+        const di = (y * width + x) * 4;
+        const si = (y * width + srcX) * 4;
+        out[di]     = sd[si]     * dark;
+        out[di + 1] = sd[si + 1] * dark;
+        out[di + 2] = sd[si + 2] * dark;
+        out[di + 3] = sd[si + 3];
       }
     }
-    ctx.putImageData(imageData, 0, 0);
+    ctx.putImageData(new ImageData(out, width, height), 0, 0);
     return;
   } else if (filter === 'chswap') {
     // ── Channel Swap ───────────────────────────────────────────────────────
@@ -4304,11 +4337,11 @@ function setupKeyboard() {
 
     // P — toggle effects preview (before/after)
     if (e.key === 'p' || e.key === 'P') {
-      state.effectsPreviewMode = !state.effectsPreviewMode;
-      const previewBtn = document.getElementById('effects-preview-btn');
-      if (previewBtn) previewBtn.classList.toggle('active', !state.effectsPreviewMode);
-      repaintGrid();
-      updateSidebarPreview();
+      const previewCb = document.getElementById('effects-preview-check');
+      if (previewCb) {
+        previewCb.checked = !previewCb.checked;
+        previewCb.dispatchEvent(new Event('change'));
+      }
       return;
     }
 
@@ -5186,6 +5219,12 @@ function setupFilterAccordion() {
     // ── Draggable reordering ────────────────────────────────────────────────
     item.draggable = true;
     item.addEventListener('dragstart', e => {
+      // Cancel drag if it originated from a slider, button, or seg control — let those handle their own events
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' ||
+          e.target.closest('.seg-control, .seg-btn, input, button, .fi-check-wrap, label')) {
+        e.preventDefault();
+        return;
+      }
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/html', item.innerHTML);
       item.classList.add('fi-dragging');
