@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.10';
+const APP_VERSION = 'v0.9.11';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -266,7 +266,7 @@ const state = {
   palette: PALETTES.dmg,
   exportScale: 8,
   exportFormat: 'png',  // 'png' | 'gif'
-  exportFilter:    'none',   // 'none' | 'crt' | 'lcd' | 'grid' | 'vignette' | 'halftone' | 'border'
+  exportFilter:    'none',   // legacy single-filter field; kept for backwards compat with old .gbcp files
   filterIntensity: 1.0,     // 0.0–1.0
   filterVariant:   'medium', // crt only: 'fine'|'medium'|'thick'|'wide'
   filterParams: buildDefaultFilterParams(), // per-filter granular parameters (see FILTER_DEFS)
@@ -319,7 +319,6 @@ const dom = {
   lbCanvas:        document.getElementById('lb-canvas'),
   lbLabel:         document.getElementById('lb-label'),
   lbMeta:          document.getElementById('lb-meta'),
-  gridPanel:       document.getElementById('grid-panel'),
   soloView:        document.getElementById('solo-view'),
   soloCanvas:      document.getElementById('solo-canvas'),
   soloLabel:       document.getElementById('solo-label'),
@@ -700,7 +699,7 @@ function renderGrid() {
       applyToneAdjustments(ctx, canvas.width, canvas.height, effThumb);
       if (effThumb.activeFilters.size > 0) {
         applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
-                           effThumb.filterIntensity, effThumb.filterVariant, effThumb.filterParams, effThumb.activeFilters);
+                           effThumb.filterIntensity, effThumb.filterVariant, effThumb.filterParams, effThumb.activeFilters, false, photo.index);
       }
       slot.appendChild(canvas);
 
@@ -784,7 +783,7 @@ function repaintGridSlot(index) {
   applyToneAdjustments(ctx, canvas.width, canvas.height, eff);
   if (eff.activeFilters.size > 0) {
     applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
-                       eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters);
+                       eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters, false, index);
   }
   // Slot badge — photo-specific settings override indicator
   slot.classList.toggle('has-photo-settings', hasPhotoOverride(index));
@@ -910,7 +909,7 @@ function renderSoloView(index) {
 
   const w = dom.soloCanvas.width, h = dom.soloCanvas.height;
   if (effSolo.activeFilters.size > 0) {
-    applyActiveEffects(ctx, w, h, SOLO_SCALE, effSolo.filterIntensity, effSolo.filterVariant, effSolo.filterParams, effSolo.activeFilters);
+    applyActiveEffects(ctx, w, h, SOLO_SCALE, effSolo.filterIntensity, effSolo.filterVariant, effSolo.filterParams, effSolo.activeFilters, false, index);
   }
   applyToneAdjustments(ctx, w, h, effSolo);
 
@@ -945,6 +944,8 @@ function soloStep(dir) {
   dom.photoGrid.querySelectorAll('.photo-slot').forEach(el => el.classList.remove('selected'));
   dom.photoGrid.querySelector(`[data-index="${idx}"]`)?.classList.add('selected');
   state.selectedIndex = idx;
+  state.selectedPhotos = new Set();
+  syncControlsToEffectiveSettings(idx);
   renderSoloView(idx);
 }
 
@@ -974,7 +975,7 @@ function renderLightbox(index) {
 
   const w = dom.lbCanvas.width, h = dom.lbCanvas.height;
   if (effLb.activeFilters.size > 0) {
-    applyActiveEffects(ctx, w, h, PREVIEW_SCALE, effLb.filterIntensity, effLb.filterVariant, effLb.filterParams, effLb.activeFilters);
+    applyActiveEffects(ctx, w, h, PREVIEW_SCALE, effLb.filterIntensity, effLb.filterVariant, effLb.filterParams, effLb.activeFilters, false, index);
   }
   applyToneAdjustments(ctx, w, h, effLb);
 
@@ -1011,6 +1012,8 @@ function lightboxStep(dir) {
     slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
   state.selectedIndex = idx;
+  state.selectedPhotos = new Set();
+  syncControlsToEffectiveSettings(idx);
   renderLightbox(idx);
 }
 
@@ -1138,9 +1141,9 @@ async function exportSinglePng() {
 
   const { width, height } = { width: canvas.width, height: canvas.height };
   if (effExp.activeFilters.size > 0) {
-    applyActiveEffects(ctx, width, height, scale, effExp.filterIntensity, effExp.filterVariant, effExp.filterParams, effExp.activeFilters);
+    applyActiveEffects(ctx, width, height, scale, effExp.filterIntensity, effExp.filterVariant, effExp.filterParams, effExp.activeFilters, true, index);
   }
-  applyToneAdjustments(ctx, width, height, effExp);
+  applyToneAdjustments(ctx, width, height, effExp, true);
 
   const dataUrl = canvas.toDataURL('image/png');
   const filterTag = effExp.activeFilters.size > 0 ? `_${[...effExp.activeFilters].join('+')}` : '';
@@ -1170,9 +1173,9 @@ async function exportBatchPng() {
     renderPhotoWithTransform(ctx, photo, effBatch.palette, batchScale, photo.index);
     if (effBatch.activeFilters.size > 0) {
       applyActiveEffects(ctx, canvas.width, canvas.height, batchScale,
-        effBatch.filterIntensity, effBatch.filterVariant, effBatch.filterParams, effBatch.activeFilters);
+        effBatch.filterIntensity, effBatch.filterVariant, effBatch.filterParams, effBatch.activeFilters, true, photo.index);
     }
-    applyToneAdjustments(ctx, canvas.width, canvas.height, effBatch);
+    applyToneAdjustments(ctx, canvas.width, canvas.height, effBatch, true);
     const dataUrl = canvas.toDataURL('image/png');
     const batchFilterTag = effBatch.activeFilters.size > 0 ? `_${[...effBatch.activeFilters].join('+')}` : '';
     const name = `gbcam_${String(photo.index + 1).padStart(2, '0')}_${effBatch.palette.id}_${scaleTag}${batchFilterTag}.png`;
@@ -1279,7 +1282,7 @@ function renderGifFrameStrip() {
       applyToneAdjustments(tctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, eff);
       if (eff.activeFilters.size > 0) {
         applyActiveEffects(tctx, GBCam.PHOTO_WIDTH, GBCam.PHOTO_HEIGHT, 1,
-          eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters);
+          eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters, false, frame.photoIndex);
       }
       canvas.getContext('2d').drawImage(tmp, 0, 0, GIF_THUMB_W, GIF_THUMB_H);
     }
@@ -1529,8 +1532,8 @@ async function openPocketModal() {
   if (saves.length === 0) {
     dom.pocketSaveList.innerHTML =
       '<p style="color:var(--text-3);font-size:12px;line-height:1.5;">' +
-      'No GB Camera saves found. Make sure your Analogue Pocket SD card is inserted, ' +
-      'and that you have run GB Camera at least once.</p>';
+      'No camera saves found. Make sure your Analogue Pocket SD card is inserted, ' +
+      'and that you have run the camera app at least once.</p>';
     return;
   }
 
@@ -1596,7 +1599,7 @@ function setupDragDrop() {
         name: file.name,
         path: null,
         error: buffer.byteLength !== 131072
-          ? `Unexpected file size: ${buffer.byteLength} bytes (expected 131072 for GB Camera SRAM).`
+          ? `Unexpected file size: ${buffer.byteLength} bytes (expected 131072 for this save format).`
           : null,
       });
     }
@@ -1652,19 +1655,7 @@ function wireButtons() {
     btn.addEventListener('click', () => setExportFormat(btn.dataset.fmt));
   });
 
-  // Filter buttons — stackable toggle
-  document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      toggleFilter(btn.dataset.filter);
-      repaintGrid();
-      if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
-      if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
-      updateSidebarPreview();
-    });
-  });
-
-  // Note: filter-check and filter-settings-btn are removed (accordion design has no checkboxes).
-  // filter-btn click is wired above; inline params are injected by buildFilterParams.
+  // Note: filter toggle wiring is handled by the accordion's fi-check elements (injected in buildFilterAccordion).
 
   // Copy / Paste — wire up all instances (grid header + any others)
   document.querySelectorAll('.btn-copy-effects').forEach(b => b.addEventListener('click', copyEffects));
@@ -2698,7 +2689,7 @@ function updateGifPreview() {
     GBCam.renderToCanvas(frameCtx, photo.pixels, pal, PREVIEW_SCALE);
     if (effGif.activeFilters.size > 0) {
       applyActiveEffects(frameCtx, canvas.width, canvas.height, PREVIEW_SCALE,
-        effGif.filterIntensity, effGif.filterVariant, effGif.filterParams, effGif.activeFilters);
+        effGif.filterIntensity, effGif.filterVariant, effGif.filterParams, effGif.activeFilters, false, frameObj.photoIndex);
     }
     applyToneAdjustments(frameCtx, canvas.width, canvas.height, effGif);
 
@@ -3036,19 +3027,10 @@ function filterPaletteGrid(query) {
 
 // ── Export filters / effects ───────────────────────────────────────────────
 
+// Legacy: called by openProject() for backwards compat with older .gbcp files
+// that stored a single exportFilter value. No-op for current accordion design.
 function setExportFilter(filter) {
   setScopedSetting('exportFilter', filter);
-  document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.filter === filter);
-  });
-  // Show/hide the settings sub-panel
-  const settingsEl = document.getElementById('filter-settings');
-  const variantEl  = document.getElementById('crt-variant-wrap');
-  if (settingsEl) settingsEl.style.display = (filter !== 'none') ? '' : 'none';
-  if (variantEl)  variantEl.style.display  = (filter === 'crt') ? '' : 'none';
-  // Build per-filter granular controls
-  buildFilterParams(filter);
-  // Repaint grid thumbnails + live views
   repaintGrid();
 }
 
@@ -3177,8 +3159,6 @@ function buildFilterParams(filter, displayParams) {
     addSlider('Falloff', 'falloff', 0, 100, 5, v => `${v}%`);
   } else if (filter === 'halftone') {
     addSlider('Dot size', 'radius', 20, 60, 2, v => `${v}%`);
-  } else if (filter === 'border') {
-    addSeg('Thickness', 'thickness', [['thin','Thin'],['medium','Medium'],['thick','Thick']]);
   }
 }
 
@@ -3191,14 +3171,14 @@ function buildFilterParams(filter, displayParams) {
  * @param {number} width     — canvas width in px
  * @param {number} height    — canvas height in px
  * @param {number} scale     — pixels-per-GB-pixel
- * @param {string} filter    — 'none'|'crt'|'lcd'|'grid'|'vignette'|'halftone'|'border'
+ * @param {string} filter    — filter id from FILTER_DEFS (e.g. 'crt', 'noise', 'bayer', etc.)
  * @param {number} intensity — 0.0–1.0 (default 1.0)
  * @param {string} variant   — crt only: 'fine'|'medium'|'thick'|'wide' (default 'medium')
  */
 // ── Tone adjustments (brightness / contrast / split toning) ─────────────────
 
-function applyToneAdjustments(ctx, width, height, settings) {
-  if (state.effectsPreviewMode) return;
+function applyToneAdjustments(ctx, width, height, settings, forExport = false) {
+  if (!forExport && state.effectsPreviewMode) return;
   const s = settings || state;
   const brightness   = (state.sectionEnabled?.exposure   ?? true) ? (s.brightness   ?? 0) : 0;
   const contrast     = (state.sectionEnabled?.exposure   ?? true) ? (s.contrast     ?? 0) : 0;
@@ -3257,8 +3237,24 @@ function applyToneAdjustments(ctx, width, height, settings) {
   ctx.putImageData(imageData, 0, 0);
 }
 
+/**
+ * Deterministic pseudo-random float in [0,1) seeded from two integers.
+ * Used to stabilise noise/glitch effects so they don't flicker on every repaint.
+ * @param {number} seed1  — first seed (e.g. photo index)
+ * @param {number} seed2  — second seed (e.g. pixel index or row)
+ */
+function _seededRand(seed1, seed2) {
+  let h = (seed1 * 1664525 + seed2 * 1013904223 + 0x9e3779b9) | 0;
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return ((h >>> 0) / 0x100000000);
+}
+
 function applyExportFilter(ctx, width, height, scale, filter,
-                           intensity = 1.0, variant = 'medium', filterParams) {
+                           intensity = 1.0, variant = 'medium', filterParams, photoSeed = 0) {
   filterParams = filterParams || state.filterParams;
   if (!filter || filter === 'none') return;
   if (intensity <= 0) return;
@@ -3607,33 +3603,43 @@ function applyExportFilter(ctx, width, height, scale, filter,
   } else if (filter === 'noise') {
     // ── Noise / Static ──────────────────────────────────────────────────────
     // Film: per-pixel luminance noise. Static: random R/G/B noise. Bands: row noise.
+    // Uses seeded PRNG (photoSeed) so noise is stable across repaints.
     const noiseAmt  = ((filterParams.noise || {}).amount ?? 40) / 100;
     const noiseType = (filterParams.noise || {}).type ?? 'film';
     const orig = ctx.getImageData(0, 0, width, height);
     const d    = orig.data;
+    const src  = new Uint8ClampedArray(d); // original for intensity blend
 
     if (noiseType === 'film') {
       for (let i = 0; i < d.length; i += 4) {
-        const g = (Math.random() - 0.5) * noiseAmt * 200;
+        const g = (_seededRand(photoSeed, i)     - 0.5) * noiseAmt * 200;
         d[i]   = Math.min(255, Math.max(0, d[i]   + g));
         d[i+1] = Math.min(255, Math.max(0, d[i+1] + g));
         d[i+2] = Math.min(255, Math.max(0, d[i+2] + g));
       }
     } else if (noiseType === 'static') {
       for (let i = 0; i < d.length; i += 4) {
-        d[i]   = Math.min(255, Math.max(0, d[i]   + (Math.random() - 0.5) * noiseAmt * 200));
-        d[i+1] = Math.min(255, Math.max(0, d[i+1] + (Math.random() - 0.5) * noiseAmt * 200));
-        d[i+2] = Math.min(255, Math.max(0, d[i+2] + (Math.random() - 0.5) * noiseAmt * 200));
+        d[i]   = Math.min(255, Math.max(0, d[i]   + (_seededRand(photoSeed, i)     - 0.5) * noiseAmt * 200));
+        d[i+1] = Math.min(255, Math.max(0, d[i+1] + (_seededRand(photoSeed, i + 1) - 0.5) * noiseAmt * 200));
+        d[i+2] = Math.min(255, Math.max(0, d[i+2] + (_seededRand(photoSeed, i + 2) - 0.5) * noiseAmt * 200));
       }
     } else if (noiseType === 'bands') {
       for (let y = 0; y < height; y++) {
-        const rowNoise = (Math.random() - 0.5) * noiseAmt * 180;
+        const rowNoise = (_seededRand(photoSeed, y) - 0.5) * noiseAmt * 180;
         for (let x = 0; x < width; x++) {
           const i = (y * width + x) * 4;
           d[i]   = Math.min(255, Math.max(0, d[i]   + rowNoise));
           d[i+1] = Math.min(255, Math.max(0, d[i+1] + rowNoise));
           d[i+2] = Math.min(255, Math.max(0, d[i+2] + rowNoise));
         }
+      }
+    }
+    const t = Math.min(1, Math.max(0, intensity));
+    if (t < 1) {
+      for (let i = 0; i < d.length; i += 4) {
+        d[i]   = Math.round(src[i]   * (1 - t) + d[i]   * t);
+        d[i+1] = Math.round(src[i+1] * (1 - t) + d[i+1] * t);
+        d[i+2] = Math.round(src[i+2] * (1 - t) + d[i+2] * t);
       }
     }
     ctx.putImageData(orig, 0, 0);
@@ -3665,6 +3671,14 @@ function applyExportFilter(ctx, width, height, scale, filter,
         o[i+1] = Math.min(255, d[i+1] + d[g1i+1] * a1 + d[g2i+1] * a2);
         o[i+2] = Math.min(255, d[i+2] + d[g1i+2] * a1 + d[g2i+2] * a2);
         o[i+3] = 255;
+      }
+    }
+    const tg = Math.min(1, Math.max(0, intensity));
+    if (tg < 1) {
+      for (let i = 0; i < o.length; i += 4) {
+        o[i]   = Math.round(d[i]   * (1 - tg) + o[i]   * tg);
+        o[i+1] = Math.round(d[i+1] * (1 - tg) + o[i+1] * tg);
+        o[i+2] = Math.round(d[i+2] * (1 - tg) + o[i+2] * tg);
       }
     }
     ctx.putImageData(dst, 0, 0);
@@ -3737,6 +3751,14 @@ function applyExportFilter(ctx, width, height, scale, filter,
         }
       }
     }
+    const tp = Math.min(1, Math.max(0, intensity));
+    if (tp < 1) {
+      for (let i = 0; i < out.length; i += 4) {
+        out[i]   = Math.round(sd[i]   * (1 - tp) + out[i]   * tp);
+        out[i+1] = Math.round(sd[i+1] * (1 - tp) + out[i+1] * tp);
+        out[i+2] = Math.round(sd[i+2] * (1 - tp) + out[i+2] * tp);
+      }
+    }
     ctx.putImageData(new ImageData(out, width, height), 0, 0);
     return;
 
@@ -3755,10 +3777,14 @@ function applyExportFilter(ctx, width, height, scale, filter,
     const maxBlockH = Math.max(1, Math.round(height * maxHeightPct * sizePct));
     const numBlocks = Math.max(1, Math.round(densityPct * 25));
 
+    // Seeded RNG so block layout is stable across repaints (no flicker)
+    let _rngBg = (photoSeed * 1664525 + 1013904223) | 0;
+    const _randBg = () => { _rngBg = (_rngBg * 1664525 + 1013904223) | 0; return (_rngBg >>> 0) / 0x100000000; };
+
     for (let b = 0; b < numBlocks; b++) {
-      const y0  = Math.floor(Math.random() * height);
-      const bh  = Math.max(1, Math.ceil(Math.random() * maxBlockH));
-      const dxs = Math.round((Math.random() - 0.5) * 2 * maxShift);
+      const y0  = Math.floor(_randBg() * height);
+      const bh  = Math.max(1, Math.ceil(_randBg() * maxBlockH));
+      const dxs = Math.round((_randBg() - 0.5) * 2 * maxShift);
       for (let y = y0; y < Math.min(height, y0 + bh); y++) {
         for (let x = 0; x < width; x++) {
           const srcX = ((x - dxs) % width + width) % width;
@@ -3766,6 +3792,14 @@ function applyExportFilter(ctx, width, height, scale, filter,
           const si = (y * width + srcX) * 4;
           out[di] = sd[si]; out[di+1] = sd[si+1]; out[di+2] = sd[si+2]; out[di+3] = sd[si+3];
         }
+      }
+    }
+    const tb = Math.min(1, Math.max(0, intensity));
+    if (tb < 1) {
+      for (let i = 0; i < out.length; i += 4) {
+        out[i]   = Math.round(sd[i]   * (1 - tb) + out[i]   * tb);
+        out[i+1] = Math.round(sd[i+1] * (1 - tb) + out[i+1] * tb);
+        out[i+2] = Math.round(sd[i+2] * (1 - tb) + out[i+2] * tb);
       }
     }
     ctx.putImageData(new ImageData(out, width, height), 0, 0);
@@ -3793,6 +3827,14 @@ function applyExportFilter(ctx, width, height, scale, filter,
         out[di] = sd[si]; out[di+1] = sd[si+1]; out[di+2] = sd[si+2]; out[di+3] = sd[si+3];
       }
     }
+    const tw = Math.min(1, Math.max(0, intensity));
+    if (tw < 1) {
+      for (let i = 0; i < out.length; i += 4) {
+        out[i]   = Math.round(sd[i]   * (1 - tw) + out[i]   * tw);
+        out[i+1] = Math.round(sd[i+1] * (1 - tw) + out[i+1] * tw);
+        out[i+2] = Math.round(sd[i+2] * (1 - tw) + out[i+2] * tw);
+      }
+    }
     ctx.putImageData(new ImageData(out, width, height), 0, 0);
     return;
 
@@ -3813,8 +3855,8 @@ function applyExportFilter(ctx, width, height, scale, filter,
     ctx.clearRect(0, 0, width, height);
     ctx.drawImage(tmp, 0, 0);
 
-    // Blend zoomed copies on top — each at low opacity, scaled with zoomAmt
-    const blendAlpha = Math.min(0.9, zoomAmt) / steps;
+    // Blend zoomed copies on top — each at low opacity, scaled with zoomAmt and intensity
+    const blendAlpha = Math.min(0.9, zoomAmt) / steps * Math.min(1, Math.max(0, intensity));
     for (let i = 1; i <= steps; i++) {
       const t  = i / steps;
       const sc = 1 + t * zoomAmt * maxExpand;
@@ -3838,6 +3880,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     const step = Math.floor(256 / levels);
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
+    const bayerOrig = new Uint8ClampedArray(data); // copy for intensity blend
     for (let i = 0; i < data.length; i += 4) {
       const pixelIndex = i / 4;
       const row = Math.floor(pixelIndex / width) % 4;
@@ -3846,6 +3889,14 @@ function applyExportFilter(ctx, width, height, scale, filter,
       for (let c = 0; c < 3; c++) {
         const quantized = Math.floor(data[i + c] / step) * step;
         data[i + c] = data[i + c] > quantized + threshold ? quantized + step : quantized;
+      }
+    }
+    const tby = Math.min(1, Math.max(0, intensity));
+    if (tby < 1) {
+      for (let i = 0; i < data.length; i += 4) {
+        data[i]   = Math.round(bayerOrig[i]   * (1 - tby) + data[i]   * tby);
+        data[i+1] = Math.round(bayerOrig[i+1] * (1 - tby) + data[i+1] * tby);
+        data[i+2] = Math.round(bayerOrig[i+2] * (1 - tby) + data[i+2] * tby);
       }
     }
     ctx.putImageData(imageData, 0, 0);
@@ -3858,6 +3909,7 @@ function applyExportFilter(ctx, width, height, scale, filter,
     const levels = ((filterParams.floyd || {}).levels ?? 2);
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
+    const floydOrig = new Uint8ClampedArray(data); // copy for intensity blend
 
     // Build luminance channel with error buffer, then quantise
     const lums   = new Float32Array(width * height);
@@ -3891,6 +3943,14 @@ function applyExportFilter(ctx, width, height, scale, filter,
       data[i * 4 + 1] = v;
       data[i * 4 + 2] = v;
     }
+    const tfl = Math.min(1, Math.max(0, intensity));
+    if (tfl < 1) {
+      for (let i = 0; i < data.length; i += 4) {
+        data[i]   = Math.round(floydOrig[i]   * (1 - tfl) + data[i]   * tfl);
+        data[i+1] = Math.round(floydOrig[i+1] * (1 - tfl) + data[i+1] * tfl);
+        data[i+2] = Math.round(floydOrig[i+2] * (1 - tfl) + data[i+2] * tfl);
+      }
+    }
     ctx.putImageData(imageData, 0, 0);
     return;
   } else if (filter === 'interlace') {
@@ -3920,6 +3980,14 @@ function applyExportFilter(ctx, width, height, scale, filter,
         out[di + 3] = sd[si + 3];
       }
     }
+    const ti = Math.min(1, Math.max(0, intensity));
+    if (ti < 1) {
+      for (let i = 0; i < out.length; i += 4) {
+        out[i]   = Math.round(sd[i]   * (1 - ti) + out[i]   * ti);
+        out[i+1] = Math.round(sd[i+1] * (1 - ti) + out[i+1] * ti);
+        out[i+2] = Math.round(sd[i+2] * (1 - ti) + out[i+2] * ti);
+      }
+    }
     ctx.putImageData(new ImageData(out, width, height), 0, 0);
     return;
   } else if (filter === 'chswap') {
@@ -3942,6 +4010,14 @@ function applyExportFilter(ctx, width, height, scale, filter,
       data[i] = tmp[i + map[0]];
       data[i + 1] = tmp[i + map[1]];
       data[i + 2] = tmp[i + map[2]];
+    }
+    const tcs = Math.min(1, Math.max(0, intensity));
+    if (tcs < 1) {
+      for (let i = 0; i < data.length; i += 4) {
+        data[i]   = Math.round(tmp[i]   * (1 - tcs) + data[i]   * tcs);
+        data[i+1] = Math.round(tmp[i+1] * (1 - tcs) + data[i+1] * tcs);
+        data[i+2] = Math.round(tmp[i+2] * (1 - tcs) + data[i+2] * tcs);
+      }
     }
     ctx.putImageData(imageData, 0, 0);
     return;
@@ -3997,6 +4073,7 @@ function buildProjectJson() {
       gifLoop:         state.gifLoop,
       photoSettings:   state.photoSettings,
       photoTransforms: state.photoTransforms,
+      filterOrder:     state.filterOrder,
       customPalettes:  loadCustomPalettes(),
       recentPalettes:  loadRecentPalettes(),
       favPalettes:     loadFavPalettes(),
@@ -4063,6 +4140,19 @@ async function openProject() {
     state.photoSettings = {};
     for (const [k, v] of Object.entries(s.photoSettings)) {
       state.photoSettings[parseInt(k)] = v;
+    }
+  }
+
+  // Restore filter order (and reorder accordion DOM to match)
+  if (Array.isArray(s.filterOrder) && s.filterOrder.length > 0) {
+    state.filterOrder = s.filterOrder;
+    localStorage.setItem('filterOrder', JSON.stringify(s.filterOrder));
+    const accordion = document.getElementById('filter-accordion');
+    if (accordion) {
+      s.filterOrder.forEach(filterId => {
+        const item = accordion.querySelector(`.fi-item[data-filter="${filterId}"]`);
+        if (item) accordion.appendChild(item);
+      });
     }
   }
 
@@ -4206,7 +4296,7 @@ function renderPresentation() {
   renderPhotoWithTransform(ctx, photo, effPres.palette, scale, _presIndex);
   if (effPres.activeFilters.size > 0) {
     applyActiveEffects(ctx, dom.presCanvas.width, dom.presCanvas.height, scale,
-      effPres.filterIntensity, effPres.filterVariant, effPres.filterParams, effPres.activeFilters);
+      effPres.filterIntensity, effPres.filterVariant, effPres.filterParams, effPres.activeFilters, false, _presIndex);
   }
   applyToneAdjustments(ctx, dom.presCanvas.width, dom.presCanvas.height, effPres);
 
@@ -4255,9 +4345,9 @@ async function exportContactSheet() {
     renderPhotoWithTransform(tctx, photo, effSheet.palette, 4, photo.index);
     if (effSheet.activeFilters.size > 0) {
       applyActiveEffects(tctx, tmp.width, tmp.height, 4,
-        effSheet.filterIntensity, effSheet.filterVariant, effSheet.filterParams, effSheet.activeFilters);
+        effSheet.filterIntensity, effSheet.filterVariant, effSheet.filterParams, effSheet.activeFilters, true, photo.index);
     }
-    applyToneAdjustments(tctx, tmp.width, tmp.height, effSheet);
+    applyToneAdjustments(tctx, tmp.width, tmp.height, effSheet, true);
     sc.drawImage(tmp, x, y);
 
     // Photo number label
@@ -4716,7 +4806,7 @@ function updateSidebarPreview() {
   renderPhotoWithTransform(tmpCtx, photo, eff.palette, SCALE, idx);
   // Effects before tone — matches solo view, lightbox, and export rendering order
   if (eff.activeFilters.size > 0) {
-    applyActiveEffects(tmpCtx, W, H, SCALE, eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters);
+    applyActiveEffects(tmpCtx, W, H, SCALE, eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters, false, idx);
   }
   applyToneAdjustments(tmpCtx, W, H, eff);
 
@@ -4774,6 +4864,7 @@ function loadPreset(name) {
     state.filterVariant   = p.filterVariant   ?? 'medium';
     if (p.filterParams) Object.assign(state.filterParams, JSON.parse(JSON.stringify(p.filterParams)));
   }
+  _autoEnableEffectsSection();
   updateFilterUI();
   _refreshFilterParamPanel();
   repaintGrid();
@@ -4952,6 +5043,7 @@ function randomiseFilters() {
     state.filterIntensity = 0.5 + Math.random() * 0.5;
     state.filterVariant = ['fine', 'medium', 'thick', 'wide'][Math.floor(Math.random() * 4)];
   }
+  _autoEnableEffectsSection();
   updateFilterUI();
   _refreshFilterParamPanel();
   syncControlsToEffectiveSettings(state.selectedIndex);
@@ -5011,9 +5103,14 @@ function captureState() {
     filterIntensity: state.filterIntensity,
     filterVariant:   state.filterVariant,
     palette:         state.palette ? { ...state.palette } : null,
-    tone:            JSON.parse(JSON.stringify(state.tone || {})),
+    brightness:      state.brightness,
+    contrast:        state.contrast,
+    toneIntensity:   state.toneIntensity,
+    shadowColor:     state.shadowColor,
+    highlightColor:  state.highlightColor,
+    toneBalance:     state.toneBalance,
     photoSettings:   JSON.parse(JSON.stringify(state.photoSettings)),
-    transforms:      JSON.parse(JSON.stringify(state.transforms || {})),
+    photoTransforms: JSON.parse(JSON.stringify(state.photoTransforms)),
     sectionEnabled:  JSON.parse(JSON.stringify(state.sectionEnabled || {})),
   };
 }
@@ -5033,10 +5130,15 @@ function performUndo() {
   state.filterIntensity = snap.filterIntensity;
   state.filterVariant   = snap.filterVariant;
   state.palette         = snap.palette;
-  if (snap.tone)         state.tone         = snap.tone;
-  if (snap.photoSettings) state.photoSettings = snap.photoSettings;
-  if (snap.transforms)   state.transforms   = snap.transforms;
-  if (snap.sectionEnabled) state.sectionEnabled = snap.sectionEnabled;
+  state.brightness     = snap.brightness     ?? state.brightness;
+  state.contrast       = snap.contrast       ?? state.contrast;
+  state.toneIntensity  = snap.toneIntensity  ?? state.toneIntensity;
+  state.shadowColor    = snap.shadowColor    ?? state.shadowColor;
+  state.highlightColor = snap.highlightColor ?? state.highlightColor;
+  state.toneBalance    = snap.toneBalance    ?? state.toneBalance;
+  if (snap.photoSettings)   state.photoSettings   = snap.photoSettings;
+  if (snap.photoTransforms) state.photoTransforms = snap.photoTransforms;
+  if (snap.sectionEnabled)  state.sectionEnabled  = snap.sectionEnabled;
   updateFilterUI();
   syncControlsToEffectiveSettings(state.selectedIndex);
   repaintGrid();
@@ -5046,15 +5148,15 @@ function performUndo() {
 
 // ── Stackable effects ────────────────────────────────────────────────────────
 
-function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVariant, filterParams, activeFilters) {
-  if (state.effectsPreviewMode) return;
+function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVariant, filterParams, activeFilters, forExport = false, photoSeed = 0) {
+  if (!forExport && state.effectsPreviewMode) return;
   if (state.sectionEnabled?.effects === false) return;
   const af = activeFilters || state.activeFilters;
   if (af.size === 0) return;
   const filterOrder = state.filterOrder || ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap'];
   for (const filterName of filterOrder) {
     if (af.has(filterName)) {
-      applyExportFilter(ctx, width, height, scale, filterName, filterIntensity, filterVariant, filterParams);
+      applyExportFilter(ctx, width, height, scale, filterName, filterIntensity, filterVariant, filterParams, photoSeed);
     }
   }
 }
