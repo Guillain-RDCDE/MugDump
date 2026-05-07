@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.58';
+const APP_VERSION = 'v0.9.59';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -6077,10 +6077,11 @@ function setupOverflowMenus() {
           break;
         }
       }
-      if (isOverflowing !== lastOverflow) {
-        lastOverflow = isOverflowing;
-        gridHeader.classList.toggle('overflow-active', isOverflowing);
-      }
+      // Always sync class to measured state — do NOT guard with lastOverflow here.
+      // We remove overflow-active at the top of every check, so lastOverflow===true
+      // would prevent re-adding it (true !== true = false). Just always toggle.
+      gridHeader.classList.toggle('overflow-active', isOverflowing);
+      lastOverflow = isOverflowing;
     };
     const scheduleGhCheck = () => {
       if (_ghRaf) return;
