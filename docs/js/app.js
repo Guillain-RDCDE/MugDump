@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.13';
+const APP_VERSION = 'v0.9.14';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -1269,8 +1269,7 @@ function renderGifFrameStrip() {
 
     // Resolve palette: frame override → frame's per-photo palette → global palette
     const eff = getEffectiveSettings(frame.photoIndex);
-    const pal = frame.paletteId ? PALETTES[frame.paletteId]
-                                : (eff.paletteId ? PALETTES[eff.paletteId] : state.palette);
+    const pal = frame.paletteId ? PALETTES[frame.paletteId] : eff.palette;
     if (pal) {
       const chipScale = GIF_THUMB_W / GBCam.PHOTO_WIDTH; // ~0.75
       // Render at native res first
@@ -1295,7 +1294,7 @@ function renderGifFrameStrip() {
 
     const swatch = document.createElement('div');
     swatch.className = 'palette-swatch gif-chip-swatch';
-    (pal || state.palette).colors.forEach(color => {
+    pal.colors.forEach(color => {
       const sp = document.createElement('span');
       sp.style.background = color;
       swatch.appendChild(sp);
