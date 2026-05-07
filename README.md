@@ -1,6 +1,6 @@
 # DMG DarkRoom
 
-**Game Boy Camera companion app.** Load `.sav` files, browse your photos, apply palettes and darkroom effects, and export.
+**Game Boy Camera companion app.** Load `.sav` or `.srm` files, browse your photos, apply palettes and darkroom effects, and export.
 
 **Web app:** [dmgdarkroom.allmyfriendsarejpegs.com](https://dmgdarkroom.allmyfriendsarejpegs.com)
 
@@ -16,7 +16,7 @@
 * **GIF export:** Build animated GIFs from any combination of your 30 photos, with a drag-to-reorder frame strip, per-frame palette, bounce mode, and loop controls.
 * **Batch PNG export:** Upscale and export individual, multiple, or all photos at once with your chosen palette and filters applied.
 * **Contact sheet export:** All photos in a single image, great for sharing your whole roll at once.
-* **Effect presets:** Save, load, export and import your favourite filter combinations as JSON files.
+* **Effect presets:** Save, load, export and import your favourite filter combinations as JSON files — includes all filter, exposure, and tone settings.
 * **Fully free and open source — runs in your browser:** No installation needed, works at [dmgdarkroom.allmyfriendsarejpegs.com](https://dmgdarkroom.allmyfriendsarejpegs.com) — source available on [GitHub](https://github.com/clickysteve/dmg-darkroom).
 
 ---
@@ -39,13 +39,20 @@ npm start
 ## Technical notes
 
 - Game Boy Camera SRAM: 128KB, photos at `0x2000`, 30 slots × 3584 bytes, 128×112px 2bpp
+- `.srm` files are raw SRAM dumps in RetroArch's save format — identical structure to `.sav` for Game Boy Camera
 - Electron main process handles file I/O and GIF encoding via `omggif`
 - Web version encodes GIFs via `gifenc`
 - `docs/` is the GitHub Pages web app source — not symlinked, must be kept in sync with `renderer/` manually after edits
 
+---
+
 ## Credits
 
-SRAM format research: [AntonioND/gbcam2png](https://github.com/AntonioND/gbcam2png) and the Game Boy Camera community.
+**SRAM format research:** [AntonioND/gbcam2png](https://github.com/AntonioND/gbcam2png) and the [Game Boy Camera Club](https://gameboycameraclub.com) community.
+
+**GBC official palettes and SGB palettes:** sourced from [The Cutting Room Floor](https://tcrf.net/Notes:Game_Boy_Color_Bootstrap_ROM).
+
+**Community palettes:** sourced from [Lospec](https://lospec.com) — individual palette credits to [Kirokaze](https://lospec.com/kirokaze), [Kerrie Lake](https://lospec.com/kerrielake), [Poltergasm](https://lospec.com/poltergasm), [WildLeoKnight](https://lospec.com/wildleoknight), [Klafooty](https://lospec.com/klafooty), [Space Sandwich](https://lospec.com/spacesandwich), and [BurakoIRL](https://lospec.com/burakoirl).
 
 ---
 
