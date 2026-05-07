@@ -2923,7 +2923,10 @@ body.web #titlebar { padding-left: 16px; }
 #btn-grid-actions { display: none; }
 @media (max-width: 1279px) {
   #btn-grid-actions { display: inline-flex; }
-  .grid-action-item { display: none !important; }
+  /* Needs .has-file prefix to match specificity of .has-file .file-only { display:flex !important }
+     and win by source order (this rule is later in the stylesheet). */
+  .grid-action-item,
+  .has-file .grid-action-item { display: none !important; }
 }
 
 /* Fav menu: JS-controlled via setupFavCarouselResponsive(); hidden by default */
