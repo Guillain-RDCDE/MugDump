@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.22';
+const APP_VERSION = 'v0.9.23';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -800,19 +800,38 @@ function repaintGrid() {
   _gridRAF = requestAnimationFrame(_doChunk);
 }
 
-// Debounced grid repaint — for interactive slider feedback.
-// Immediately updates detail views; schedules grid repaint 160 ms after last call.
+// Debounced synchronous grid repaint — fires after the user pauses on a slider.
+// Intentionally synchronous (not chunked): it runs once after the debounce delay
+// so there's no per-slot pop-in. The async chunked repaintGrid() is reserved for
+// bulk one-shot calls (randomise, paste, load) where non-blocking matters.
 let _gridDebounceTimer = null;
 function scheduleGridRepaint() {
   clearTimeout(_gridDebounceTimer);
-  _gridDebounceTimer = setTimeout(() => { _gridDebounceTimer = null; repaintGrid(); }, 160);
+  _gridDebounceTimer = setTimeout(() => {
+    _gridDebounceTimer = null;
+    const slots = dom.photoGrid.querySelectorAll('.photo-slot:not(.empty)');
+    for (const slot of slots) repaintGridSlot(parseInt(slot.dataset.index));
+    if (state.gifMode && state.gifSelection.size > 0) updateGifPreview();
+  }, 200);
 }
 
 // Use this instead of repaintGrid() in per-tick interactive handlers (sliders etc.)
-// Gives immediate detail feedback while deferring the expensive grid repaint.
+// Strategy:
+//   per-photo scope → repaint only the affected slot(s) immediately (1-2 canvases, fast)
+//   global scope    → debounce a full synchronous sweep (fires after user pauses)
+// Either way, detail views (solo/lightbox/sidebar) update instantly.
 function repaintInteractive() {
   repaintDetailOnly();
-  scheduleGridRepaint();
+  if (state.applyScope === 'photo') {
+    // Only selected slot(s) changed — repaint them right now, skip the debounce
+    const targets = state.selectedPhotos.size > 0
+      ? [...state.selectedPhotos]
+      : state.selectedIndex !== null ? [state.selectedIndex] : [];
+    for (const idx of targets) repaintGridSlot(idx);
+  } else {
+    // Global scope: all thumbnails will need updating — wait for the pause
+    scheduleGridRepaint();
+  }
 }
 
 // Re-render a single thumbnail slot (after palette or transform change)
