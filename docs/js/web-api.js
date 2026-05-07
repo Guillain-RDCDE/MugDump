@@ -181,8 +181,8 @@ window.api = {
 
     let bytes;
     try {
-      // gifenc from CDN — ESM, pure JS, no web workers needed
-      const { GIFEncoder } = await import('https://cdn.jsdelivr.net/npm/gifenc@1.0.1/+esm');
+      // gifenc bundled locally — no network dependency
+      const { GIFEncoder } = await import('./gifenc.esm.js');
       const gif = GIFEncoder();
 
       for (let fi = 0; fi < frames.length; fi++) {
