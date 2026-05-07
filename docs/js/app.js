@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.5';
+const APP_VERSION = 'v0.9.6';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -209,6 +209,22 @@ const FILTER_DEFS = [
   { id: 'ghosting', label: 'VHS Ghosting',         params: [
     { type: 'range', key: 'offset',    label: 'Echo offset',      def: 60, min: 1,   max: 150, step: 1, fmt: v => `${v}%` },
     { type: 'range', key: 'fade',      label: 'Echo fade',        def: 70, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
+  ]},
+  { id: 'pixsort',   label: 'Pixel Sort',           params: [
+    { type: 'range', key: 'threshold', label: 'Threshold',        def: 50, min: 0,   max: 100, step: 1, fmt: v => `${v}%` },
+    { type: 'seg',   key: 'direction', label: 'Direction',        def: 'vertical',   opts: [['vertical','Down'],['horizontal','Right']] },
+  ]},
+  { id: 'blkglitch', label: 'Block Glitch',         params: [
+    { type: 'range', key: 'shift',     label: 'Shift amount',     def: 40, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'density',   label: 'Block count',      def: 30, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'size',      label: 'Block height',     def: 20, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
+  ]},
+  { id: 'wavewarp',  label: 'Wave Warp',            params: [
+    { type: 'range', key: 'amplitude', label: 'Amplitude',        def: 30, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
+    { type: 'range', key: 'frequency', label: 'Frequency',        def: 40, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
+  ]},
+  { id: 'zoomblur',  label: 'Zoom Blur',            params: [
+    { type: 'range', key: 'amount',    label: 'Amount',           def: 30, min: 1,   max: 100, step: 1, fmt: v => `${v}%` },
   ]},
 ];
 
@@ -3611,6 +3627,147 @@ function applyExportFilter(ctx, width, height, scale, filter,
     }
     ctx.putImageData(dst, 0, 0);
     return;
+
+  } else if (filter === 'pixsort') {
+    // ── Pixel Sort ────────────────────────────────────────────────────────
+    // Finds contiguous runs of pixels above a luminance threshold and sorts
+    // them by brightness — dark-to-bright in direction of travel — creating
+    // coloured streaks that drip or slide along the image.
+    const threshPct = ((filterParams.pixsort || {}).threshold ?? 50) / 100;
+    const dir       = (filterParams.pixsort || {}).direction ?? 'vertical';
+    const src = ctx.getImageData(0, 0, width, height);
+    const sd  = src.data;
+    const out = new Uint8ClampedArray(sd); // start as identity copy
+    const lum = i => (sd[i] * 0.299 + sd[i+1] * 0.587 + sd[i+2] * 0.114) / 255;
+
+    if (dir === 'vertical') {
+      for (let x = 0; x < width; x++) {
+        let runStart = -1;
+        for (let y = 0; y <= height; y++) {
+          const i = (y * width + x) * 4;
+          const l = y < height ? lum(i) : -1;
+          if (l >= threshPct && runStart === -1) {
+            runStart = y;
+          } else if ((l < threshPct || y === height) && runStart !== -1) {
+            const run = [];
+            for (let ry = runStart; ry < y; ry++) {
+              const ri = (ry * width + x) * 4;
+              run.push([lum(ri), sd[ri], sd[ri+1], sd[ri+2], sd[ri+3]]);
+            }
+            run.sort((a, b) => a[0] - b[0]);
+            for (let j = 0; j < run.length; j++) {
+              const ri = ((runStart + j) * width + x) * 4;
+              out[ri] = run[j][1]; out[ri+1] = run[j][2]; out[ri+2] = run[j][3]; out[ri+3] = run[j][4];
+            }
+            runStart = -1;
+          }
+        }
+      }
+    } else {
+      for (let y = 0; y < height; y++) {
+        let runStart = -1;
+        for (let x = 0; x <= width; x++) {
+          const i = (y * width + x) * 4;
+          const l = x < width ? lum(i) : -1;
+          if (l >= threshPct && runStart === -1) {
+            runStart = x;
+          } else if ((l < threshPct || x === width) && runStart !== -1) {
+            const run = [];
+            for (let rx = runStart; rx < x; rx++) {
+              const ri = (y * width + rx) * 4;
+              run.push([lum(ri), sd[ri], sd[ri+1], sd[ri+2], sd[ri+3]]);
+            }
+            run.sort((a, b) => a[0] - b[0]);
+            for (let j = 0; j < run.length; j++) {
+              const ri = (y * width + (runStart + j)) * 4;
+              out[ri] = run[j][1]; out[ri+1] = run[j][2]; out[ri+2] = run[j][3]; out[ri+3] = run[j][4];
+            }
+            runStart = -1;
+          }
+        }
+      }
+    }
+    ctx.putImageData(new ImageData(out, width, height), 0, 0);
+    return;
+
+  } else if (filter === 'blkglitch') {
+    // ── Block Glitch ──────────────────────────────────────────────────────
+    // Picks random horizontal strips and shifts each one sideways with
+    // wraparound — simulates corrupted video block data.
+    const shiftPct   = ((filterParams.blkglitch || {}).shift   ?? 40) / 100;
+    const densityPct = ((filterParams.blkglitch || {}).density ?? 30) / 100;
+    const sizePct    = ((filterParams.blkglitch || {}).size    ?? 20) / 100;
+    const src = ctx.getImageData(0, 0, width, height);
+    const sd  = src.data;
+    const out = new Uint8ClampedArray(sd);
+    const maxShift  = Math.max(1, Math.round(width  * shiftPct  * 0.5));
+    const maxBlockH = Math.max(1, Math.round(height * sizePct   * 0.3));
+    const numBlocks = Math.max(1, Math.round(densityPct * 25));
+
+    for (let b = 0; b < numBlocks; b++) {
+      const y0  = Math.floor(Math.random() * height);
+      const bh  = Math.max(1, Math.ceil(Math.random() * maxBlockH));
+      const dxs = Math.round((Math.random() - 0.5) * 2 * maxShift);
+      for (let y = y0; y < Math.min(height, y0 + bh); y++) {
+        for (let x = 0; x < width; x++) {
+          const srcX = ((x - dxs) % width + width) % width;
+          const di = (y * width + x) * 4;
+          const si = (y * width + srcX) * 4;
+          out[di] = sd[si]; out[di+1] = sd[si+1]; out[di+2] = sd[si+2]; out[di+3] = sd[si+3];
+        }
+      }
+    }
+    ctx.putImageData(new ImageData(out, width, height), 0, 0);
+    return;
+
+  } else if (filter === 'wavewarp') {
+    // ── Wave Warp ─────────────────────────────────────────────────────────
+    // Displaces each row horizontally by a sine function of its y position,
+    // creating a smooth rippling warp across the image.
+    const ampPct  = ((filterParams.wavewarp || {}).amplitude ?? 30) / 100;
+    const freqPct = ((filterParams.wavewarp || {}).frequency ?? 40) / 100;
+    const amplitude = Math.max(1, Math.round(width * ampPct * 0.25));
+    const cycles    = 1 + freqPct * 7; // 1 to 8 full cycles over image height
+
+    const src = ctx.getImageData(0, 0, width, height);
+    const sd  = src.data;
+    const out = new Uint8ClampedArray(sd.length);
+
+    for (let y = 0; y < height; y++) {
+      const offsetX = Math.round(Math.sin((y / height) * cycles * Math.PI * 2) * amplitude);
+      for (let x = 0; x < width; x++) {
+        const srcX = ((x - offsetX) % width + width) % width;
+        const di = (y * width + x) * 4;
+        const si = (y * width + srcX) * 4;
+        out[di] = sd[si]; out[di+1] = sd[si+1]; out[di+2] = sd[si+2]; out[di+3] = sd[si+3];
+      }
+    }
+    ctx.putImageData(new ImageData(out, width, height), 0, 0);
+    return;
+
+  } else if (filter === 'zoomblur') {
+    // ── Zoom Blur ─────────────────────────────────────────────────────────
+    // Composites multiple scaled copies of the image radiating outward from
+    // the centre at decreasing opacity, producing a radial motion-blur effect.
+    const zoomAmt = ((filterParams.zoomblur || {}).amount ?? 30) / 100;
+    const steps   = 10;
+    const maxExpand = 0.5; // at 100% the widest copy is 1.5× the canvas size
+
+    // Save the current canvas state before we clobber it
+    const tmp = Object.assign(document.createElement('canvas'), { width, height });
+    tmp.getContext('2d').drawImage(ctx.canvas, 0, 0);
+
+    ctx.clearRect(0, 0, width, height);
+    for (let i = steps - 1; i >= 0; i--) {
+      const t  = i / (steps - 1);
+      const sc = 1 + t * zoomAmt * maxExpand;
+      const dx = (width  - width  * sc) / 2;
+      const dy = (height - height * sc) / 2;
+      ctx.globalAlpha = 1 / steps;
+      ctx.drawImage(tmp, dx, dy, width * sc, height * sc);
+    }
+    ctx.globalAlpha = 1;
+    return;
   }
 
   // Composite the effect onto the main canvas at the requested intensity
@@ -4606,7 +4763,7 @@ function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVa
   if (state.sectionEnabled?.effects === false) return;
   const af = activeFilters || state.activeFilters;
   if (af.size === 0) return;
-  const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting'];
+  const filterOrder = ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur'];
   for (const filterName of filterOrder) {
     if (af.has(filterName)) {
       applyExportFilter(ctx, width, height, scale, filterName, filterIntensity, filterVariant, filterParams);
