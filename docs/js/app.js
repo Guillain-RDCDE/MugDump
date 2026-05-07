@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.61';
+const APP_VERSION = 'v0.9.62';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -6048,9 +6048,56 @@ function setupOverflowMenus() {
   bindToggle('btn-grid-actions', 'grid-actions-dropdown');
   wireItems('grid-actions-dropdown');
 
-  // Grid actions collapse is now handled entirely by a CSS @media (max-width: 1279px)
-  // query — no JS detection needed. The breakpoint is viewport-width-based so it
-  // doesn't jump when the sidebar resizes accordion sections.
+  // ── Grid actions overflow detection ─────────────────────────────────────────
+  // Collapses individual action buttons into the Actions ▾ menu when they no
+  // longer fit in #grid-header. Uses getBoundingClientRect so it accounts for
+  // the actual panel width after sidebar resizing — pure CSS media queries can't
+  // do this because they don't know about the sidebar.
+  const gridHeader = document.getElementById('grid-header');
+  const gridPanel  = document.getElementById('grid-panel');
+  if (gridHeader && gridPanel && window.ResizeObserver) {
+    let _ghRaf = null;
+    const checkGridOverflow = () => {
+      _ghRaf = null;
+      // Temporarily remove the class so all items are visible and measurable.
+      gridHeader.classList.remove('overflow-active');
+      // Force synchronous reflow so positions are current after class removal.
+      void gridHeader.offsetHeight;
+      // Check if any .grid-action-item has its right edge past the header's
+      // right edge. getBoundingClientRect gives true viewport coordinates,
+      // which cannot be fooled by flex layout or overflow:visible.
+      const headerRight = gridHeader.getBoundingClientRect().right;
+      let isOverflowing = false;
+      for (const item of gridHeader.querySelectorAll('.grid-action-item')) {
+        if (item.offsetParent === null) continue; // display:none — skip
+        if (item.getBoundingClientRect().right > headerRight + 1) {
+          isOverflowing = true;
+          break;
+        }
+      }
+      // Always sync — do NOT guard with a lastOverflow variable here.
+      // We removed the class above, so any guard based on a stale "true"
+      // value would prevent re-adding it (true !== true = false). Just toggle.
+      gridHeader.classList.toggle('overflow-active', isOverflowing);
+    };
+    const scheduleGhCheck = () => {
+      if (_ghRaf) return;
+      _ghRaf = requestAnimationFrame(checkGridOverflow);
+    };
+    // gridPanel changes width when the window resizes or the user drags the
+    // panel-resize handle — covers both window resize and sidebar resize.
+    new ResizeObserver(scheduleGhCheck).observe(gridPanel);
+    // dom.app gets has-file when a .sav loads — file-only buttons appear,
+    // changing the total content width without any resize event.
+    new MutationObserver(scheduleGhCheck).observe(dom.app, {
+      attributes: true, attributeFilter: ['class']
+    });
+    // solo-mode class on gridPanel hides grid-only buttons — re-check.
+    new MutationObserver(scheduleGhCheck).observe(gridPanel, {
+      attributes: true, attributeFilter: ['class']
+    });
+    scheduleGhCheck(); // initial check
+  }
 
   // ── Fav Palettes menu ────────────────────────────────────────────────────────
   bindToggle('btn-fav-menu', 'fav-dropdown');
