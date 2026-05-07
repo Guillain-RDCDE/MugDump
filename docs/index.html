@@ -22,7 +22,7 @@
     <button id="btn-home" class="app-name-btn">DMG DarkRoom</button>
     <span class="app-subtitle"><span id="app-version"></span>Beta // by <a href="https://allmyfriendsarejpegs.com" target="_blank">allmyfriendsarejpegs.com</a></span>
     <span class="spacer"></span>
-    <button id="tb-open-sav"      class="btn btn-secondary btn-sm">Open .sav…</button>
+    <button id="tb-open-sav"      class="btn btn-secondary btn-sm">Open .sav / .srm…</button>
     <button id="tb-open-pocket"   class="btn btn-ghost btn-sm">Open from Pocket SD…</button>
     <button id="tb-open-project"  class="btn btn-ghost btn-sm">Open Project…</button>
     <button id="tb-save-project"  class="btn btn-ghost btn-sm file-only">Save Project…</button>
@@ -61,14 +61,14 @@
   <div id="welcome">
     <div class="welcome-icon"><img src="icon.png" alt="DMG DarkRoom" style="width:80px;height:80px;image-rendering:pixelated;border-radius:14px;"></div>
     <h2>DMG DarkRoom</h2>
-    <p class="welcome-subtitle">Camera .sav Darkroom</p>
-    <p>Load a camera <code>.sav</code> file to view, manage, and export your photos.</p>
+    <p class="welcome-subtitle">Camera Save Darkroom</p>
+    <p>Load a <code>.sav</code> or <code>.srm</code> file to view, manage, and export your Game Boy Camera photos.</p>
     <div class="btn-row">
-      <button id="btn-open-sav"    class="btn btn-primary">Open .sav file…</button>
+      <button id="btn-open-sav"    class="btn btn-primary">Open .sav / .srm…</button>
       <button id="btn-open-pocket" class="btn btn-secondary">Analogue Pocket…</button>
     </div>
     <p style="font-size:11px; color:var(--text-3); margin-top:8px;">
-      Or drag & drop a .sav file anywhere
+      Or drag & drop a .sav or .srm file anywhere
     </p>
   </div>
 
@@ -131,7 +131,7 @@
       <!-- No-file placeholder -->
       <div id="detail-empty">
         <div class="icon">🖼</div>
-        <span>Load a .sav file to get started</span>
+        <span>Load a .sav or .srm file to get started</span>
       </div>
 
       <!-- Export controls (always visible once a file is loaded) -->
@@ -331,7 +331,7 @@
 
 <!-- ── Drop overlay ──────────────────────────────────────────────────────────── -->
 <div id="drop-overlay" class="hidden">
-  <div class="drop-msg">Drop .sav file to open</div>
+  <div class="drop-msg">Drop .sav / .srm to open</div>
 </div>
 
 <!-- ── Fullscreen presentation overlay ───────────────────────────────────────── -->
