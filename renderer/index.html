@@ -54,7 +54,7 @@
 
   <!-- ── Welcome / empty state ──────────────────────────────────────────────── -->
   <div id="welcome">
-    <div class="welcome-icon">📷</div>
+    <div class="welcome-icon"><img src="../build/icon.png" alt="DMG DarkRoom" style="width:80px;height:80px;image-rendering:pixelated;border-radius:14px;"></div>
     <h2>DMG DarkRoom</h2>
     <p class="welcome-subtitle">Camera .sav Darkroom</p>
     <p>Load a camera <code>.sav</code> file to view, manage, and export your photos.</p>
@@ -81,7 +81,6 @@
         <!-- Grid-only controls -->
         <span class="ctrl-label grid-only">Thumbnails</span>
         <input type="range" id="thumb-size-slider" min="60" max="400" step="10" value="120" class="grid-only">
-        <button id="btn-hide-empty" class="btn btn-ghost btn-sm grid-only" title="Hide empty photo slots">Hide empty</button>
         <button id="btn-select-all" class="btn btn-ghost btn-sm grid-only" title="Select all photos">Select All</button>
         <button id="btn-deselect-all" class="btn btn-ghost btn-sm grid-only" title="Deselect all photos">Deselect</button>
         <button id="btn-reset-all" class="btn btn-ghost btn-sm grid-only" title="Reset all edits (or just selected photos)">Reset Edits</button>
@@ -263,9 +262,18 @@
             <div class="preset-section">
               <div class="preset-header">
                 <span class="ctrl-label" style="font-size:11px; color:var(--text-3);">Presets</span>
-                <button id="btn-save-preset" class="btn btn-ghost btn-xs">Save…</button>
               </div>
-              <div id="preset-list"></div>
+              <div class="preset-row">
+                <select id="preset-select" class="preset-select"><option value="">— select preset —</option></select>
+                <button id="btn-load-preset"   class="btn btn-ghost btn-xs" title="Load selected preset">Load</button>
+                <button id="btn-delete-preset" class="btn btn-ghost btn-xs" title="Delete selected preset">✕</button>
+              </div>
+              <div class="preset-row" style="margin-top:4px;">
+                <button id="btn-save-preset"    class="btn btn-ghost btn-xs">Save…</button>
+                <button id="btn-export-presets" class="btn btn-ghost btn-xs" title="Export all presets as JSON">Export…</button>
+                <button id="btn-import-presets" class="btn btn-ghost btn-xs" title="Import presets from JSON">Import…</button>
+                <input type="file" id="preset-import-input" accept=".json" style="display:none;">
+              </div>
             </div>
           </div>
 
