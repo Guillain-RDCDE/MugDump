@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.2';
+const APP_VERSION = 'v0.9.3';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -4620,8 +4620,9 @@ function syncFilterAccordion(eff) {
     const cb       = item.querySelector('.fi-check');
     if (cb) cb.checked = active;
 
-    // Expand/collapse body
+    // Expand/collapse: auto-open when filter becomes active; never auto-close
     item.classList.toggle('fi-active', active);
+    if (active) item.classList.add('fi-open');
 
     // Sync param values
     const fp_f = (fp && fp[filterId]) || {};
@@ -4686,9 +4687,9 @@ function setupFilterAccordion() {
 
     // ── Params body ─────────────────────────────────────────────────────────
     const outer = document.createElement('div');
-    outer.className = 'fi-body-outer section-body-outer';
+    outer.className = 'fi-body-outer';
     const inner = document.createElement('div');
-    inner.className = 'fi-body-inner section-body-inner';
+    inner.className = 'fi-body-inner';
 
     for (const p of fd.params) {
       if (p.type === 'range') {
@@ -4778,12 +4779,13 @@ function setupFilterAccordion() {
     // ── Toggle filter on checkbox change ─────────────────────────────────
     cb.addEventListener('change', () => {
       toggleFilter(fd.id);
+      if (cb.checked) item.classList.add('fi-open'); // auto-expand on enable
     });
 
     // ── Chevron click: expand/collapse params body ────────────────────────
     header.addEventListener('click', e => {
       if (e.target.closest('.fi-check-wrap')) return; // let checkbox handle it
-      item.classList.toggle('fi-collapsed');
+      item.classList.toggle('fi-open');
     });
 
     container.appendChild(item);
