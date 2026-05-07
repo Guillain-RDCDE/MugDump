@@ -5319,21 +5319,21 @@ function setupFilterAccordion() {
     header.appendChild(checkWrap);
 
     // ── Draggable reordering ────────────────────────────────────────────────
-    item.draggable = true;
+    // draggable is only enabled while the pointer is held on the header row,
+    // so sliders and controls in the params panel never accidentally start a drag.
+    item.draggable = false;
+    header.addEventListener('mousedown', () => { item.draggable = true; });
+    item.addEventListener('dragend', () => {
+      item.draggable = false;
+      item.classList.remove('fi-dragging');
+      document.querySelectorAll('.fi-item').forEach(el => el.classList.remove('fi-drag-over'));
+    });
+    // Safety: release draggability if the mouse is released anywhere without a drop
+    document.addEventListener('mouseup', () => { item.draggable = false; }, { passive: true });
     item.addEventListener('dragstart', e => {
-      // Cancel drag if it originated from a slider, button, or seg control — let those handle their own events
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' ||
-          e.target.closest('.seg-control, .seg-btn, input, button, .fi-check-wrap, label')) {
-        e.preventDefault();
-        return;
-      }
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/html', item.innerHTML);
       item.classList.add('fi-dragging');
-    });
-    item.addEventListener('dragend', () => {
-      item.classList.remove('fi-dragging');
-      document.querySelectorAll('.fi-item').forEach(el => el.classList.remove('fi-drag-over'));
     });
     item.addEventListener('dragover', e => {
       e.preventDefault();
