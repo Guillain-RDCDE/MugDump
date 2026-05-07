@@ -2918,11 +2918,13 @@ body.web #titlebar { padding-left: 16px; }
   #btn-tools-menu { display: inline-flex; }
 }
 
-/* Grid actions menu: hidden by default; JS adds .overflow-active to #grid-header to reveal */
+/* Grid actions overflow button — pure CSS threshold, no JS detection needed.
+   At wide viewports (≥1280px) show individual buttons; below that, collapse to Actions menu. */
 #btn-grid-actions { display: none; }
-#grid-header.overflow-active #btn-grid-actions { display: inline-flex; }
-/* Hide individual action buttons when overflow menu is active */
-#grid-header.overflow-active .grid-action-item { display: none !important; }
+@media (max-width: 1279px) {
+  #btn-grid-actions { display: inline-flex; }
+  .grid-action-item { display: none !important; }
+}
 
 /* Fav menu: JS-controlled via setupFavCarouselResponsive(); hidden by default */
 #btn-fav-menu { display: none; }
