@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.37';
+const APP_VERSION = 'v0.9.38';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -993,7 +993,7 @@ function soloStep(dir) {
   dom.photoGrid.querySelectorAll('.photo-slot').forEach(el => el.classList.remove('selected'));
   dom.photoGrid.querySelector(`[data-index="${idx}"]`)?.classList.add('selected');
   state.selectedIndex = idx;
-  state.selectedPhotos = new Set();
+  state.selectedPhotos = new Set([idx]);
   syncControlsToEffectiveSettings(idx);
   renderSoloView(idx);
 }
@@ -1061,7 +1061,7 @@ function lightboxStep(dir) {
     slot.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
   state.selectedIndex = idx;
-  state.selectedPhotos = new Set();
+  state.selectedPhotos = new Set([idx]);
   syncControlsToEffectiveSettings(idx);
   renderLightbox(idx);
 }
