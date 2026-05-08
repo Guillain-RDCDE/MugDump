@@ -83,7 +83,7 @@ function getColorizedBorderCanvas(borderId, palette) {
  * eff must contain { palette, borderId }.
  */
 function renderPhotoWithBorder(ctx, photo, eff, scale, idx) {
-  const borderEnabled = state.sectionEnabled?.border && eff.borderId;
+  const borderEnabled = eff.borderEnabled && eff.borderId;
   const borderId = borderEnabled ? eff.borderId : 'none';
 
   if (borderId === 'none') {
@@ -398,7 +398,7 @@ const state = {
   gifDelay: 250,           // ms per frame
   gifLoop: 'infinite',     // 'infinite' | 'once' | 'bounce'
   activeFilters:   new Set(),        // active filter names for stackable effects
-  sectionEnabled:  { exposure: false, splitTone: false, effects: false, border: false }, // per-section on/off (off by default)
+  sectionEnabled:  { exposure: false, splitTone: false, effects: false }, // per-section on/off (off by default)
   effectsPreviewMode: false, // toggle before/after for effects; false = effects visible (normal rendering)
   filterOrder: ['crt', 'lcd', 'grid', 'vignette', 'halftone', 'dot', 'glow', 'chroma', 'jitter', 'noise', 'ghosting', 'pixsort', 'blkglitch', 'wavewarp', 'zoomblur', 'bayer', 'floyd', 'interlace', 'chswap', 'rgbplanes', 'colcorrupt'],
   gifPreviewTimer: null,   // setInterval handle for live GIF preview
@@ -418,6 +418,7 @@ const state = {
   focusedFilter:      null,      // which filter's param panel is open
   effectClipboard:    null,      // copied effect settings for paste
   borderId:           'int-frame-0', // global border frame id
+  borderEnabled:      false,         // global border on/off
 };
 
 
@@ -495,6 +496,7 @@ function getEffectiveSettings(index) {
       highlightColor: state.highlightColor,
       toneBalance:    state.toneBalance,
       borderId:       state.borderId,
+      borderEnabled:  state.borderEnabled,
     };
   }
   return {
@@ -511,6 +513,7 @@ function getEffectiveSettings(index) {
     highlightColor: ps.highlightColor ?? state.highlightColor,
     toneBalance:    ps.toneBalance    ?? state.toneBalance,
     borderId:       ps.borderId       ?? state.borderId,
+    borderEnabled:  ps.borderEnabled  ?? state.borderEnabled,
   };
 }
 
@@ -650,7 +653,9 @@ function syncControlsToEffectiveSettings(index) {
   if (balEl)  balEl.value = eff.toneBalance;
   if (balVal) balVal.textContent = eff.toneBalance > 0 ? `+${eff.toneBalance}` : String(eff.toneBalance);
 
-  // Border picker
+  // Border picker + checkbox
+  const borderCb = document.getElementById('border-enabled-check');
+  if (borderCb) borderCb.checked = eff.borderEnabled ?? false;
   document.querySelectorAll('.border-frame-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.frameId === eff.borderId);
   });
@@ -807,7 +812,7 @@ function renderGrid() {
       // Canvas thumbnail — rendered at THUMB_SCALE (4×) for filter clarity
       const canvas = document.createElement('canvas');
       const effThumb = getEffectiveSettings(photo.index);
-      const hasBorderThumb = state.sectionEnabled?.border && effThumb.borderId;
+      const hasBorderThumb = effThumb.borderEnabled && effThumb.borderId;
       canvas.width  = (hasBorderThumb ? 160 : GBCam.PHOTO_WIDTH)  * THUMB_SCALE;
       canvas.height = (hasBorderThumb ? 144 : GBCam.PHOTO_HEIGHT) * THUMB_SCALE;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -934,7 +939,7 @@ function repaintGridSlot(index) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const eff = getEffectiveSettings(index);
   // Re-size canvas if needed (border state may have changed)
-  const hasBorderSlot = state.sectionEnabled?.border && eff.borderId;
+  const hasBorderSlot = eff.borderEnabled && eff.borderId;
   const expW = (hasBorderSlot ? 160 : GBCam.PHOTO_WIDTH)  * THUMB_SCALE;
   const expH = (hasBorderSlot ? 144 : GBCam.PHOTO_HEIGHT) * THUMB_SCALE;
   if (canvas.width !== expW || canvas.height !== expH) {
@@ -1065,7 +1070,7 @@ function renderSoloView(index) {
   const availW = wrap.clientWidth  - 8;  // minor padding
   const availH = wrap.clientHeight - 8;
   const effSolo = getEffectiveSettings(index);
-  const hasBorderSolo = state.sectionEnabled?.border && effSolo.borderId;
+  const hasBorderSolo = effSolo.borderEnabled && effSolo.borderId;
   const soloDisplayW = hasBorderSolo ? 160 : GBCam.PHOTO_WIDTH;
   const soloDisplayH = hasBorderSolo ? 144 : GBCam.PHOTO_HEIGHT;
   const scaleW = Math.max(1, Math.floor(availW / soloDisplayW));
@@ -1946,7 +1951,7 @@ function wireButtons() {
   // Render preset dropdown on load
   renderPresetList();
 
-  // Section enable/disable checkboxes
+  // Section enable/disable checkboxes (global sections only)
   document.querySelectorAll('.section-check').forEach(cb => {
     const section = cb.dataset.section;
     cb.checked = state.sectionEnabled[section] ?? false;
@@ -1958,6 +1963,20 @@ function wireButtons() {
       updateSidebarPreview();
     });
   });
+
+  // Border enable/disable — scoped like borderId (per-photo or global)
+  const borderEnabledCb = document.getElementById('border-enabled-check');
+  if (borderEnabledCb) {
+    borderEnabledCb.checked = state.borderEnabled ?? false;
+    borderEnabledCb.addEventListener('change', () => {
+      pushUndo();
+      setScopedSetting('borderEnabled', borderEnabledCb.checked);
+      repaintGrid();
+      if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+      if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+      updateSidebarPreview();
+    });
+  }
 
   // Note: intensity slider and CRT variant buttons are now injected dynamically
   // by buildFilterParams into each filter's inline panel — no static wiring needed.
@@ -5464,7 +5483,7 @@ function updateSidebarPreview() {
 
   const SCALE = 4; // match THUMB_SCALE — ensures filter appearance matches grid thumbnails
   const eff = getEffectiveSettings(idx);
-  const hasBorderPrev = state.sectionEnabled?.border && eff.borderId;
+  const hasBorderPrev = eff.borderEnabled && eff.borderId;
   const W = (hasBorderPrev ? 160 : GBCam.PHOTO_WIDTH)  * SCALE;
   const H = (hasBorderPrev ? 144 : GBCam.PHOTO_HEIGHT) * SCALE;
 
@@ -5774,6 +5793,8 @@ function captureState() {
     photoSettings:   JSON.parse(JSON.stringify(state.photoSettings)),
     photoTransforms: JSON.parse(JSON.stringify(state.photoTransforms)),
     sectionEnabled:  JSON.parse(JSON.stringify(state.sectionEnabled || {})),
+    borderId:        state.borderId,
+    borderEnabled:   state.borderEnabled,
   };
 }
 
@@ -5801,6 +5822,8 @@ function performUndo() {
   if (snap.photoSettings)   state.photoSettings   = snap.photoSettings;
   if (snap.photoTransforms) state.photoTransforms = snap.photoTransforms;
   if (snap.sectionEnabled)  state.sectionEnabled  = snap.sectionEnabled;
+  if (snap.borderId      != null) state.borderId      = snap.borderId;
+  if (snap.borderEnabled != null) state.borderEnabled = snap.borderEnabled;
   updateFilterUI();
   syncControlsToEffectiveSettings(state.selectedIndex);
   repaintGrid();
