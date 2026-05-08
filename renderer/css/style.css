@@ -1608,6 +1608,13 @@ input[type="range"] {
 }
 
 /* Pinned / sticky preview */
+
+/* When preview is pinned, remove the container's top padding so the sticky
+   element can reach the very top of the scrollable area with no gap. */
+#export-controls:has(#preview-group.preview-pinned) {
+  padding-top: 0;
+}
+
 #preview-group.preview-pinned {
   position: sticky;
   top: 0;
