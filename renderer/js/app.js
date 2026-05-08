@@ -5536,6 +5536,8 @@ function savePreset(name) {
     shadowColor:     eff ? eff.shadowColor                                 : state.shadowColor,
     highlightColor:  eff ? eff.highlightColor                              : state.highlightColor,
     toneBalance:     eff ? eff.toneBalance                                 : state.toneBalance,
+    borderId:        eff ? eff.borderId                                    : state.borderId,
+    borderEnabled:   eff ? eff.borderEnabled                              : state.borderEnabled,
   };
   const presets = getPresets();
   presets[name] = src;
@@ -5570,6 +5572,8 @@ function loadPreset(name) {
     if (p.shadowColor    !== undefined) ps.shadowColor    = p.shadowColor;
     if (p.highlightColor !== undefined) ps.highlightColor = p.highlightColor;
     if (p.toneBalance    !== undefined) ps.toneBalance    = p.toneBalance;
+    if (p.borderId       !== undefined) ps.borderId       = p.borderId;
+    if (p.borderEnabled  !== undefined) ps.borderEnabled  = p.borderEnabled;
   }
 
   // Repaint affected thumbnails
