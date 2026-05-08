@@ -38,6 +38,48 @@
 
 ---
 
+## Keyboard shortcuts
+
+### Navigation
+
+| Key | Action |
+|-----|--------|
+| `←` / `→` | Previous / next photo |
+| `↑` / `↓` | Previous / next row (grid view) |
+| `G` | Switch to grid view |
+| `S` | Switch to solo view |
+| `F` | Open fullscreen presentation (or close) |
+| `Escape` | Close presentation / lightbox / solo mode |
+
+### Photo transforms (requires a photo selected)
+
+| Key | Action |
+|-----|--------|
+| `R` | Rotate clockwise |
+| `L` | Rotate counter-clockwise |
+| `H` | Flip horizontal |
+| `V` | Flip vertical |
+
+### Editing
+
+| Key | Action |
+|-----|--------|
+| `Cmd/Ctrl+Z` | Undo |
+| `Cmd/Ctrl+C` | Copy settings |
+| `Cmd/Ctrl+V` | Paste settings |
+| `Cmd/Ctrl+A` | Select all photos |
+| `P` | Toggle before/after effects preview |
+| `Space` | Toggle GIF frame selection (in GIF mode) |
+
+### Palettes
+
+| Key | Action |
+|-----|--------|
+| `-` | Previous favourite palette |
+| `+` | Next favourite palette |
+
+---
+
 ## Usage
 
 Open **[dmgdarkroom.allmyfriendsarejpegs.com](https://dmgdarkroom.allmyfriendsarejpegs.com)** in Chrome or Edge for the best experience (full File System Access API). Firefox and Safari work with standard file pickers.
