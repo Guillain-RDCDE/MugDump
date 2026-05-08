@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v0.9.62';
+const APP_VERSION = 'v0.9.63';
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -1979,7 +1979,10 @@ function wireButtons() {
 // ── Thumbnail size ────────────────────────────────────────────────────────────
 
 function setThumbnailSize(px) {
-  dom.photoGrid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${px}px, 1fr))`;
+  // min(${px}px, 48%) caps the column minimum at just under half the container
+  // width, guaranteeing at least 2 columns always fit — eliminates the deadzone
+  // where the slider top-end does nothing because only 1 column is placed.
+  dom.photoGrid.style.gridTemplateColumns = `repeat(auto-fill, minmax(min(${px}px, 48%), 1fr))`;
 }
 
 // ── Panel resize (drag handle between grid and detail panel) ─────────────────
@@ -3267,7 +3270,7 @@ function openPaletteGrid() {
 
 function updatePaletteGridSize(px) {
   const list = document.getElementById('palette-grid-list');
-  if (list) list.style.gridTemplateColumns = `repeat(auto-fill, minmax(${px}px, 1fr))`;
+  if (list) list.style.gridTemplateColumns = `repeat(auto-fill, minmax(min(${px}px, 48%), 1fr))`;
 }
 
 function closePaletteGrid() {
