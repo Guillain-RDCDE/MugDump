@@ -16,13 +16,18 @@
 - Palette favourites, palette grid visualiser, and random palette picker
 
 **Effects & tone**
-- CRT, LCD grid, halftone, dot matrix, phosphor glow, chromatic aberration, vignette, noise/static, VHS ghosting, scanline jitter, and border — each with granular per-filter controls
+- CRT, LCD grid, halftone, dot matrix, phosphor glow, chromatic aberration, vignette, noise/static, VHS ghosting, and scanline jitter — each with granular per-filter controls
 - Brightness, contrast, and split toning (shadow/highlight colour with intensity and balance)
 
+**Border frames**
+- 21 authentic Game Boy Camera border frames, palette-colorized to match your chosen palette
+- Enable per-photo or globally; frame selection and on/off state saved in presets and project files
+- Frames sourced from [gb-cam-lab](https://github.com/RomanObaraz/gb-cam-lab)
+
 **Editing**
-- Apply palettes and effects per-photo or globally across your whole roll
+- Apply palettes, effects, and borders per-photo or globally across your whole roll
 - Copy and paste settings between photos
-- Effect presets — save, load, import and export as JSON
+- Effect presets — save, load, import and export as JSON (borders included)
 - Per-photo rotate and flip
 - Undo support
 
