@@ -1669,11 +1669,6 @@ input[type="range"] {
   color: var(--accent);
 }
 
-.border-frame-off {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-}
 
 .border-frame-btn img {
   width: 40px;
