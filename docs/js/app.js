@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v1.1.0';
+const APP_VERSION = 'v1.2.0';
 
 // ── Border frames ─────────────────────────────────────────────────────────────
 
@@ -111,6 +111,71 @@ function renderPhotoWithBorder(ctx, photo, eff, scale, idx) {
   if (borderBase) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(borderBase, 0, 0, BW, BH);
+  }
+}
+
+/**
+ * Full render pipeline for a photo: composite → effects → tone.
+ * Handles both 'full' scope (effects apply to border+photo) and
+ * 'photo' scope (effects applied to photo area only before border composite).
+ *
+ * Replaces the pattern: renderPhotoWithBorder + applyActiveEffects + applyToneAdjustments
+ * at every call site.
+ *
+ * opts.thumbMode  — omit THUMBNAIL_SKIP_FILTERS (for grid thumbnails)
+ * opts.forExport  — pass forExport=true to effects/tone functions
+ */
+function renderPhotoComplete(ctx, photo, eff, scale, idx, opts = {}) {
+  const { thumbMode = false, forExport = false } = opts;
+
+  const borderEnabled = eff.borderEnabled && eff.borderId;
+  const photoScopeOnly = eff.filterScope === 'photo' && borderEnabled;
+
+  // Build the filter set (thumbnail mode skips slow filters)
+  let filtersToApply = eff.activeFilters;
+  if (thumbMode && filtersToApply.size > 0) {
+    filtersToApply = new Set([...filtersToApply].filter(id => !THUMBNAIL_SKIP_FILTERS.has(id)));
+  }
+
+  if (photoScopeOnly) {
+    // Photo-scope: apply effects+tone to the raw 128×112 photo canvas,
+    // then composite it behind a clean border.
+    const BW = 160 * scale;
+    const BH = 144 * scale;
+    ctx.canvas.width  = BW;
+    ctx.canvas.height = BH;
+    ctx.clearRect(0, 0, BW, BH);
+
+    const tmpPhoto = document.createElement('canvas');
+    const tmpCtx   = tmpPhoto.getContext('2d', { willReadFrequently: true });
+    renderPhotoWithTransform(tmpCtx, photo, eff.palette, scale, idx);
+    const PW = tmpPhoto.width;
+    const PH = tmpPhoto.height;
+
+    if (filtersToApply.size > 0) {
+      applyActiveEffects(tmpCtx, PW, PH, scale, eff.filterIntensity, eff.filterVariant,
+                         eff.filterParams, filtersToApply, forExport, idx);
+    }
+    applyToneAdjustments(tmpCtx, PW, PH, eff, forExport);
+
+    ctx.drawImage(tmpPhoto, 16 * scale, 16 * scale);
+
+    const borderBase = getColorizedBorderCanvas(eff.borderId, eff.palette);
+    if (borderBase) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(borderBase, 0, 0, BW, BH);
+    }
+  } else {
+    // Full-scope (default): render photo+border composite first,
+    // then apply effects+tone to the full canvas.
+    renderPhotoWithBorder(ctx, photo, eff, scale, idx);
+    const W = ctx.canvas.width;
+    const H = ctx.canvas.height;
+    if (filtersToApply.size > 0) {
+      applyActiveEffects(ctx, W, H, scale, eff.filterIntensity, eff.filterVariant,
+                         eff.filterParams, filtersToApply, forExport, idx);
+    }
+    applyToneAdjustments(ctx, W, H, eff, forExport);
   }
 }
 
@@ -419,6 +484,7 @@ const state = {
   effectClipboard:    null,      // copied effect settings for paste
   borderId:           'int-frame-0', // global border frame id
   borderEnabled:      false,         // global border on/off
+  filterScope:        'full',        // 'full' = filters apply to border+photo; 'photo' = photo area only
 };
 
 
@@ -497,6 +563,7 @@ function getEffectiveSettings(index) {
       toneBalance:    state.toneBalance,
       borderId:       state.borderId,
       borderEnabled:  state.borderEnabled,
+      filterScope:    state.filterScope,
     };
   }
   return {
@@ -514,6 +581,7 @@ function getEffectiveSettings(index) {
     toneBalance:    ps.toneBalance    ?? state.toneBalance,
     borderId:       ps.borderId       ?? state.borderId,
     borderEnabled:  ps.borderEnabled  ?? state.borderEnabled,
+    filterScope:    state.filterScope, // always global (not per-photo)
   };
 }
 
@@ -816,12 +884,7 @@ function renderGrid() {
       canvas.width  = (hasBorderThumb ? 160 : GBCam.PHOTO_WIDTH)  * THUMB_SCALE;
       canvas.height = (hasBorderThumb ? 144 : GBCam.PHOTO_HEIGHT) * THUMB_SCALE;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      renderPhotoWithBorder(ctx, photo, effThumb, THUMB_SCALE, photo.index);
-      applyToneAdjustments(ctx, canvas.width, canvas.height, effThumb);
-      if (effThumb.activeFilters.size > 0) {
-        applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
-                           effThumb.filterIntensity, effThumb.filterVariant, effThumb.filterParams, effThumb.activeFilters, false, photo.index);
-      }
+      renderPhotoComplete(ctx, photo, effThumb, THUMB_SCALE, photo.index, { thumbMode: true });
       slot.appendChild(canvas);
 
       // GIF selection (invisible div for event delegation; frame number via data attr)
@@ -946,15 +1009,7 @@ function repaintGridSlot(index) {
     canvas.width  = expW;
     canvas.height = expH;
   }
-  renderPhotoWithBorder(ctx, photo, eff, THUMB_SCALE, index);
-  applyToneAdjustments(ctx, canvas.width, canvas.height, eff);
-  if (eff.activeFilters.size > 0) {
-    const thumbFilters = new Set([...eff.activeFilters].filter(id => !THUMBNAIL_SKIP_FILTERS.has(id)));
-    if (thumbFilters.size > 0) {
-      applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
-                         eff.filterIntensity, eff.filterVariant, eff.filterParams, thumbFilters, false, index);
-    }
-  }
+  renderPhotoComplete(ctx, photo, eff, THUMB_SCALE, index, { thumbMode: true });
   // Slot badge — photo-specific settings override indicator
   slot.classList.toggle('has-photo-settings', hasPhotoOverride(index));
 }
@@ -1078,13 +1133,7 @@ function renderSoloView(index) {
   const SOLO_SCALE = Math.max(1, Math.min(scaleW, scaleH));
 
   const ctx = dom.soloCanvas.getContext('2d');
-  renderPhotoWithBorder(ctx, photo, effSolo, SOLO_SCALE, index);
-
-  const w = dom.soloCanvas.width, h = dom.soloCanvas.height;
-  if (effSolo.activeFilters.size > 0) {
-    applyActiveEffects(ctx, w, h, SOLO_SCALE, effSolo.filterIntensity, effSolo.filterVariant, effSolo.filterParams, effSolo.activeFilters, false, index);
-  }
-  applyToneAdjustments(ctx, w, h, effSolo);
+  renderPhotoComplete(ctx, photo, effSolo, SOLO_SCALE, index);
 
   // Update info strip
   if (dom.soloLabel) dom.soloLabel.textContent = `Photo ${index + 1}`;
@@ -1144,13 +1193,7 @@ function renderLightbox(index) {
   const PREVIEW_SCALE = 8;
   const ctx = dom.lbCanvas.getContext('2d');
   const effLb = getEffectiveSettings(index);
-  renderPhotoWithBorder(ctx, photo, effLb, PREVIEW_SCALE, index);
-
-  const w = dom.lbCanvas.width, h = dom.lbCanvas.height;
-  if (effLb.activeFilters.size > 0) {
-    applyActiveEffects(ctx, w, h, PREVIEW_SCALE, effLb.filterIntensity, effLb.filterVariant, effLb.filterParams, effLb.activeFilters, false, index);
-  }
-  applyToneAdjustments(ctx, w, h, effLb);
+  renderPhotoComplete(ctx, photo, effLb, PREVIEW_SCALE, index);
 
   dom.lbLabel.textContent = `Photo ${index + 1}`;
   const t = getTransform(index);
@@ -1310,13 +1353,7 @@ async function exportSinglePng() {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   const effExp = getEffectiveSettings(index);
-  renderPhotoWithBorder(ctx, photo, effExp, scale, index);
-
-  const { width, height } = { width: canvas.width, height: canvas.height };
-  if (effExp.activeFilters.size > 0) {
-    applyActiveEffects(ctx, width, height, scale, effExp.filterIntensity, effExp.filterVariant, effExp.filterParams, effExp.activeFilters, true, index);
-  }
-  applyToneAdjustments(ctx, width, height, effExp, true);
+  renderPhotoComplete(ctx, photo, effExp, scale, index, { forExport: true });
 
   const dataUrl = canvas.toDataURL('image/png');
   const filterTag = effExp.activeFilters.size > 0 ? `_${[...effExp.activeFilters].join('+')}` : '';
@@ -1343,12 +1380,7 @@ async function exportBatchPng() {
     const canvas = document.createElement('canvas');
     const ctx    = canvas.getContext('2d');
     const effBatch = getEffectiveSettings(photo.index);
-    renderPhotoWithBorder(ctx, photo, effBatch, batchScale, photo.index);
-    if (effBatch.activeFilters.size > 0) {
-      applyActiveEffects(ctx, canvas.width, canvas.height, batchScale,
-        effBatch.filterIntensity, effBatch.filterVariant, effBatch.filterParams, effBatch.activeFilters, true, photo.index);
-    }
-    applyToneAdjustments(ctx, canvas.width, canvas.height, effBatch, true);
+    renderPhotoComplete(ctx, photo, effBatch, batchScale, photo.index, { forExport: true });
     const dataUrl = canvas.toDataURL('image/png');
     const batchFilterTag = effBatch.activeFilters.size > 0 ? `_${[...effBatch.activeFilters].join('+')}` : '';
     const name = `gbcam_${String(photo.index + 1).padStart(2, '0')}_${effBatch.palette.id}_${scaleTag}${batchFilterTag}.png`;
@@ -1975,6 +2007,40 @@ function wireButtons() {
       if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
       if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
       updateSidebarPreview();
+    });
+  }
+
+  // Filter scope toggle — "Filters affect border" checkbox (global setting)
+  const filterScopeCb = document.getElementById('filter-scope-check');
+  if (filterScopeCb) {
+    filterScopeCb.checked = state.filterScope === 'full';
+    filterScopeCb.addEventListener('change', () => {
+      state.filterScope = filterScopeCb.checked ? 'full' : 'photo';
+      repaintGrid();
+      if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+      if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+      updateSidebarPreview();
+    });
+  }
+
+  // Sticky preview pin toggle
+  const previewPinBtn = document.getElementById('preview-pin-btn');
+  const previewGroup  = document.getElementById('preview-group');
+  const PREVIEW_PIN_KEY = 'dmgdr:previewPinned';
+
+  function applyPreviewPin(pinned) {
+    if (!previewGroup) return;
+    previewGroup.classList.toggle('preview-pinned', pinned);
+    if (previewPinBtn) previewPinBtn.classList.toggle('active', pinned);
+  }
+
+  if (previewPinBtn && previewGroup) {
+    const savedPin = localStorage.getItem(PREVIEW_PIN_KEY) === 'true';
+    applyPreviewPin(savedPin);
+    previewPinBtn.addEventListener('click', () => {
+      const nowPinned = !previewGroup.classList.contains('preview-pinned');
+      applyPreviewPin(nowPinned);
+      localStorage.setItem(PREVIEW_PIN_KEY, String(nowPinned));
     });
   }
 
@@ -4907,12 +4973,7 @@ function renderPresentation() {
 
   const ctx = dom.presCanvas.getContext('2d');
   const effPres = getEffectiveSettings(_presIndex);
-  renderPhotoWithBorder(ctx, photo, effPres, scale, _presIndex);
-  if (effPres.activeFilters.size > 0) {
-    applyActiveEffects(ctx, dom.presCanvas.width, dom.presCanvas.height, scale,
-      effPres.filterIntensity, effPres.filterVariant, effPres.filterParams, effPres.activeFilters, false, _presIndex);
-  }
-  applyToneAdjustments(ctx, dom.presCanvas.width, dom.presCanvas.height, effPres);
+  renderPhotoComplete(ctx, photo, effPres, scale, _presIndex);
 
   const filled = state.photos.filter(p => !p.isEmpty).length;
   const pos    = state.photos.slice(0, _presIndex + 1).filter(p => !p.isEmpty).length;
@@ -4959,12 +5020,7 @@ async function exportContactSheet() {
     const tmp  = document.createElement('canvas');
     const tctx = tmp.getContext('2d');
     const effSheet = getEffectiveSettings(photo.index);
-    renderPhotoWithBorder(tctx, photo, effSheet, SHEET_SCALE, photo.index);
-    if (effSheet.activeFilters.size > 0) {
-      applyActiveEffects(tctx, tmp.width, tmp.height, SHEET_SCALE,
-        effSheet.filterIntensity, effSheet.filterVariant, effSheet.filterParams, effSheet.activeFilters, true, photo.index);
-    }
-    applyToneAdjustments(tctx, tmp.width, tmp.height, effSheet, true);
+    renderPhotoComplete(tctx, photo, effSheet, SHEET_SCALE, photo.index, { forExport: true });
 
     // Black fill for cell, then centre the rendered photo (non-bordered = centred in 160×144 slot)
     sc.fillStyle = '#000';
@@ -5501,12 +5557,7 @@ function updateSidebarPreview() {
   const tmp = document.createElement('canvas');
   const tmpCtx = tmp.getContext('2d', { willReadFrequently: true });
 
-  renderPhotoWithBorder(tmpCtx, photo, eff, SCALE, idx);
-  // Effects before tone — matches solo view, lightbox, and export rendering order
-  if (eff.activeFilters.size > 0) {
-    applyActiveEffects(tmpCtx, W, H, SCALE, eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters, false, idx);
-  }
-  applyToneAdjustments(tmpCtx, W, H, eff);
+  renderPhotoComplete(tmpCtx, photo, eff, SCALE, idx);
 
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
