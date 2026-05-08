@@ -64,8 +64,26 @@ function getColorizedBorderCanvas(borderId, palette) {
   const d = imageData.data;
   const rgb = window.paletteToRGB(palette); // [[r,g,b]×4] — index 0=lightest, 3=darkest
 
+  // Photo window bounds in the 160×144 frame (pixels here stay transparent so the photo shows through)
+  const PX1 = 16, PX2 = 143, PY1 = 16, PY2 = 127;
+
   for (let i = 0; i < d.length; i += 4) {
-    if (d[i + 3] === 0) continue;              // transparent (photo area) — leave as-is
+    if (d[i + 3] === 0) {
+      // Transparent pixel — check whether it's the photo window or a border area
+      const pidx = i / 4;
+      const px = pidx % 160;
+      const py = Math.floor(pidx / 160);
+      if (px >= PX1 && px <= PX2 && py >= PY1 && py <= PY2) {
+        // Inside photo window — leave transparent so the photo beneath shows through
+        continue;
+      }
+      // Outside photo window (e.g. film-strip perforations): fill with darkest palette colour
+      // so they look the same in exports as they do in the preview (dark page background).
+      const [pr, pg, pb] = rgb[3];
+      d[i] = pr;  d[i + 1] = pg;  d[i + 2] = pb;  d[i + 3] = 255;
+      continue;
+    }
+    // Non-transparent border pixel — colorize based on brightness
     const R = d[i];
     const gbIdx = Math.min(3, Math.max(0, Math.round((255 - R) * 3 / 255)));
     const [pr, pg, pb] = rgb[gbIdx];
