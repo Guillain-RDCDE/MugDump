@@ -1631,6 +1631,69 @@ input[type="range"] {
   color: var(--text-3);
 }
 
+/* ── Border frame picker ───────────────────────────────────────────────────── */
+
+#border-frame-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.border-frame-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+  color: var(--text-2);
+  font-size: 10px;
+  min-height: 52px;
+  justify-content: center;
+}
+
+.border-frame-btn:hover {
+  border-color: var(--accent);
+  background: var(--surface-3);
+}
+
+.border-frame-btn.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface-2));
+  color: var(--accent);
+}
+
+.border-frame-off {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.border-frame-btn img {
+  width: 40px;
+  height: 36px; /* 160:144 ratio × 40px */
+  image-rendering: pixelated;
+  display: block;
+  background: #000;
+  border-radius: 1px;
+}
+
+.border-frame-btn span {
+  font-size: 9px;
+  color: var(--text-3);
+  line-height: 1;
+}
+
+.border-frame-btn.active span {
+  color: var(--accent);
+}
+
 /* ── Export filters/effects ───────────────────────────────────────────────── */
 
 .filter-seg {

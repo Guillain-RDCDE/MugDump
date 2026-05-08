@@ -6,7 +6,114 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v1.0.0';
+const APP_VERSION = 'v1.0.1';
+
+// ── Border frames ─────────────────────────────────────────────────────────────
+
+const BORDER_FRAMES = [
+  { id: 'none',         label: 'Off'  },
+  { id: 'int-frame-0',  label: '1'   },
+  { id: 'int-frame-1',  label: '2'   },
+  { id: 'int-frame-2',  label: '3'   },
+  { id: 'int-frame-3',  label: '4'   },
+  { id: 'int-frame-4',  label: '5'   },
+  { id: 'int-frame-5',  label: '6'   },
+  { id: 'int-frame-6',  label: '7'   },
+  { id: 'int-frame-7',  label: '8'   },
+  { id: 'int-frame-8',  label: '9'   },
+  { id: 'int-frame-9',  label: '10'  },
+  { id: 'int-frame-10', label: '11'  },
+  { id: 'int-frame-11', label: '12'  },
+  { id: 'int-frame-12', label: '13'  },
+  { id: 'int-frame-13', label: '14'  },
+  { id: 'int-frame-14', label: '15'  },
+  { id: 'int-frame-15', label: '16'  },
+  { id: 'int-frame-16', label: '17'  },
+  { id: 'int-frame-17', label: '18'  },
+  { id: 'jp-frame-0',   label: 'JP 1' },
+  { id: 'jp-frame-1',   label: 'JP 2' },
+  { id: 'jp-frame-6',   label: 'JP 3' },
+];
+
+const _borderImageCache = {}; // id → HTMLImageElement (loaded)
+
+function preloadBorderImages() {
+  BORDER_FRAMES.forEach(({ id }) => {
+    if (id === 'none') return;
+    const img = new Image();
+    img.onload  = () => { _borderImageCache[id] = img; };
+    img.onerror = () => console.warn(`Border frame not found: ${id}`);
+    img.src = `../frames/${id}.png`;
+  });
+}
+
+/**
+ * Returns a 160×144 canvas with border pixels colorized to the given palette.
+ * Photo area (x 16-143, y 16-127) remains transparent.
+ * Returns null if the image hasn't loaded yet.
+ */
+function getColorizedBorderCanvas(borderId, palette) {
+  const img = _borderImageCache[borderId];
+  if (!img) return null;
+
+  const raw = document.createElement('canvas');
+  raw.width  = 160;
+  raw.height = 144;
+  const rawCtx = raw.getContext('2d', { willReadFrequently: true });
+  rawCtx.drawImage(img, 0, 0);
+
+  const imageData = rawCtx.getImageData(0, 0, 160, 144);
+  const d = imageData.data;
+  const rgb = window.paletteToRGB(palette); // [[r,g,b]×4] — index 0=lightest, 3=darkest
+
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue;              // transparent (photo area) — leave as-is
+    const R = d[i];
+    const gbIdx = Math.min(3, Math.max(0, Math.round((255 - R) * 3 / 255)));
+    const [pr, pg, pb] = rgb[gbIdx];
+    d[i] = pr;  d[i + 1] = pg;  d[i + 2] = pb;  d[i + 3] = 255;
+  }
+
+  rawCtx.putImageData(imageData, 0, 0);
+  return raw;
+}
+
+/**
+ * Render a photo with an optional GB Camera border frame.
+ * Falls through to renderPhotoWithTransform when borderId is 'none'.
+ * When a border is active the canvas becomes 160×144×scale.
+ * eff must contain { palette, borderId }.
+ */
+function renderPhotoWithBorder(ctx, photo, eff, scale, idx) {
+  const borderId = eff.borderId || 'none';
+
+  if (borderId === 'none') {
+    renderPhotoWithTransform(ctx, photo, eff.palette, scale, idx);
+    return;
+  }
+
+  const BW = 160 * scale;
+  const BH = 144 * scale;
+  const OX = 16 * scale;
+  const OY = 16 * scale;
+
+  ctx.canvas.width  = BW;
+  ctx.canvas.height = BH;
+  ctx.clearRect(0, 0, BW, BH);
+
+  // Draw photo (with any transform) into the photo area slot
+  const tmpPhoto = document.createElement('canvas');
+  const tmpCtx   = tmpPhoto.getContext('2d');
+  renderPhotoWithTransform(tmpCtx, photo, eff.palette, scale, idx);
+  ctx.drawImage(tmpPhoto, OX, OY);
+
+  // Overlay colorised border (transparent centre reveals photo)
+  const borderBase = getColorizedBorderCanvas(borderId, eff.palette);
+  if (borderBase) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(borderBase, 0, 0, BW, BH);
+  }
+}
 
 // ── Color picker helpers ───────────────────────────────────────────────────
 
@@ -311,6 +418,7 @@ const state = {
   lastSelectedIndex:  null,      // last clicked photo index, for shift-range
   focusedFilter:      null,      // which filter's param panel is open
   effectClipboard:    null,      // copied effect settings for paste
+  borderId:           'none',   // global border frame id ('none' = off)
 };
 
 
@@ -387,6 +495,7 @@ function getEffectiveSettings(index) {
       shadowColor:    state.shadowColor,
       highlightColor: state.highlightColor,
       toneBalance:    state.toneBalance,
+      borderId:       state.borderId,
     };
   }
   return {
@@ -402,6 +511,7 @@ function getEffectiveSettings(index) {
     shadowColor:    ps.shadowColor    ?? state.shadowColor,
     highlightColor: ps.highlightColor ?? state.highlightColor,
     toneBalance:    ps.toneBalance    ?? state.toneBalance,
+    borderId:       ps.borderId       ?? state.borderId,
   };
 }
 
@@ -540,6 +650,11 @@ function syncControlsToEffectiveSettings(index) {
   const balVal = document.getElementById('tone-balance-val');
   if (balEl)  balEl.value = eff.toneBalance;
   if (balVal) balVal.textContent = eff.toneBalance > 0 ? `+${eff.toneBalance}` : String(eff.toneBalance);
+
+  // Border picker
+  document.querySelectorAll('.border-frame-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.frameId === eff.borderId);
+  });
 
 }
 
@@ -692,11 +807,12 @@ function renderGrid() {
     } else {
       // Canvas thumbnail — rendered at THUMB_SCALE (4×) for filter clarity
       const canvas = document.createElement('canvas');
-      canvas.width  = GBCam.PHOTO_WIDTH  * THUMB_SCALE;
-      canvas.height = GBCam.PHOTO_HEIGHT * THUMB_SCALE;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       const effThumb = getEffectiveSettings(photo.index);
-      renderPhotoWithTransform(ctx, photo, effThumb.palette, THUMB_SCALE, photo.index);
+      const hasBorderThumb = effThumb.borderId && effThumb.borderId !== 'none';
+      canvas.width  = (hasBorderThumb ? 160 : GBCam.PHOTO_WIDTH)  * THUMB_SCALE;
+      canvas.height = (hasBorderThumb ? 144 : GBCam.PHOTO_HEIGHT) * THUMB_SCALE;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      renderPhotoWithBorder(ctx, photo, effThumb, THUMB_SCALE, photo.index);
       applyToneAdjustments(ctx, canvas.width, canvas.height, effThumb);
       if (effThumb.activeFilters.size > 0) {
         applyActiveEffects(ctx, canvas.width, canvas.height, THUMB_SCALE,
@@ -818,12 +934,15 @@ function repaintGridSlot(index) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const eff = getEffectiveSettings(index);
-  // Re-size canvas if needed (e.g. first paint)
-  if (canvas.width !== GBCam.PHOTO_WIDTH * THUMB_SCALE) {
-    canvas.width  = GBCam.PHOTO_WIDTH  * THUMB_SCALE;
-    canvas.height = GBCam.PHOTO_HEIGHT * THUMB_SCALE;
+  // Re-size canvas if needed (border state may have changed)
+  const hasBorderSlot = eff.borderId && eff.borderId !== 'none';
+  const expW = (hasBorderSlot ? 160 : GBCam.PHOTO_WIDTH)  * THUMB_SCALE;
+  const expH = (hasBorderSlot ? 144 : GBCam.PHOTO_HEIGHT) * THUMB_SCALE;
+  if (canvas.width !== expW || canvas.height !== expH) {
+    canvas.width  = expW;
+    canvas.height = expH;
   }
-  renderPhotoWithTransform(ctx, photo, eff.palette, THUMB_SCALE, index);
+  renderPhotoWithBorder(ctx, photo, eff, THUMB_SCALE, index);
   applyToneAdjustments(ctx, canvas.width, canvas.height, eff);
   if (eff.activeFilters.size > 0) {
     const thumbFilters = new Set([...eff.activeFilters].filter(id => !THUMBNAIL_SKIP_FILTERS.has(id)));
@@ -946,13 +1065,16 @@ function renderSoloView(index) {
   // Calculate largest integer scale that fits the available canvas area
   const availW = wrap.clientWidth  - 8;  // minor padding
   const availH = wrap.clientHeight - 8;
-  const scaleW = Math.max(1, Math.floor(availW / GBCam.PHOTO_WIDTH));
-  const scaleH = Math.max(1, Math.floor(availH / GBCam.PHOTO_HEIGHT));
+  const effSolo = getEffectiveSettings(index);
+  const hasBorderSolo = effSolo.borderId && effSolo.borderId !== 'none';
+  const soloDisplayW = hasBorderSolo ? 160 : GBCam.PHOTO_WIDTH;
+  const soloDisplayH = hasBorderSolo ? 144 : GBCam.PHOTO_HEIGHT;
+  const scaleW = Math.max(1, Math.floor(availW / soloDisplayW));
+  const scaleH = Math.max(1, Math.floor(availH / soloDisplayH));
   const SOLO_SCALE = Math.max(1, Math.min(scaleW, scaleH));
 
   const ctx = dom.soloCanvas.getContext('2d');
-  const effSolo = getEffectiveSettings(index);
-  renderPhotoWithTransform(ctx, photo, effSolo.palette, SOLO_SCALE, index);
+  renderPhotoWithBorder(ctx, photo, effSolo, SOLO_SCALE, index);
 
   const w = dom.soloCanvas.width, h = dom.soloCanvas.height;
   if (effSolo.activeFilters.size > 0) {
@@ -1018,7 +1140,7 @@ function renderLightbox(index) {
   const PREVIEW_SCALE = 8;
   const ctx = dom.lbCanvas.getContext('2d');
   const effLb = getEffectiveSettings(index);
-  renderPhotoWithTransform(ctx, photo, effLb.palette, PREVIEW_SCALE, index);
+  renderPhotoWithBorder(ctx, photo, effLb, PREVIEW_SCALE, index);
 
   const w = dom.lbCanvas.width, h = dom.lbCanvas.height;
   if (effLb.activeFilters.size > 0) {
@@ -1184,7 +1306,7 @@ async function exportSinglePng() {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   const effExp = getEffectiveSettings(index);
-  renderPhotoWithTransform(ctx, photo, effExp.palette, scale, index);
+  renderPhotoWithBorder(ctx, photo, effExp, scale, index);
 
   const { width, height } = { width: canvas.width, height: canvas.height };
   if (effExp.activeFilters.size > 0) {
@@ -1217,7 +1339,7 @@ async function exportBatchPng() {
     const canvas = document.createElement('canvas');
     const ctx    = canvas.getContext('2d');
     const effBatch = getEffectiveSettings(photo.index);
-    renderPhotoWithTransform(ctx, photo, effBatch.palette, batchScale, photo.index);
+    renderPhotoWithBorder(ctx, photo, effBatch, batchScale, photo.index);
     if (effBatch.activeFilters.size > 0) {
       applyActiveEffects(ctx, canvas.width, canvas.height, batchScale,
         effBatch.filterIntensity, effBatch.filterVariant, effBatch.filterParams, effBatch.activeFilters, true, photo.index);
@@ -4762,7 +4884,7 @@ function renderPresentation() {
 
   const ctx = dom.presCanvas.getContext('2d');
   const effPres = getEffectiveSettings(_presIndex);
-  renderPhotoWithTransform(ctx, photo, effPres.palette, scale, _presIndex);
+  renderPhotoWithBorder(ctx, photo, effPres, scale, _presIndex);
   if (effPres.activeFilters.size > 0) {
     applyActiveEffects(ctx, dom.presCanvas.width, dom.presCanvas.height, scale,
       effPres.filterIntensity, effPres.filterVariant, effPres.filterParams, effPres.activeFilters, false, _presIndex);
@@ -4780,10 +4902,13 @@ async function exportContactSheet() {
   const filled = state.photos.filter(p => !p.isEmpty);
   if (filled.length === 0) { showToast('No photos to export'); return; }
 
+  // Use 160×144 cells so bordered and non-bordered photos share the same grid.
+  // Non-bordered photos are centred (black fill fills the border area).
+  const SHEET_SCALE = 4;
   const cols  = Math.min(filled.length, 5);
   const rows  = Math.ceil(filled.length / cols);
-  const CELL  = GBCam.PHOTO_WIDTH * 4;   // 4× scale per cell = 512px wide
-  const CELLH = GBCam.PHOTO_HEIGHT * 4;
+  const CELL  = 160 * SHEET_SCALE;   // 640 px wide per cell
+  const CELLH = 144 * SHEET_SCALE;   // 576 px tall
   const GAP   = 8;
   const PAD   = 16;
   const LABEL = 18; // px for photo number below each cell
@@ -4807,17 +4932,23 @@ async function exportContactSheet() {
     const x     = PAD + col * (CELL + GAP);
     const y     = PAD + row * (CELLH + LABEL + GAP);
 
-    // Render photo with transform + filter
+    // Render photo (with border if any) + filters + tone
     const tmp  = document.createElement('canvas');
     const tctx = tmp.getContext('2d');
     const effSheet = getEffectiveSettings(photo.index);
-    renderPhotoWithTransform(tctx, photo, effSheet.palette, 4, photo.index);
+    renderPhotoWithBorder(tctx, photo, effSheet, SHEET_SCALE, photo.index);
     if (effSheet.activeFilters.size > 0) {
-      applyActiveEffects(tctx, tmp.width, tmp.height, 4,
+      applyActiveEffects(tctx, tmp.width, tmp.height, SHEET_SCALE,
         effSheet.filterIntensity, effSheet.filterVariant, effSheet.filterParams, effSheet.activeFilters, true, photo.index);
     }
     applyToneAdjustments(tctx, tmp.width, tmp.height, effSheet, true);
-    sc.drawImage(tmp, x, y);
+
+    // Black fill for cell, then centre the rendered photo (non-bordered = centred in 160×144 slot)
+    sc.fillStyle = '#000';
+    sc.fillRect(x, y, CELL, CELLH);
+    const offX = Math.floor((CELL  - tmp.width)  / 2);
+    const offY = Math.floor((CELLH - tmp.height) / 2);
+    sc.drawImage(tmp, x + offX, y + offY);
 
     // Photo number label
     sc.fillStyle = 'rgba(255,255,255,0.45)';
@@ -5208,6 +5339,51 @@ function wireButtonsPaletteEditor() {
   });
 }
 
+// ── Border picker ─────────────────────────────────────────────────────────────
+
+function setupBorderPicker() {
+  const grid = document.getElementById('border-frame-grid');
+  if (!grid) return;
+
+  BORDER_FRAMES.forEach(({ id, label }) => {
+    const btn = document.createElement('button');
+    btn.className = 'border-frame-btn';
+    btn.dataset.frameId = id;
+    btn.title = id === 'none' ? 'No border' : `Frame ${label}`;
+
+    if (id === 'none') {
+      btn.textContent = 'Off';
+      btn.classList.add('border-frame-off');
+    } else {
+      // Show frame thumbnail as img
+      const img = document.createElement('img');
+      img.src = `../frames/${id}.png`;
+      img.alt = label;
+      img.draggable = false;
+      btn.appendChild(img);
+      const lbl = document.createElement('span');
+      lbl.textContent = label;
+      btn.appendChild(lbl);
+    }
+
+    btn.addEventListener('click', () => {
+      pushUndo();
+      setScopedSetting('borderId', id);
+      document.querySelectorAll('.border-frame-btn').forEach(b => b.classList.toggle('active', b.dataset.frameId === id));
+      repaintGrid();
+      updateSidebarPreview();
+    });
+
+    grid.appendChild(btn);
+  });
+
+  // Restore active state
+  const currentId = state.borderId;
+  grid.querySelectorAll('.border-frame-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.frameId === currentId);
+  });
+}
+
 // ── Collapsible sidebar sections ──────────────────────────────────────────────
 
 function setupCollapsibleSections() {
@@ -5294,20 +5470,21 @@ function updateSidebarPreview() {
   hideGifPreviewInfo(); // hide GIF frame counter when showing static preview
 
   const SCALE = 4; // match THUMB_SCALE — ensures filter appearance matches grid thumbnails
-  const W = GBCam.PHOTO_WIDTH  * SCALE;
-  const H = GBCam.PHOTO_HEIGHT * SCALE;
+  const eff = getEffectiveSettings(idx);
+  const hasBorderPrev = eff.borderId && eff.borderId !== 'none';
+  const W = (hasBorderPrev ? 160 : GBCam.PHOTO_WIDTH)  * SCALE;
+  const H = (hasBorderPrev ? 144 : GBCam.PHOTO_HEIGHT) * SCALE;
 
-  // Update canvas resolution to match render scale
+  // Update canvas resolution and container aspect ratio
   canvas.width  = W;
   canvas.height = H;
+  const previewWrap = document.getElementById('sidebar-preview-wrap');
+  if (previewWrap) previewWrap.style.aspectRatio = hasBorderPrev ? '160/144' : '8/7';
 
   const tmp = document.createElement('canvas');
-  tmp.width  = W;
-  tmp.height = H;
   const tmpCtx = tmp.getContext('2d', { willReadFrequently: true });
 
-  const eff = getEffectiveSettings(idx);
-  renderPhotoWithTransform(tmpCtx, photo, eff.palette, SCALE, idx);
+  renderPhotoWithBorder(tmpCtx, photo, eff, SCALE, idx);
   // Effects before tone — matches solo view, lightbox, and export rendering order
   if (eff.activeFilters.size > 0) {
     applyActiveEffects(tmpCtx, W, H, SCALE, eff.filterIntensity, eff.filterVariant, eff.filterParams, eff.activeFilters, false, idx);
@@ -6124,6 +6301,8 @@ function init() {
   setupSidebarCollapse();
   setupCollapsibleSections();
   setupFilterAccordion();
+  preloadBorderImages();
+  setupBorderPicker();
   setStatus('No file loaded');
   setExportScale(20);
   setThumbnailSize(120); // default: ~120px thumbnails (auto-fill)
