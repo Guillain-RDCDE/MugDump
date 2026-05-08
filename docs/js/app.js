@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = 'v1.0.1';
+const APP_VERSION = 'v1.1.0';
 
 // ── Border frames ─────────────────────────────────────────────────────────────
 
@@ -3768,8 +3768,9 @@ function applyExportFilter(ctx, width, height, scale, filter,
     const gapH    = Math.min(Math.max(1, Math.round(rowH * cfg.gap)), rowH - 1);
     const brightH = Math.max(1, rowH - gapH);
 
-    // Draw dark gaps at the bottom of each GB pixel row
-    for (let row = 0; row < GBCam.PHOTO_HEIGHT; row++) {
+    // Draw dark gaps at the bottom of each GB pixel row (use canvas height so border area is covered too)
+    const numCrtRows = Math.ceil(height / rowH);
+    for (let row = 0; row < numCrtRows; row++) {
       const rowTop = row * rowH;
       ec.fillStyle = `rgba(0,0,0,${cfg.alpha * crtMix})`;
       ec.fillRect(0, rowTop + brightH, width, gapH);
@@ -3850,13 +3851,15 @@ function applyExportFilter(ctx, width, height, scale, filter,
     if (s >= 2) {
       ec.strokeStyle = `rgba(0,0,0,${gridOpacity})`;
       ec.lineWidth = lineW;
-      // Vertical lines at each GB pixel boundary (including right outer edge)
-      for (let col = 1; col <= GBCam.PHOTO_WIDTH; col++) {
+      // Vertical lines at each GB pixel boundary — use canvas width so border area is covered
+      const numGridCols = Math.ceil(width / s);
+      for (let col = 1; col <= numGridCols; col++) {
         const x = col * s - lineW / 2;
         ec.beginPath(); ec.moveTo(x, 0); ec.lineTo(x, height); ec.stroke();
       }
-      // Horizontal lines at each GB pixel boundary (including bottom outer edge)
-      for (let row = 1; row <= GBCam.PHOTO_HEIGHT; row++) {
+      // Horizontal lines at each GB pixel boundary — use canvas height so border area is covered
+      const numGridRows = Math.ceil(height / s);
+      for (let row = 1; row <= numGridRows; row++) {
         const y = row * s - lineW / 2;
         ec.beginPath(); ec.moveTo(0, y); ec.lineTo(width, y); ec.stroke();
       }
@@ -3935,8 +3938,10 @@ function applyExportFilter(ctx, width, height, scale, filter,
     const dotRadPct  = ((filterParams.dot || {}).radius   ?? 44) / 100;
     const halationPct= ((filterParams.dot || {}).halation ?? 0)  / 100;
     const dotR = Math.max(1, Math.round(s * dotRadPct));
-    for (let py = 0; py < GBCam.PHOTO_HEIGHT; py++) {
-      for (let px = 0; px < GBCam.PHOTO_WIDTH; px++) {
+    const dotRows = Math.ceil(height / s);
+    const dotCols = Math.ceil(width / s);
+    for (let py = 0; py < dotRows; py++) {
+      for (let px = 0; px < dotCols; px++) {
         const cx = Math.round(px * s + s * 0.5);
         const cy = Math.round(py * s + s * 0.5);
         ec.beginPath();
@@ -3947,8 +3952,8 @@ function applyExportFilter(ctx, width, height, scale, filter,
     ec.globalCompositeOperation = 'source-over';
     // Halation — soft outer glow around each dot
     if (halationPct > 0) {
-      for (let py = 0; py < GBCam.PHOTO_HEIGHT; py++) {
-        for (let px = 0; px < GBCam.PHOTO_WIDTH; px++) {
+      for (let py = 0; py < dotRows; py++) {
+        for (let px = 0; px < dotCols; px++) {
           const cx2 = Math.round(px * s + s * 0.5);
           const cy2 = Math.round(py * s + s * 0.5);
           const gR   = dotR + Math.round(s * halationPct * 0.8);
