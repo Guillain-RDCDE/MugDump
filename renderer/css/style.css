@@ -356,8 +356,8 @@ html, body {
 }
 
 .photo-slot.multi-selected {
-  border-color: rgba(255,255,255,0.35);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+  border-color: rgba(255,255,255,0.65);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.65);
 }
 
 .photo-slot.selected-for-gif {
@@ -1613,9 +1613,10 @@ input[type="range"] {
   top: 0;
   z-index: 10;
   background: var(--surface);
+  margin-top: -12px;   /* cancel #export-controls padding-top so element sits flush at top */
   margin-left: -16px;
   margin-right: -16px;
-  padding: 8px 16px;
+  padding: 20px 16px 8px; /* 20px top = 12px offset + 8px internal breathing room */
   border-bottom: 1px solid var(--border-dim);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
