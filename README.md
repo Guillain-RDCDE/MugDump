@@ -103,6 +103,8 @@ No installation. No sign-up. Runs entirely in your browser.
 
 **Community palettes:** sourced from [Lospec](https://lospec.com) — individual palette credits to [Kirokaze](https://lospec.com/kirokaze), [Kerrie Lake](https://lospec.com/kerrielake), [Poltergasm](https://lospec.com/poltergasm), [WildLeoKnight](https://lospec.com/wildleoknight), [Klafooty](https://lospec.com/klafooty), [Space Sandwich](https://lospec.com/spacesandwich), and [BurakoIRL](https://lospec.com/burakoirl).
 
+**Border frames:** sourced from [RomanObaraz/gb-cam-lab](https://github.com/RomanObaraz/gb-cam-lab).
+
 ---
 
 Made by [clickysteve](https://github.com/clickysteve) · [allmyfriendsarejpegs.com](https://allmyfriendsarejpegs.com)
