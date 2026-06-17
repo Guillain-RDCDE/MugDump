@@ -1,81 +1,96 @@
-<img src="docs/icon.png" width="160" alt="MugDump">
+<img src="docs/icon.png" width="120" alt="MugDump">
 
 # MugDump
 
-**Dump and develop your Game Boy Camera mug shots.** Point MugDump at a Game Boy
-Camera save — straight off your Analogue Pocket SD card, or any `.sav` / `.srm`
-dump — and it pulls out your 30 photos, gives them a full digital darkroom
-(palettes, effects, frames), and exports them as PNG or animated GIF.
+**Dump and develop your Game Boy Camera mug shots.** Pull the photos off your
+Game Boy Camera and turn them into PNGs and GIFs — palettes, effects, frames and all.
 
-Runs two ways from the same code: a desktop **Electron app**, and a zero-install
-**web app** that runs entirely in your browser.
+**[▶ Open the web app](https://guillain-rdcde.github.io/MugDump/)** — no install, runs in your browser.
 
 > *mug shot* (the portraits the Game Boy Camera was made for) + *memory dump*
-> (pulling the photos out of the cartridge SRAM) = **MugDump**.
+> (pulling those photos out of the cartridge) = **MugDump**.
 
 ---
 
-## What it does
+## 🟢 Beginner — "I just want my photos"
 
-**Read your saves**
-- Loads Game Boy Camera SRAM dumps (`.sav` / `.srm`, 128 KB) — drag-and-drop or file picker
-- **Analogue Pocket** SD-card detection: finds Game Boy Camera saves under
-  `Memories/` (built-in cores) and `Saves/` (openFPGA cores) automatically
-- Decodes the 2bpp tile format into your 30 photo slots, skipping empty ones
+Four steps, nothing technical:
 
-**Develop them**
-- **100+ palettes** — original DMG/GBC/SGB hardware palettes plus Lospec community palettes
-- Custom **palette editor** with `.pal` / `.gbp` import & export, favourites and a random picker
-- A deep stack of **effects**: CRT scanlines, LCD grid, halftone, dot-matrix,
-  phosphor glow, chromatic aberration, vignette, noise, VHS ghosting, dithering,
-  pixel-sort, glitch — each with its own controls
-- Tone controls: brightness, contrast, split toning
-- **21 authentic Game Boy Camera border frames**, recoloured to match your palette
-- Apply everything per-photo or globally across the whole roll; copy/paste settings; undo
+1. **On your Analogue Pocket:** open the Game Boy Camera, then create a **Save State** — *Memories › Create Save State*.
+2. **Pop the SD card** into your computer.
+3. **Open MugDump** → click **Analogue Pocket…** → pick your save.
+4. **Click a photo, choose a palette, hit Export.** 🎉
 
-**Export them**
-- Batch **PNG** at any scale, with palette and effects baked in
-- Animated **GIF** builder — reorder frames, per-frame palettes, loop / bounce
-- **Contact sheet** of all 30 photos in one image
-- Save and reload your work as a `.gbcp` project file
+That's the whole thing. No files to hunt for, no settings to understand.
+
+*No Analogue Pocket? You can also drag any `.sav` / `.srm` save straight onto the window.*
 
 ---
 
-## Running it
+## 🔵 Pro — the full toolbox
 
-### Web app
-Open `docs/index.html` in a browser, or serve the `docs/` folder. Chrome / Edge
-give the best experience (File System Access API for direct SD-card reading);
-Firefox and Safari fall back to standard file pickers. No install, no sign-up.
+Everything works **per-photo** or **globally** across your whole 30-photo roll, with undo and copy/paste of settings between photos.
 
-### Desktop app (Electron)
+**Loading**
+- `.sav` / `.srm` (128 KB Game Boy Camera SRAM) — drag-and-drop or file picker
+- **Analogue Pocket** SD detection (`Memories/Save States`, openFPGA `Saves/<core>`)
+- Save & reload your work as a `.gbcp` project
+
+**Palettes**
+- 100+ palettes — DMG, GBC, SGB and Lospec community packs, grouped by category
+- Custom palette editor with `.pal` / `.gbp` import / export, favourites, random picker
+
+**Effects & tone**
+- CRT, LCD grid, halftone, dot-matrix, phosphor glow, chromatic aberration, vignette,
+  noise, VHS ghosting, dithering, pixel-sort, glitch — each with its own controls
+- Brightness, contrast, split toning
+
+**Border frames**
+- 21 authentic Game Boy Camera frames, recoloured to match your palette
+
+**Export**
+- Batch **PNG** at any scale · animated **GIF** builder (reorder, per-frame palette, loop/bounce) · 30-photo **contact sheet**
+
+### Keyboard shortcuts
+
+| Key | Action | Key | Action |
+|-----|--------|-----|--------|
+| `←` / `→` | Prev / next photo | `R` / `L` | Rotate cw / ccw |
+| `G` / `S` | Grid / solo view | `H` / `V` | Flip horizontal / vertical |
+| `F` | Fullscreen presentation | `P` | Before/after preview |
+| `Ctrl/Cmd+Z` | Undo | `Ctrl/Cmd+C` · `+V` | Copy / paste settings |
+| `Ctrl/Cmd+A` | Select all | `-` / `+` | Prev / next favourite palette |
+
+### Run it locally
+
+Desktop app (Electron):
+
 ```bash
 npm install
 npm start
 ```
+
 Build installers (output in `dist/`):
+
 ```bash
 npm run build:win     # Windows (NSIS)
 npm run build:mac     # macOS (dmg)
 npm run build:linux   # Linux (AppImage)
 ```
 
----
+The same code also runs as a static web app — just serve the `docs/` folder.
 
-## How it works
+### How it works
 
-Game Boy Camera SRAM is exactly 128 KB. Photo data starts at offset `0x2000`,
-in 30 slots of `0x1000` bytes each. Every slot holds a 128×112 image stored as
-2-bits-per-pixel Game Boy tiles (16×14 tiles, 16 bytes per tile), plus a
-thumbnail and metadata. Each pixel is a value 0–3 that MugDump maps onto the
-four colours of your chosen palette. `.srm` files are the same SRAM in
-RetroArch's naming — identical structure to `.sav`.
+Game Boy Camera SRAM is exactly 128 KB. Photos start at offset `0x2000`, in 30 slots
+of `0x1000` bytes; each is a 128×112 image stored as 2-bits-per-pixel Game Boy tiles
+(16×14 tiles, 16 bytes each). Every pixel is a value 0–3 mapped onto the four colours
+of your palette. `.srm` files are the same SRAM under RetroArch's name.
 
-The decoding lives in [`renderer/js/gbcam.js`](renderer/js/gbcam.js); the whole
-editor/UI is in [`renderer/js/app.js`](renderer/js/app.js). The desktop shell
-([`main.js`](main.js)) and the browser shim
-([`docs/js/web-api.js`](docs/js/web-api.js)) expose the same `window.api`, so the
-app code is identical across both targets.
+Decoder: [`renderer/js/gbcam.js`](renderer/js/gbcam.js) · editor/UI:
+[`renderer/js/app.js`](renderer/js/app.js). The desktop shell ([`main.js`](main.js)) and
+the browser shim ([`docs/js/web-api.js`](docs/js/web-api.js)) expose the same `window.api`,
+so the app code is identical on desktop and web.
 
 ---
 
