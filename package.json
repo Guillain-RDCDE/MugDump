@@ -1,7 +1,7 @@
 {
-  "name": "dmg-darkroom",
+  "name": "mugdump",
   "version": "0.1.0",
-  "description": "DMG DarkRoom — Game Boy Camera companion app. Load .sav files, manage photos, export with proper palettes.",
+  "description": "MugDump — extract and develop your Game Boy Camera mug shots. Load .sav/.srm saves, apply palettes and effects, export PNG/GIF.",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -17,8 +17,8 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.clickysteve.dmgdarkroom",
-    "productName": "DMG DarkRoom",
+    "appId": "com.rdcde.mugdump",
+    "productName": "MugDump",
     "files": [
       "main.js",
       "preload.js",
@@ -29,7 +29,6 @@
     "mac": {
       "category": "public.app-category.photography",
       "icon": "build/icon.icns",
-      "identity": "Developer ID Application: Stephen McLeod Blythe (2N9AC8M66C)",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
@@ -45,7 +44,7 @@
       "target": [{ "target": "AppImage", "arch": ["x64"] }]
     },
     "dmg": {
-      "title": "DMG DarkRoom",
+      "title": "MugDump",
       "background": "build/dmg-background.png",
       "window": { "width": 540, "height": 380 }
     }

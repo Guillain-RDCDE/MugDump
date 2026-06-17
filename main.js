@@ -371,7 +371,7 @@ ipcMain.handle('export-sav', async (_event, { buffer, defaultName }) => {
 
 ipcMain.handle('save-project', async (_event, { json, defaultName }) => {
   const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
-    title: 'Save DMG DarkRoom Project',
+    title: 'Save MugDump Project',
     defaultPath: defaultName,
     filters: [{ name: 'GB Camera Project', extensions: ['gbcp'] }],
   });
@@ -384,7 +384,7 @@ ipcMain.handle('save-project', async (_event, { json, defaultName }) => {
 
 ipcMain.handle('open-project', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
-    title: 'Open DMG DarkRoom Project',
+    title: 'Open MugDump Project',
     filters: [{ name: 'GB Camera Project', extensions: ['gbcp'] }],
     properties: ['openFile'],
   });

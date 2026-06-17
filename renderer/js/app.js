@@ -1,5 +1,5 @@
 /**
- * app.js — DMG DarkRoom renderer
+ * app.js — MugDump renderer
  *
  * Dependencies (loaded via script tags before this file):
  *   - gbcam.js  → window.GBCam
@@ -1721,7 +1721,7 @@ async function exportGif() {
     if (frames.length === 0) { showToast('No valid frames'); return; }
 
     const loopTag = state.gifLoop !== 'infinite' ? `_${state.gifLoop}` : '';
-    const defaultName = `darkroom_anim_${scale}x${loopTag}.gif`;
+    const defaultName = `mugdump_anim_${scale}x${loopTag}.gif`;
 
     const result = await window.api.saveGif({
       frames,
@@ -2044,7 +2044,7 @@ function wireButtons() {
   // Sticky preview pin toggle
   const previewPinBtn = document.getElementById('preview-pin-btn');
   const previewGroup  = document.getElementById('preview-group');
-  const PREVIEW_PIN_KEY = 'dmgdr:previewPinned';
+  const PREVIEW_PIN_KEY = 'mugdump:previewPinned';
 
   function applyPreviewPin(pinned) {
     if (!previewGroup) return;
@@ -4751,7 +4751,7 @@ function buildProjectJson() {
 
   return JSON.stringify({
     version: 1,
-    app: 'DMG DarkRoom',
+    app: 'MugDump',
     filename: state.filename || 'GBCAMERA.sav',
     sav: sav64,
     settings: {
@@ -5478,7 +5478,7 @@ function setupBorderPicker() {
 // ── Collapsible sidebar sections ──────────────────────────────────────────────
 
 function setupCollapsibleSections() {
-  const STORAGE_KEY = 'darkroom:section-states'; // object map of sectionId → isCollapsed
+  const STORAGE_KEY = 'mugdump:section-states'; // object map of sectionId → isCollapsed
   let sectionStates = {};
   try { sectionStates = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(_) {}
 
@@ -5586,7 +5586,7 @@ function updateSidebarPreview() {
 
 // ── Effect Presets ──────────────────────────────────────────────────────────
 
-const PRESET_KEY = 'dmgdr:presets:v1';
+const PRESET_KEY = 'mugdump:presets:v1';
 
 function getPresets() {
   try { return JSON.parse(localStorage.getItem(PRESET_KEY) || '{}'); }
@@ -5695,7 +5695,7 @@ function exportPresets() {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = 'dmg-darkroom-presets.json';
+  a.download = 'mugdump-presets.json';
   a.click();
   URL.revokeObjectURL(url);
   showToast(`Exported ${Object.keys(presets).length} preset(s)`);

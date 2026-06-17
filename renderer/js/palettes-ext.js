@@ -1,5 +1,5 @@
 /**
- * palettes-ext.js — Extended palette library for DMG DarkRoom
+ * palettes-ext.js — Extended palette library for MugDump
  *
  * Sources / Credits:
  *   • TheWolfBunny64       https://github.com/TheWolfBunny64
