@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';">
-  <title>DMG DarkRoom</title>
+  <title>MugDump</title>
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="apple-touch-icon" href="icon.png">
-  <meta name="og:title" content="DMG DarkRoom">
-  <meta name="og:description" content="Game Boy Camera companion — load .sav files, apply palettes, export with filters.">
-  <meta name="og:image" content="https://dmgdarkroom.allmyfriendsarejpegs.com/icon.png">
+  <meta name="og:title" content="MugDump">
+  <meta name="og:description" content="Extract and develop your Game Boy Camera mug shots — load .sav/.srm saves, apply palettes and effects, export PNG/GIF.">
+  <meta name="og:image" content="https://guillain-rdcde.github.io/MugDump/icon.png">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="web">
@@ -20,8 +20,8 @@
 
   <!-- ── Titlebar ─────────────────────────────────────────────────────────── -->
   <div id="titlebar">
-    <button id="btn-home" class="app-name-btn">DMG DarkRoom</button>
-    <span class="app-subtitle"><span id="app-version"></span><span class="app-subtitle-detail">by <a href="https://allmyfriendsarejpegs.com" target="_blank">allmyfriendsarejpegs</a></span></span>
+    <button id="btn-home" class="app-name-btn">MugDump</button>
+    <span class="app-subtitle"><span id="app-version"></span><span class="app-subtitle-detail">forked from <a href="https://github.com/clickysteve/dmg-darkroom" target="_blank">DMG DarkRoom</a></span></span>
     <span class="spacer"></span>
     <button id="tb-open-sav"      class="btn btn-secondary btn-sm">Open .sav / .srm…</button>
     <button id="tb-open-pocket"   class="btn btn-ghost btn-sm">Open from Pocket SD…</button>
@@ -75,9 +75,9 @@
 
   <!-- ── Welcome / empty state ──────────────────────────────────────────────── -->
   <div id="welcome">
-    <div class="welcome-icon"><img src="icon.png" alt="DMG DarkRoom" style="width:80px;height:80px;image-rendering:pixelated;border-radius:14px;"></div>
-    <h2>DMG DarkRoom</h2>
-    <p class="welcome-subtitle">Camera Save Darkroom</p>
+    <div class="welcome-icon"><img src="icon.png" alt="MugDump" style="width:80px;height:80px;image-rendering:pixelated;border-radius:14px;"></div>
+    <h2>MugDump</h2>
+    <p class="welcome-subtitle">Dump &amp; develop your Game Boy Camera photos</p>
     <p>Load a <code>.sav</code> or <code>.srm</code> file to view, manage, and export your Game Boy Camera photos.</p>
     <div class="btn-row">
       <button id="btn-open-sav"    class="btn btn-primary">Open .sav / .srm…</button>

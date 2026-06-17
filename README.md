@@ -1,115 +1,91 @@
-<img src="docs/icon.png" width="200" alt="DMG DarkRoom">
+<img src="docs/icon.png" width="160" alt="MugDump">
 
-# DMG DarkRoom
+# MugDump
 
-**Game Boy Camera darkroom — in your browser.** Load `.sav` or `.srm` files, browse your photos, apply palettes and effects, and export.
+**Dump and develop your Game Boy Camera mug shots.** Point MugDump at a Game Boy
+Camera save — straight off your Analogue Pocket SD card, or any `.sav` / `.srm`
+dump — and it pulls out your 30 photos, gives them a full digital darkroom
+(palettes, effects, frames), and exports them as PNG or animated GIF.
 
-**→ [dmgdarkroom.allmyfriendsarejpegs.com](https://dmgdarkroom.allmyfriendsarejpegs.com)**
+Runs two ways from the same code: a desktop **Electron app**, and a zero-install
+**web app** that runs entirely in your browser.
 
----
-
-## Features
-
-**Palettes**
-- 100+ colour palettes: DMG, GBC, SGB, and Lospec community palettes
-- Custom palette editor with `.pal` / `.gbp` import/export
-- Palette favourites, palette grid visualiser, and random palette picker
-
-**Effects & tone**
-- CRT, LCD grid, halftone, dot matrix, phosphor glow, chromatic aberration, vignette, noise/static, VHS ghosting, and scanline jitter — each with granular per-filter controls
-- Brightness, contrast, and split toning (shadow/highlight colour with intensity and balance)
-
-**Border frames**
-- 21 authentic Game Boy Camera border frames, palette-colorized to match your chosen palette
-- Enable per-photo or globally; frame selection and on/off state saved in presets and project files
-- Frames sourced from [gb-cam-lab](https://github.com/RomanObaraz/gb-cam-lab)
-
-**Editing**
-- Apply palettes, effects, and borders per-photo or globally across your whole roll
-- Copy and paste settings between photos
-- Effect presets — save, load, import and export as JSON (borders included)
-- Per-photo rotate and flip
-- Undo support
-
-**Export**
-- Batch PNG export at any scale with palettes and effects applied
-- Animated GIF builder — drag-to-reorder frames, per-frame palette, bounce mode, loop controls
-- Contact sheet — all 30 photos in one image
-
-**Loading**
-- Drag and drop `.sav` or `.srm` files, or open from file
-- Analogue Pocket SD card support
-- Save and reload project files (`.gbcp`)
+> *mug shot* (the portraits the Game Boy Camera was made for) + *memory dump*
+> (pulling the photos out of the cartridge SRAM) = **MugDump**.
 
 ---
 
-## Keyboard shortcuts
+## What it does
 
-### Navigation
+**Read your saves**
+- Loads Game Boy Camera SRAM dumps (`.sav` / `.srm`, 128 KB) — drag-and-drop or file picker
+- **Analogue Pocket** SD-card detection: finds Game Boy Camera saves under
+  `Memories/` (built-in cores) and `Saves/` (openFPGA cores) automatically
+- Decodes the 2bpp tile format into your 30 photo slots, skipping empty ones
 
-| Key | Action |
-|-----|--------|
-| `←` / `→` | Previous / next photo |
-| `↑` / `↓` | Previous / next row (grid view) |
-| `G` | Switch to grid view |
-| `S` | Switch to solo view |
-| `F` | Open fullscreen presentation (or close) |
-| `Escape` | Close presentation / lightbox / solo mode |
+**Develop them**
+- **100+ palettes** — original DMG/GBC/SGB hardware palettes plus Lospec community palettes
+- Custom **palette editor** with `.pal` / `.gbp` import & export, favourites and a random picker
+- A deep stack of **effects**: CRT scanlines, LCD grid, halftone, dot-matrix,
+  phosphor glow, chromatic aberration, vignette, noise, VHS ghosting, dithering,
+  pixel-sort, glitch — each with its own controls
+- Tone controls: brightness, contrast, split toning
+- **21 authentic Game Boy Camera border frames**, recoloured to match your palette
+- Apply everything per-photo or globally across the whole roll; copy/paste settings; undo
 
-### Photo transforms (requires a photo selected)
-
-| Key | Action |
-|-----|--------|
-| `R` | Rotate clockwise |
-| `L` | Rotate counter-clockwise |
-| `H` | Flip horizontal |
-| `V` | Flip vertical |
-
-### Editing
-
-| Key | Action |
-|-----|--------|
-| `Cmd/Ctrl+Z` | Undo |
-| `Cmd/Ctrl+C` | Copy settings |
-| `Cmd/Ctrl+V` | Paste settings |
-| `Cmd/Ctrl+A` | Select all photos |
-| `P` | Toggle before/after effects preview |
-| `Space` | Toggle GIF frame selection (in GIF mode) |
-
-### Palettes
-
-| Key | Action |
-|-----|--------|
-| `-` | Previous favourite palette |
-| `+` | Next favourite palette |
+**Export them**
+- Batch **PNG** at any scale, with palette and effects baked in
+- Animated **GIF** builder — reorder frames, per-frame palettes, loop / bounce
+- **Contact sheet** of all 30 photos in one image
+- Save and reload your work as a `.gbcp` project file
 
 ---
 
-## Usage
+## Running it
 
-Open **[dmgdarkroom.allmyfriendsarejpegs.com](https://dmgdarkroom.allmyfriendsarejpegs.com)** in Chrome or Edge for the best experience (full File System Access API). Firefox and Safari work with standard file pickers.
+### Web app
+Open `docs/index.html` in a browser, or serve the `docs/` folder. Chrome / Edge
+give the best experience (File System Access API for direct SD-card reading);
+Firefox and Safari fall back to standard file pickers. No install, no sign-up.
 
-No installation. No sign-up. Runs entirely in your browser.
+### Desktop app (Electron)
+```bash
+npm install
+npm start
+```
+Build installers (output in `dist/`):
+```bash
+npm run build:win     # Windows (NSIS)
+npm run build:mac     # macOS (dmg)
+npm run build:linux   # Linux (AppImage)
+```
 
 ---
 
-## Technical notes
+## How it works
 
-- Game Boy Camera SRAM: 128KB, photos at `0x2000`, 30 slots × 3584 bytes, 128×112px 2bpp
-- `.srm` files are raw SRAM dumps in RetroArch format — identical structure to `.sav`
+Game Boy Camera SRAM is exactly 128 KB. Photo data starts at offset `0x2000`,
+in 30 slots of `0x1000` bytes each. Every slot holds a 128×112 image stored as
+2-bits-per-pixel Game Boy tiles (16×14 tiles, 16 bytes per tile), plus a
+thumbnail and metadata. Each pixel is a value 0–3 that MugDump maps onto the
+four colours of your chosen palette. `.srm` files are the same SRAM in
+RetroArch's naming — identical structure to `.sav`.
+
+The decoding lives in [`renderer/js/gbcam.js`](renderer/js/gbcam.js); the whole
+editor/UI is in [`renderer/js/app.js`](renderer/js/app.js). The desktop shell
+([`main.js`](main.js)) and the browser shim
+([`docs/js/web-api.js`](docs/js/web-api.js)) expose the same `window.api`, so the
+app code is identical across both targets.
 
 ---
 
 ## Credits
 
-**SRAM format research:** [AntonioND/gbcam2png](https://github.com/AntonioND/gbcam2png) and the [Game Boy Camera Club](https://gameboycameraclub.com) community.
+MugDump is a fork of **[DMG DarkRoom](https://github.com/clickysteve/dmg-darkroom)**
+by [clickysteve](https://github.com/clickysteve) — all of the original
+heavy lifting (decoder, editor, effects) is theirs. Huge thanks.
 
-**GBC and SGB palettes:** sourced from [The Cutting Room Floor](https://tcrf.net/Notes:Game_Boy_Color_Bootstrap_ROM).
-
-**Community palettes:** sourced from [Lospec](https://lospec.com) — individual palette credits to [Kirokaze](https://lospec.com/kirokaze), [Kerrie Lake](https://lospec.com/kerrielake), [Poltergasm](https://lospec.com/poltergasm), [WildLeoKnight](https://lospec.com/wildleoknight), [Klafooty](https://lospec.com/klafooty), [Space Sandwich](https://lospec.com/spacesandwich), and [BurakoIRL](https://lospec.com/burakoirl).
-
-**Border frames:** sourced from [RomanObaraz/gb-cam-lab](https://github.com/RomanObaraz/gb-cam-lab).
-
----
-
-Made by [clickysteve](https://github.com/clickysteve) · [allmyfriendsarejpegs.com](https://allmyfriendsarejpegs.com)
+- **SRAM format research:** [AntonioND/gbcam2png](https://github.com/AntonioND/gbcam2png) and the [Game Boy Camera Club](https://gameboycameraclub.com)
+- **GBC / SGB palettes:** [The Cutting Room Floor](https://tcrf.net/Notes:Game_Boy_Color_Bootstrap_ROM)
+- **Community palettes:** [Lospec](https://lospec.com) — Kirokaze, Kerrie Lake, Poltergasm, WildLeoKnight, Klafooty, Space Sandwich, BurakoIRL
+- **Border frames:** [RomanObaraz/gb-cam-lab](https://github.com/RomanObaraz/gb-cam-lab)
