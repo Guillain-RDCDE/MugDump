@@ -3186,6 +3186,25 @@ body.web #titlebar { padding-left: 16px; }
 }
 .onboard-steps b { color: var(--text); font-weight: 600; }
 
+/* ── Border hover preview popover ──────────────────────────────────────────── */
+.border-preview-popover {
+  position: fixed;
+  z-index: 200;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.border-preview-popover canvas {
+  display: block;
+  width: 240px;
+  height: 216px;
+  image-rendering: pixelated;
+  border-radius: 4px;
+}
+
 /* ── Discreet repo link (bottom-right) ─────────────────────────────────────── */
 #repo-link {
   position: fixed;
