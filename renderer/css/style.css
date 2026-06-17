@@ -714,19 +714,20 @@ input[type="range"] {
 }
 
 #welcome h2 {
-  font-size: 27px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
   color: var(--text);
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 #welcome .welcome-subtitle {
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 400;
   color: var(--text-2);
-  margin: -8px 0 4px;
-  max-width: 320px;
-  line-height: 1.45;
+  margin: -6px 0 6px;
+  max-width: 330px;
+  line-height: 1.5;
 }
 
 #welcome .welcome-hint {
@@ -749,11 +750,15 @@ input[type="range"] {
 }
 
 #welcome .welcome-btn {
-  padding: 11px 20px;
+  padding: 11px 22px;
   font-size: 13px;
   font-weight: 600;
-  border-radius: var(--radius);
+  border-radius: 980px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
 }
+#welcome .welcome-btn:hover { transform: translateY(-1px); }
+#welcome .btn-primary.welcome-btn { box-shadow: 0 4px 14px var(--accent-glow); }
+#welcome .btn-primary.welcome-btn:hover { box-shadow: 0 7px 18px var(--accent-glow); opacity: 1; }
 
 /* ── Status bar ───────────────────────────────────────────────────────────── */
 
@@ -3119,18 +3124,19 @@ body.web #titlebar { padding-left: 16px; }
 /* ── Welcome onboarding card ───────────────────────────────────────────────── */
 .onboard {
   text-align: left;
-  background: var(--surface-2);
-  border: 1px solid var(--border-dim);
-  border-radius: 12px;
-  padding: 16px 18px;
-  margin: 2px auto 0;
-  max-width: 360px;
+  max-width: 320px;
+  margin: 12px auto 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--border-dim);
 }
 .onboard-title {
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
-  color: var(--text);
-  margin-bottom: 12px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--text-3);
+  text-align: center;
+  margin-bottom: 14px;
 }
 .onboard-steps {
   list-style: none;
@@ -3139,13 +3145,13 @@ body.web #titlebar { padding-left: 16px; }
   counter-reset: onboard-step;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 .onboard-steps li {
   counter-increment: onboard-step;
   position: relative;
-  padding-left: 30px;
-  font-size: 12px;
+  padding-left: 28px;
+  font-size: 12.5px;
   line-height: 1.5;
   color: var(--text-2);
 }
@@ -3153,19 +3159,19 @@ body.web #titlebar { padding-left: 16px; }
   content: counter(onboard-step);
   position: absolute;
   left: 0;
-  top: -1px;
-  width: 20px;
-  height: 20px;
+  top: 0;
+  width: 19px;
+  height: 19px;
   border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.onboard-steps b { color: var(--text); font-weight: 700; }
+.onboard-steps b { color: var(--text); font-weight: 600; }
 
 /* ── Discreet repo link (bottom-right) ─────────────────────────────────────── */
 #repo-link {
