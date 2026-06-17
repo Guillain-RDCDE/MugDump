@@ -118,6 +118,7 @@
         <button id="btn-reset-all" class="btn btn-ghost btn-sm file-only grid-action-item" title="Clear effects and tone from selected photos (palette preserved)">Clear Edits</button>
         <button id="btn-copy-effects" class="btn-copy-effects btn btn-ghost btn-sm file-only grid-action-item" title="Copy all settings from selected photo">Copy Settings</button>
         <button id="btn-paste-effects" class="btn-paste-effects btn btn-ghost btn-sm file-only grid-action-item" title="Paste settings to selected photos" disabled>Paste Settings</button>
+        <button id="btn-export-all-grid" class="btn btn-ghost btn-sm file-only grid-action-item" title="Export every photo as a PNG (in one go)">Export All…</button>
         <button id="btn-contact-sheet" class="btn btn-ghost btn-sm file-only grid-action-item" title="Export all photos as a contact sheet">Export Contact Sheet…</button>
         <div class="overflow-wrap" id="grid-actions-wrap">
           <button id="btn-grid-actions" class="btn btn-ghost btn-sm" title="More actions">Actions ▾</button>
@@ -127,6 +128,7 @@
             <button class="overflow-item overflow-file-only" data-for="btn-reset-all">Clear Edits</button>
             <button class="overflow-item overflow-file-only" data-for="btn-copy-effects">Copy Settings</button>
             <button class="overflow-item overflow-file-only" data-for="btn-paste-effects">Paste Settings</button>
+            <button class="overflow-item overflow-file-only" data-for="btn-export-all-grid">Export All…</button>
             <button class="overflow-item overflow-file-only" data-for="btn-contact-sheet">Export Contact Sheet…</button>
           </div>
         </div>
@@ -181,6 +183,11 @@
           <div class="ctrl-group collapsible" id="preview-group">
             <div class="tone-header section-header">
               <div class="ctrl-label section-label">Preview</div>
+              <div class="preview-size-stepper" title="Preview size">
+                <button id="preview-size-dec" class="btn btn-ghost btn-xs btn-icon" title="Smaller preview">−</button>
+                <span id="preview-size-label">2×</span>
+                <button id="preview-size-inc" class="btn btn-ghost btn-xs btn-icon" title="Larger preview">+</button>
+              </div>
               <button id="preview-pin-btn" class="btn btn-ghost btn-xs btn-icon" title="Pin preview (keep visible while scrolling)">📌</button>
               <label class="section-check-wrap preview-effects-wrap" title="Show effects in preview (P)">
                 <input type="checkbox" id="effects-preview-check" checked>
