@@ -3520,6 +3520,18 @@ function closePaletteGrid() {
   renderRecentPalettes(); // update strip after grid closes
 }
 
+// Collapsed categories in the All Palettes grid — remembered across sessions.
+const PGRID_COLLAPSE_KEY = 'mugdump:pgrid:collapsed';
+function getCollapsedPgridGroups() {
+  try { return new Set(JSON.parse(localStorage.getItem(PGRID_COLLAPSE_KEY) || '[]')); }
+  catch (_) { return new Set(); }
+}
+function setPgridGroupCollapsed(group, collapsed) {
+  const set = getCollapsedPgridGroups();
+  if (collapsed) set.add(group); else set.delete(group);
+  try { localStorage.setItem(PGRID_COLLAPSE_KEY, JSON.stringify([...set])); } catch (_) {}
+}
+
 async function buildPaletteGrid() {
   const list = document.getElementById('palette-grid-list');
   if (!list) return;
@@ -3534,11 +3546,14 @@ async function buildPaletteGrid() {
   list.innerHTML = '';
 
   const renderQueue = [];
+  const collapsedGroups = getCollapsedPgridGroups();
 
-  function makePaletteCell(id, pal) {
+  function makePaletteCell(id, pal, groupKey) {
     const cell = document.createElement('div');
     cell.className = 'pgrid-cell' + (state.palette.id === id ? ' active' : '');
     cell.dataset.paletteId = id;
+    cell.dataset.group = groupKey;
+    if (collapsedGroups.has(groupKey)) cell.style.display = 'none';
 
     const canvas = document.createElement('canvas');
     canvas.width  = GBCam.PHOTO_WIDTH;
@@ -3583,10 +3598,30 @@ async function buildPaletteGrid() {
     return cell;
   }
 
-  function addGridSectionHeader(text) {
+  // Click a section header to collapse/expand that category — remembered across sessions.
+  function addGridSectionHeader(text, groupKey) {
     const h = document.createElement('div');
     h.className = 'pgrid-section-header';
-    h.textContent = text;
+    h.dataset.group = groupKey;
+    if (collapsedGroups.has(groupKey)) h.classList.add('collapsed');
+
+    const chevron = document.createElement('span');
+    chevron.className = 'pgrid-chevron';
+    chevron.textContent = '▾';
+    const label = document.createElement('span');
+    label.textContent = text;
+    h.appendChild(chevron);
+    h.appendChild(label);
+
+    h.addEventListener('click', () => {
+      const nowCollapsed = !h.classList.contains('collapsed');
+      h.classList.toggle('collapsed', nowCollapsed);
+      if (nowCollapsed) collapsedGroups.add(groupKey); else collapsedGroups.delete(groupKey);
+      setPgridGroupCollapsed(groupKey, nowCollapsed);
+      list.querySelectorAll(`.pgrid-cell[data-group="${groupKey}"]`)
+        .forEach(cell => { cell.style.display = nowCollapsed ? 'none' : ''; });
+    });
+
     list.appendChild(h);
   }
 
@@ -3603,15 +3638,15 @@ async function buildPaletteGrid() {
   ];
   for (const g of orderedGroups) {
     if (!grouped[g] || grouped[g].length === 0) continue;
-    addGridSectionHeader(PAL_GROUP_LABELS[g] || g);
-    for (const [id, pal] of grouped[g]) list.appendChild(makePaletteCell(id, pal));
+    addGridSectionHeader(PAL_GROUP_LABELS[g] || g, g);
+    for (const [id, pal] of grouped[g]) list.appendChild(makePaletteCell(id, pal, g));
   }
 
   // Custom palettes last
   const customs = Object.entries(PALETTES).filter(([, p]) => p.custom);
   if (customs.length > 0) {
-    addGridSectionHeader('Custom');
-    for (const [id, pal] of customs) list.appendChild(makePaletteCell(id, pal));
+    addGridSectionHeader('Custom', 'custom');
+    for (const [id, pal] of customs) list.appendChild(makePaletteCell(id, pal, 'custom'));
   }
 
   // Scroll active palette into view
@@ -3639,12 +3674,18 @@ function filterPaletteGrid(query) {
   const q = query.toLowerCase().trim();
   const list = document.getElementById('palette-grid-list');
   if (!list) return;
+  const collapsed = getCollapsedPgridGroups();
   list.querySelectorAll('.pgrid-cell').forEach(cell => {
     const name = (cell.querySelector('.pgrid-name')?.textContent || '').toLowerCase();
-    cell.style.display = (!q || name.includes(q)) ? '' : 'none';
+    const matches = !q || name.includes(q);
+    // While searching, show every match (ignore collapse); otherwise respect collapsed categories
+    const hidden = q ? !matches : (!matches || collapsed.has(cell.dataset.group));
+    cell.style.display = hidden ? 'none' : '';
   });
-  // Hide a section header when every palette under it is filtered out
+  // While searching, hide a header whose palettes are all filtered out.
+  // When not searching, keep every header visible (collapsed ones included).
   list.querySelectorAll('.pgrid-section-header').forEach(header => {
+    if (!q) { header.style.display = ''; return; }
     let next = header.nextElementSibling;
     let anyVisible = false;
     while (next && !next.classList.contains('pgrid-section-header')) {
