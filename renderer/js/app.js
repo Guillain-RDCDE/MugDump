@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = '0.1';
+const APP_VERSION = '0.6';
 
 // ── Border frames ─────────────────────────────────────────────────────────────
 

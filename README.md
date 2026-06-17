@@ -7,7 +7,7 @@
 **Dump and develop your Game Boy Camera mug shots.** Pull the photos off your
 Game Boy Camera and turn them into PNGs and GIFs — palettes, effects, frames and all.
 
-**[▶ Open the web app](https://guillain-rdcde.github.io/MugDump/)** — no install, runs in your browser.
+**[▶ Open the web app](https://guillain-rdcde.github.io/MugDump/)** — no install, runs in your browser. · **[Changelog](CHANGELOG.md)**
 
 > *mug shot* (the portraits the Game Boy Camera was made for) + *memory dump*
 > (pulling those photos out of the cartridge) = **MugDump**.
