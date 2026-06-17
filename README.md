@@ -9,6 +9,8 @@ Game Boy Camera and turn them into PNGs and GIFs — palettes, effects, frames a
 
 **[▶ Open the web app](https://guillain-rdcde.github.io/MugDump/)** — no install, runs in your browser. · **[Changelog](CHANGELOG.md)**
 
+> ⚠️ **Reading the SD card directly (and deleting saves on it) only works in [Chrome](https://www.google.com/chrome/) or [Edge](https://www.microsoft.com/edge)** — it relies on the File System Access API, which Firefox and Safari don't support. In those browsers, just **drag a `.sav` / `.srm` file onto the window** instead, or grab the desktop app. Everything else (palettes, effects, export) works in every browser.
+
 > *mug shot* (the portraits the Game Boy Camera was made for) + *memory dump*
 > (pulling those photos out of the cartridge) = **MugDump**.
 
@@ -20,12 +22,14 @@ Four steps, nothing technical:
 
 1. **On your Analogue Pocket:** open the Game Boy Camera, then create a **Save State** — *Memories › Create a Save State*.
 2. **Pop the SD card** into your computer.
-3. **Open MugDump** → click **Analogue Pocket…** → pick your save.
+3. **Open MugDump** → click **Analogue Pocket…** → pick your save. *(In the web app, use **Chrome** or **Edge** — see the note above.)*
 4. **Click a photo, choose a palette, hit Export.** 🎉
 
 That's the whole thing. No files to hunt for, no settings to understand.
 
 *No Analogue Pocket? You can also drag any `.sav` / `.srm` save straight onto the window.*
+
+*Tidying up? In the SD-card picker, each save has an **✕** — one click (with a confirm) deletes it straight off the card.*
 
 ---
 
@@ -35,7 +39,8 @@ Everything works **per-photo** or **globally** across your whole 30-photo roll, 
 
 **Loading**
 - `.sav` / `.srm` (128 KB Game Boy Camera SRAM) — drag-and-drop or file picker
-- **Analogue Pocket** SD detection (`Memories/Save States`, openFPGA `Saves/<core>`)
+- **Analogue Pocket** SD detection (`Memories/Save States`, openFPGA `Saves/<core>`) — Chrome/Edge or desktop app
+- Delete saves off the SD card from the picker (per-save **✕**, with confirm)
 - Save & reload your work as a `.gbcp` project
 
 **Palettes**

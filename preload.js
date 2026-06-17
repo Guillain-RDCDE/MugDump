@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('api', {
   openSavFile: () => ipcRenderer.invoke('open-sav-file'),
   detectPocket: () => ipcRenderer.invoke('detect-pocket'),
   readFile: (filePath) => ipcRenderer.invoke('read-file', filePath),
+  deletePocketSave: (save) => ipcRenderer.invoke('delete-pocket-save', save),
 
   // Export
   savePng: (dataUrl, defaultName) => ipcRenderer.invoke('save-png', dataUrl, defaultName),

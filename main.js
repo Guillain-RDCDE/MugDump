@@ -281,6 +281,43 @@ ipcMain.handle('detect-pocket', async () => {
   return { saves: unique };
 });
 
+// ─── IPC: Delete a save from the Analogue Pocket SD card ─────────────────────
+
+ipcMain.handle('delete-pocket-save', async (_event, saveObj) => {
+  const filePath = typeof saveObj === 'string' ? saveObj : saveObj.path;
+  if (!filePath) return { error: 'No file path provided.' };
+
+  // Safety net: only ever delete a genuine 128KB GB Camera save — never any
+  // other file the path might accidentally point at.
+  try {
+    const st = await fs.promises.stat(filePath);
+    if (!st.isFile() || st.size !== 131072) {
+      return { error: 'Refusing to delete: not a 128KB Game Boy Camera save.' };
+    }
+  } catch (e) {
+    return { error: e.message };
+  }
+
+  const { response } = await dialog.showMessageBox(mainWindow, {
+    type: 'warning',
+    buttons: ['Cancel', 'Delete'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Delete save',
+    message: 'Delete this save from your Analogue Pocket?',
+    detail: `${path.basename(filePath)}\n\nThis permanently removes the file from the SD card. This cannot be undone.`,
+  });
+
+  if (response !== 1) return { canceled: true };
+
+  try {
+    await fs.promises.unlink(filePath);
+    return { deleted: true };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+
 ipcMain.handle('read-file', async (_event, saveObj) => {
   // saveObj may be a string (legacy) or { path } object
   const filePath = typeof saveObj === 'string' ? saveObj : saveObj.path;

@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = '0.6';
+const APP_VERSION = '0.7';
 
 // ── Border frames ─────────────────────────────────────────────────────────────
 
@@ -1807,8 +1807,18 @@ async function openPocketModal() {
   dom.pocketConfirm.disabled = true;
   selectedPocketSave = null;
 
-  const { saves } = await window.api.detectPocket();
+  const { saves, unsupported } = await window.api.detectPocket();
   dom.pocketSaveList.innerHTML = '';
+
+  if (unsupported) {
+    dom.pocketSaveList.innerHTML =
+      '<p style="color:var(--text-3);font-size:12px;line-height:1.5;">' +
+      "Your browser can't read the SD card directly. Reading and deleting Analogue " +
+      'Pocket saves needs <strong>Chrome</strong> or <strong>Edge</strong> on desktop ' +
+      '(the File System Access API). On Firefox or Safari, drag a <code>.sav</code> / ' +
+      '<code>.srm</code> file onto the window instead, or use the desktop app.</p>';
+    return;
+  }
 
   if (saves.length === 0) {
     dom.pocketSaveList.innerHTML =
@@ -1866,6 +1876,34 @@ async function openPocketModal() {
 
     item.appendChild(previewWrap);
     item.appendChild(info);
+
+    // Delete button — present wherever the platform can remove the file
+    if (window.api.deletePocketSave) {
+      const del = document.createElement('button');
+      del.className = 'save-delete';
+      del.title = 'Delete this save from the SD card';
+      del.textContent = '✕';
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const result = await window.api.deletePocketSave(save);
+        if (!result || result.canceled) return;
+        if (result.error) { alert('Could not delete save:\n' + result.error); return; }
+
+        item.remove();
+        const idx = saves.indexOf(save);
+        if (idx !== -1) saves.splice(idx, 1);
+        if (selectedPocketSave === save) {
+          selectedPocketSave = null;
+          dom.pocketConfirm.disabled = true;
+        }
+        if (saves.length === 0) {
+          dom.pocketSaveList.innerHTML =
+            '<p style="color:var(--text-3);font-size:12px;line-height:1.5;">' +
+            'All camera saves deleted.</p>';
+        }
+      });
+      item.appendChild(del);
+    }
 
     item.addEventListener('click', () => {
       dom.pocketSaveList.querySelectorAll('.save-item').forEach(el => el.classList.remove('selected'));

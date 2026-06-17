@@ -4,6 +4,13 @@ All notable changes to MugDump. MugDump is a fork of
 [DMG DarkRoom](https://github.com/clickysteve/dmg-darkroom); versions below cover
 the MugDump line.
 
+## 0.7 — 2026-06-17
+- **Delete saves straight off the SD card** — every save in the Analogue Pocket
+  picker now has an **✕**; one click (with a confirm) removes it from the card.
+  Works in the desktop app and in Chrome/Edge on the web.
+- The Pocket picker now tells you up front when your browser can't read the SD
+  card (Firefox/Safari), instead of a misleading "no saves found".
+
 ## 0.6 — 2026-06-17
 - Redesigned the welcome screen: cleaner single-action hero, lighter typography,
   pill button, an airy "Getting started" guide, and a square logo.
