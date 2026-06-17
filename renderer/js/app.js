@@ -6144,6 +6144,27 @@ function _autoEnableEffectsSection() {
   }
 }
 
+// Ensure a filter is active for the current scope — used when the user starts
+// tweaking a filter's params without first ticking its box. Mirrors toggleFilter's
+// "add" path, minus the undo push (the control already pushed) and grid repaint.
+function enableFilter(filterName) {
+  const targets = state.selectedPhotos.size > 0 ? [...state.selectedPhotos] : null;
+  if (targets) {
+    for (const idx of targets) {
+      if (!state.photoSettings[idx]) state.photoSettings[idx] = {};
+      const ps = state.photoSettings[idx];
+      const cur = ps.activeFilters ? new Set(ps.activeFilters) : new Set(state.activeFilters);
+      cur.add(filterName);
+      ps.activeFilters = [...cur];
+    }
+  } else {
+    state.activeFilters.add(filterName);
+  }
+  state.focusedFilter = filterName;
+  _autoEnableEffectsSection();
+  updateFilterUI();
+}
+
 function _refreshFilterParamPanel() {
   // No-op — filter accordion syncs via syncFilterAccordion()
 }
@@ -6345,7 +6366,7 @@ function setupFilterAccordion() {
         slider._fiDef = p.def;
         slider._fiFmt = p.fmt;
 
-        slider.addEventListener('pointerdown', () => { pushUndo(); });
+        slider.addEventListener('pointerdown', () => { pushUndo(); if (!cb.checked) enableFilter(fd.id); });
         slider.addEventListener('input', () => {
           const v = parseFloat(slider.value);
           pVal.textContent = p.fmt(v);
@@ -6383,6 +6404,7 @@ function setupFilterAccordion() {
           btn.dataset.val = optVal;
           btn.addEventListener('click', () => {
             pushUndo();
+            if (!cb.checked) enableFilter(fd.id);
             seg.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b === btn));
             if (p.stateKey) {
               setScopedSetting(p.stateKey, optVal);
