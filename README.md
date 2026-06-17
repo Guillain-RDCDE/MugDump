@@ -16,7 +16,7 @@ Game Boy Camera and turn them into PNGs and GIFs — palettes, effects, frames a
 
 Four steps, nothing technical:
 
-1. **On your Analogue Pocket:** open the Game Boy Camera, then create a **Save State** — *Memories › Create Save State*.
+1. **On your Analogue Pocket:** open the Game Boy Camera, then create a **Save State** — *Memories › Create a Save State*.
 2. **Pop the SD card** into your computer.
 3. **Open MugDump** → click **Analogue Pocket…** → pick your save.
 4. **Click a photo, choose a palette, hit Export.** 🎉
