@@ -1749,7 +1749,12 @@ let selectedPocketSave = null;
 
 async function openPocketModal() {
   dom.pocketModal.classList.remove('hidden');
-  dom.pocketSaveList.innerHTML = '<p style="color:var(--text-3);font-size:12px;">Scanning for Analogue Pocket SD card…</p>';
+  dom.pocketSaveList.innerHTML =
+    '<div class="loading-state">' +
+    '<div class="spinner"></div>' +
+    '<div class="loading-text">Scanning for your Analogue Pocket SD card…</div>' +
+    '<div class="loading-sub">This can take up to a minute on large cards.</div>' +
+    '</div>';
   dom.pocketConfirm.disabled = true;
   selectedPocketSave = null;
 
