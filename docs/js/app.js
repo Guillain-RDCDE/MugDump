@@ -2010,14 +2010,26 @@ function wireButtons() {
   document.querySelectorAll('.section-check').forEach(cb => {
     const section = cb.dataset.section;
     cb.checked = state.sectionEnabled[section] ?? false;
-    cb.addEventListener('change', () => {
-      state.sectionEnabled[section] = cb.checked;
-      repaintGrid();
-      if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
-      if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
-      updateSidebarPreview();
-    });
+    cb.addEventListener('change', () => setSectionEnabled(section, cb.checked));
   });
+
+  // Touching any control inside a tone/effects section auto-enables that section,
+  // so you never have to also tick its "apply" box (the reset button un-ticks it).
+  const SECTION_CONTAINERS = {
+    exposure:  'exposure-controls',
+    splitTone: 'split-tone-controls',
+    effects:   'effects-controls',
+  };
+  for (const [section, contId] of Object.entries(SECTION_CONTAINERS)) {
+    const cont = document.getElementById(contId);
+    if (!cont) continue;
+    const autoEnable = (e) => {
+      if (e.target.classList.contains('section-check')) return; // ignore the enable box itself
+      if (!state.sectionEnabled[section]) setSectionEnabled(section, true);
+    };
+    cont.addEventListener('input', autoEnable);
+    cont.addEventListener('change', autoEnable);
+  }
 
   // Border enable/disable — scoped like borderId (per-photo or global)
   const borderEnabledCb = document.getElementById('border-enabled-check');
@@ -5386,8 +5398,7 @@ function setupToneControls() {
       state.contrast   = 0;
     }
     if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
-    repaintGrid();
-    updateSidebarPreview();
+    setSectionEnabled('exposure', false);
     showToast('Exposure reset');
   });
 
@@ -5413,8 +5424,7 @@ function setupToneControls() {
       state.highlightColor = '#ff8800';
     }
     if (state.selectedIndex !== null) syncControlsToEffectiveSettings(state.selectedIndex);
-    repaintGrid();
-    updateSidebarPreview();
+    setSectionEnabled('splitTone', false);
     showToast('Split tone reset');
   });
 }
@@ -5815,6 +5825,18 @@ function pasteEffects() {
   showToast(`Settings pasted to ${targets.length} photo${targets.length > 1 ? 's' : ''}`);
 }
 
+// Enable/disable a tone/effects section (exposure | splitTone | effects),
+// keeping its "apply" checkbox and the preview in sync.
+function setSectionEnabled(section, on) {
+  state.sectionEnabled[section] = on;
+  const cb = document.querySelector(`.section-check[data-section="${section}"]`);
+  if (cb) cb.checked = on;
+  repaintGrid();
+  if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+  if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+  updateSidebarPreview();
+}
+
 function resetEffects() {
   pushUndo();
   // Reset all filter state for selected photo(s), or global if none selected
@@ -5837,8 +5859,7 @@ function resetEffects() {
     state.filterVariant   = 'medium';
   }
   updateFilterUI();
-  repaintGrid();
-  updateSidebarPreview();
+  setSectionEnabled('effects', false);
   showToast('Effects reset');
 }
 
