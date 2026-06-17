@@ -41,7 +41,7 @@ function preloadBorderImages() {
     const img = new Image();
     img.onload  = () => { _borderImageCache[id] = img; };
     img.onerror = () => console.warn(`Border frame not found: ${id}`);
-    img.src = `../frames/${id}.png`;
+    img.src = `frames/${id}.png`;
   });
 }
 
@@ -5454,7 +5454,7 @@ function setupBorderPicker() {
     btn.title = `Frame ${label}`;
 
     const img = document.createElement('img');
-    img.src = `../frames/${id}.png`;
+    img.src = `frames/${id}.png`;
     img.alt = label;
     img.draggable = false;
     btn.appendChild(img);
