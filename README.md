@@ -1,4 +1,6 @@
-<img src="docs/icon.png" width="120" alt="MugDump">
+<p align="center">
+  <img src="docs/icon.png" width="120" alt="MugDump">
+</p>
 
 # MugDump
 
