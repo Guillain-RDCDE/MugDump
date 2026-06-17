@@ -51,7 +51,8 @@ async function scanDirForSavFiles(dirHandle, volumeName, saves, depth = 0) {
         try {
           const file = await handle.getFile();
           if (file.size === 131072) {
-            saves.push({ name, handle, volume: volumeName, path: `${volumeName}/${name}` });
+            // Keep the containing directory handle so we can removeEntry() later.
+            saves.push({ name, handle, parent: dirHandle, volume: volumeName, path: `${volumeName}/${name}` });
           }
         } catch (_) {}
       }
@@ -136,6 +137,34 @@ window.api = {
       const file = await saveObj.handle.getFile();
       const buffer = await file.arrayBuffer();
       return { buffer, name: file.name, path: null };
+    } catch (e) {
+      return { error: e.message };
+    }
+  },
+
+  // ── Delete a save from the SD card ──────────────────────────────────────────
+  // Uses the File System Access API: removeEntry() on the containing folder.
+  // Write permission is requested lazily here (on the user's click) so the
+  // initial directory pick can stay read-only.
+  deletePocketSave: async (save) => {
+    if (!save || !save.parent || typeof save.parent.removeEntry !== 'function') {
+      return { error: "This browser can't delete files. Try the desktop app." };
+    }
+
+    const ok = window.confirm(
+      `Delete "${save.name}" from your SD card?\n\n` +
+      'This permanently removes the file. This cannot be undone.'
+    );
+    if (!ok) return { canceled: true };
+
+    try {
+      // Upgrade the folder handle from read → readwrite (prompts once).
+      if (save.parent.requestPermission) {
+        const perm = await save.parent.requestPermission({ mode: 'readwrite' });
+        if (perm !== 'granted') return { error: 'Write permission was denied.' };
+      }
+      await save.parent.removeEntry(save.name);
+      return { deleted: true };
     } catch (e) {
       return { error: e.message };
     }

@@ -911,6 +911,30 @@ input[type="range"] {
   text-overflow: ellipsis;
 }
 
+/* Delete-save cross — sits at the right edge of each save row */
+.save-delete {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+}
+
+.save-delete:hover {
+  border-color: var(--danger);
+  color: #fff;
+  background: var(--danger);
+}
+
 /* ── Toast ────────────────────────────────────────────────────────────────── */
 
 #toast {
