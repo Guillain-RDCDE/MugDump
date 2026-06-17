@@ -212,59 +212,62 @@ ipcMain.handle('detect-pocket', async () => {
     }
   }
 
-  // Recursively collect 128KB .sav files up to a given depth
-  function collectSavFiles(dir, volumeName, out, depth = 0) {
-    if (depth > 3) return;
+  const fsp = fs.promises;
+  const exists = async (p) => { try { await fsp.access(p); return true; } catch (_) { return false; } };
+
+  // Collect 128KB .sav/.srm files in a directory, with bounded (shallow) recursion.
+  // We deliberately keep maxDepth tiny so we never walk into the huge Assets/ tree —
+  // only the few folders where the Pocket actually stores camera saves get scanned.
+  async function collectSavFiles(dir, volumeName, out, depth, maxDepth) {
     let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (_) { return; }
+    try { entries = await fsp.readdir(dir, { withFileTypes: true }); } catch (_) { return; }
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        collectSavFiles(fullPath, volumeName, out, depth + 1);
+        if (depth < maxDepth) await collectSavFiles(fullPath, volumeName, out, depth + 1, maxDepth);
       } else if (['sav','srm'].includes(entry.name.toLowerCase().split('.').pop())) {
         try {
-          if (fs.statSync(fullPath).size === 131072) {
-            out.push({ path: fullPath, name: entry.name, volume: volumeName });
-          }
+          const st = await fsp.stat(fullPath);
+          if (st.size === 131072) out.push({ path: fullPath, name: entry.name, volume: volumeName });
         } catch (_) {}
       }
     }
   }
 
-  const saves = [];
+  // Scan one volume root; returns the camera saves found on it (or []).
+  async function scanRoot(root) {
+    const volume = process.platform === 'win32' ? root.replace(/\\+$/, '') : path.basename(root);
+    const out = [];
 
-  for (const root of volumeRoots) {
-    const volume = path.basename(root);
+    // Identify an Analogue Pocket SD card: Assets/ (on every AP card) or Memories/.
+    const [hasAssets, hasMemories, hasSaves] = await Promise.all([
+      exists(path.join(root, 'Assets')),
+      exists(path.join(root, 'Memories')),
+      exists(path.join(root, 'Saves')),
+    ]);
+    if (!hasAssets && !hasMemories) return out;
 
-    // Identify as Analogue Pocket SD card:
-    // Must have Assets/ (present on all AP cards) OR Memories/ (built-in core saves)
-    const hasAssets   = fs.existsSync(path.join(root, 'Assets'));
-    const hasMemories = fs.existsSync(path.join(root, 'Memories'));
-    const hasSaves    = fs.existsSync(path.join(root, 'Saves'));
-
-    if (!hasAssets && !hasMemories) continue;
-
-    // ── Primary: Memories/Save States/ (AP built-in cores — "Memories" UI) ──
-    // The AP stores SRAM saves here when using Memories > Save States
+    const jobs = [];
     if (hasMemories) {
-      const saveStatesDir = path.join(root, 'Memories', 'Save States');
-      if (fs.existsSync(saveStatesDir)) {
-        collectSavFiles(saveStatesDir, volume, saves);
-      }
-      // Also check the Memories root itself in case of a flat layout
-      collectSavFiles(path.join(root, 'Memories'), volume, saves, 0);
+      // Primary: Memories/Save States/ (Memories > Save States UI). Flat folder.
+      jobs.push(collectSavFiles(path.join(root, 'Memories', 'Save States'), volume, out, 0, 1));
+      // Flat-layout fallback: direct files in Memories/ only (no recursion).
+      jobs.push(collectSavFiles(path.join(root, 'Memories'), volume, out, 0, 0));
     }
-
-    // ── Fallback: Saves/{gb,gbc,…}/ (openFPGA cores) ──
     if (hasSaves) {
-      for (const dir of ['gb', 'gbc', 'Game Boy', 'GameBoy', 'Analogue.gb', 'Analogue.gbc']) {
-        const savesDir = path.join(root, 'Saves', dir);
-        if (fs.existsSync(savesDir)) {
-          collectSavFiles(savesDir, volume, saves);
-        }
+      // openFPGA cores: Saves/<core>/ — known core folders only, shallow.
+      for (const core of ['gb', 'gbc', 'Game Boy', 'GameBoy', 'Analogue.gb', 'Analogue.gbc']) {
+        jobs.push(collectSavFiles(path.join(root, 'Saves', core), volume, out, 0, 1));
       }
     }
+    await Promise.all(jobs);
+    return out;
   }
+
+  // Probe every candidate volume IN PARALLEL — a slow/phantom Windows drive no
+  // longer blocks the others (that serial probing was the main cause of the freeze).
+  const perRoot = await Promise.all(volumeRoots.map(scanRoot));
+  const saves = perRoot.flat();
 
   // Deduplicate by path (Memories root scan + Save States scan may overlap)
   const seen = new Set();
