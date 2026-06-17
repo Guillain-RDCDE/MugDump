@@ -3205,6 +3205,37 @@ body.web #titlebar { padding-left: 16px; }
   border-radius: 4px;
 }
 
+/* ── Effect family headers (Pixel-perfect / Retro / Glitch) ────────────────── */
+.fi-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 4px 5px;
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border-bottom: 1px solid var(--border-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.fi-group-header:first-child { margin-top: 0; }
+.fi-group-header:hover { color: var(--text-2); }
+.fi-group-chevron { font-size: 9px; transition: transform 0.15s; }
+.fi-group-header.collapsed .fi-group-chevron { transform: rotate(-90deg); }
+.fi-group-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.fi-group-header.has-active .fi-group-dot { opacity: 1; }
+
 /* ── Discreet repo link (bottom-right) ─────────────────────────────────────── */
 #repo-link {
   position: fixed;
