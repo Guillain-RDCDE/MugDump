@@ -2082,6 +2082,24 @@ function wireButtons() {
     });
   }
 
+  // Preview size stepper (1×–6× of the native 128px width, remembered)
+  const PREVIEW_SCALE_KEY = 'mugdump:previewScale';
+  const previewWrapEl = document.getElementById('sidebar-preview-wrap');
+  const sizeDecBtn    = document.getElementById('preview-size-dec');
+  const sizeIncBtn    = document.getElementById('preview-size-inc');
+  const sizeLabelEl   = document.getElementById('preview-size-label');
+  let previewScale = parseInt(localStorage.getItem(PREVIEW_SCALE_KEY) || '2', 10);
+  if (!(previewScale >= 1 && previewScale <= 6)) previewScale = 2;
+  function applyPreviewScale(n) {
+    previewScale = Math.min(6, Math.max(1, n));
+    if (previewWrapEl) previewWrapEl.style.maxWidth = (previewScale * 128) + 'px';
+    if (sizeLabelEl)   sizeLabelEl.textContent = previewScale + '×';
+    localStorage.setItem(PREVIEW_SCALE_KEY, String(previewScale));
+  }
+  applyPreviewScale(previewScale);
+  sizeDecBtn?.addEventListener('click', () => applyPreviewScale(previewScale - 1));
+  sizeIncBtn?.addEventListener('click', () => applyPreviewScale(previewScale + 1));
+
   // Note: intensity slider and CRT variant buttons are now injected dynamically
   // by buildFilterParams into each filter's inline panel — no static wiring needed.
 
@@ -2131,6 +2149,7 @@ function wireButtons() {
   // Export buttons
   document.getElementById('btn-export-single').addEventListener('click', exportSinglePng);
   document.getElementById('btn-export-all').addEventListener('click', exportBatchPng);
+  document.getElementById('btn-export-all-grid')?.addEventListener('click', exportBatchPng);
   document.getElementById('btn-export-gif').addEventListener('click', exportGif);
   document.getElementById('btn-contact-sheet')?.addEventListener('click', exportContactSheet);
 
