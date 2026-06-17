@@ -1322,6 +1322,9 @@ function setPalette(id) {
     }
   });
   repaintGrid();
+  if (state.viewMode === 'solo' && state.selectedIndex !== null) renderSoloView(state.selectedIndex);
+  if (state.lightboxOpen && state.selectedIndex !== null) renderLightbox(state.selectedIndex);
+  updateSidebarPreview();
 }
 
 function updatePalettePickerBtn(pal) {
