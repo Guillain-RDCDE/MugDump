@@ -3522,7 +3522,8 @@ async function buildPaletteGrid() {
   list.innerHTML = '';
 
   const renderQueue = [];
-  for (const [id, pal] of Object.entries(PALETTES)) {
+
+  function makePaletteCell(id, pal) {
     const cell = document.createElement('div');
     cell.className = 'pgrid-cell' + (state.palette.id === id ? ' active' : '');
     cell.dataset.paletteId = id;
@@ -3560,7 +3561,6 @@ async function buildPaletteGrid() {
     cell.appendChild(namEl);
     cell.appendChild(swatchRow);
     cell.appendChild(gridStar);
-    list.appendChild(cell);
 
     cell.addEventListener('click', () => {
       setPalette(id);
@@ -3568,6 +3568,38 @@ async function buildPaletteGrid() {
     });
 
     renderQueue.push({ canvas, pal, photo });
+    return cell;
+  }
+
+  function addGridSectionHeader(text) {
+    const h = document.createElement('div');
+    h.className = 'pgrid-section-header';
+    h.textContent = text;
+    list.appendChild(h);
+  }
+
+  // Group built-in palettes by category — same buckets/order/labels as the picker menu
+  const grouped = {};
+  for (const [id, pal] of Object.entries(PALETTES)) {
+    if (pal.custom) continue;
+    const g = pal.group || 'other';
+    (grouped[g] = grouped[g] || []).push([id, pal]);
+  }
+  const orderedGroups = [
+    ...PAL_GROUP_ORDER,
+    ...Object.keys(grouped).filter(g => !PAL_GROUP_ORDER.includes(g)),
+  ];
+  for (const g of orderedGroups) {
+    if (!grouped[g] || grouped[g].length === 0) continue;
+    addGridSectionHeader(PAL_GROUP_LABELS[g] || g);
+    for (const [id, pal] of grouped[g]) list.appendChild(makePaletteCell(id, pal));
+  }
+
+  // Custom palettes last
+  const customs = Object.entries(PALETTES).filter(([, p]) => p.custom);
+  if (customs.length > 0) {
+    addGridSectionHeader('Custom');
+    for (const [id, pal] of customs) list.appendChild(makePaletteCell(id, pal));
   }
 
   // Scroll active palette into view
@@ -3598,6 +3630,16 @@ function filterPaletteGrid(query) {
   list.querySelectorAll('.pgrid-cell').forEach(cell => {
     const name = (cell.querySelector('.pgrid-name')?.textContent || '').toLowerCase();
     cell.style.display = (!q || name.includes(q)) ? '' : 'none';
+  });
+  // Hide a section header when every palette under it is filtered out
+  list.querySelectorAll('.pgrid-section-header').forEach(header => {
+    let next = header.nextElementSibling;
+    let anyVisible = false;
+    while (next && !next.classList.contains('pgrid-section-header')) {
+      if (next.classList.contains('pgrid-cell') && next.style.display !== 'none') { anyVisible = true; break; }
+      next = next.nextElementSibling;
+    }
+    header.style.display = anyVisible ? '' : 'none';
   });
 }
 
