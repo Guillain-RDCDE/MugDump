@@ -3064,3 +3064,33 @@ body.web #titlebar { padding-left: 16px; }
 @media (prefers-reduced-motion: reduce) {
   .spinner { animation-duration: 2s; }
 }
+
+/* ── Welcome onboarding card ───────────────────────────────────────────────── */
+.onboard {
+  text-align: left;
+  background: var(--accent-dim);
+  border: 1px solid var(--border-dim);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 6px auto 18px;
+  max-width: 400px;
+}
+.onboard-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1, #fff);
+  margin-bottom: 8px;
+}
+.onboard-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.onboard-steps li {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2, var(--text-3));
+}
+.onboard-steps b { color: var(--accent); font-weight: 600; }
