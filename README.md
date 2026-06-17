@@ -79,13 +79,4 @@ app code is identical across both targets.
 
 ---
 
-## Credits
-
-MugDump is a fork of **[DMG DarkRoom](https://github.com/clickysteve/dmg-darkroom)**
-by [clickysteve](https://github.com/clickysteve) — all of the original
-heavy lifting (decoder, editor, effects) is theirs. Huge thanks.
-
-- **SRAM format research:** [AntonioND/gbcam2png](https://github.com/AntonioND/gbcam2png) and the [Game Boy Camera Club](https://gameboycameraclub.com)
-- **GBC / SGB palettes:** [The Cutting Room Floor](https://tcrf.net/Notes:Game_Boy_Color_Bootstrap_ROM)
-- **Community palettes:** [Lospec](https://lospec.com) — Kirokaze, Kerrie Lake, Poltergasm, WildLeoKnight, Klafooty, Space Sandwich, BurakoIRL
-- **Border frames:** [RomanObaraz/gb-cam-lab](https://github.com/RomanObaraz/gb-cam-lab)
+<sub>A fork of [DMG DarkRoom](https://github.com/clickysteve/dmg-darkroom) by clickysteve. SRAM format research: [AntonioND/gbcam2png](https://github.com/AntonioND/gbcam2png) & the [Game Boy Camera Club](https://gameboycameraclub.com). Palettes: [The Cutting Room Floor](https://tcrf.net/Notes:Game_Boy_Color_Bootstrap_ROM) and [Lospec](https://lospec.com). Border frames: [RomanObaraz/gb-cam-lab](https://github.com/RomanObaraz/gb-cam-lab).</sub>
