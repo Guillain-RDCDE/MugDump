@@ -3112,17 +3112,23 @@ body.web #titlebar { padding-left: 16px; }
 /* ── Discreet repo link (bottom-right) ─────────────────────────────────────── */
 #repo-link {
   position: fixed;
-  right: 10px;
-  bottom: 6px;
+  right: 12px;
+  bottom: 10px;
   z-index: 50;
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.2px;
-  color: var(--text-3);
+  color: var(--text-2, #b8b8bd);
   text-decoration: none;
-  opacity: 0.5;
-  transition: opacity 0.15s, color 0.15s;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  opacity: 0.95;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
 }
-#repo-link:hover { opacity: 1; color: var(--accent); }
+#repo-link::before { content: "★ "; color: var(--accent); }
+#repo-link:hover { opacity: 1; color: var(--accent); border-color: var(--accent); }
 
 /* ── Palette grid section headers (All Palettes, grouped by category) ───────── */
 .pgrid-section-header {
