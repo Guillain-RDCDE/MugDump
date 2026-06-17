@@ -5465,6 +5465,10 @@ function setupBorderPicker() {
     btn.addEventListener('click', () => {
       pushUndo();
       setScopedSetting('borderId', id);
+      // Picking a frame should show it right away — enable borders too.
+      setScopedSetting('borderEnabled', true);
+      const enableCb = document.getElementById('border-enabled-check');
+      if (enableCb) enableCb.checked = true;
       document.querySelectorAll('.border-frame-btn').forEach(b => b.classList.toggle('active', b.dataset.frameId === id));
       repaintGrid();
       updateSidebarPreview();
