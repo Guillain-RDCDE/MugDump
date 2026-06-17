@@ -709,7 +709,6 @@ input[type="range"] {
   width: 88px;
   height: 88px;
   image-rendering: pixelated;
-  border-radius: 20px;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
 }
 
@@ -1691,6 +1690,7 @@ input[type="range"] {
 #sidebar-preview-wrap {
   position: relative;
   width: 100%;
+  margin: 0 auto;
   aspect-ratio: 8/7;
 }
 
