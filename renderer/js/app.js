@@ -443,6 +443,52 @@ const FILTER_DEFS = [
   ]},
 ];
 
+// ── Effect families ─────────────────────────────────────────────────────────
+// Pixel-perfect keeps the crisp GB look; Retro softens like a screen; Glitch
+// deliberately distorts. Pixel-perfect is open by default, the others collapsed.
+const FX_GROUP_ORDER  = ['crisp', 'retro', 'glitch'];
+const FX_GROUP_LABELS = { crisp: 'Pixel-perfect', retro: 'Retro display', glitch: 'Glitch & corrupt' };
+const FX_FILTER_GROUP = {
+  grid: 'crisp', dot: 'crisp', halftone: 'crisp', bayer: 'crisp', floyd: 'crisp', chswap: 'crisp',
+  crt: 'retro', lcd: 'retro', glow: 'retro', vignette: 'retro', interlace: 'retro',
+  chroma: 'glitch', noise: 'glitch', ghosting: 'glitch', jitter: 'glitch', zoomblur: 'glitch',
+  pixsort: 'glitch', blkglitch: 'glitch', wavewarp: 'glitch', rgbplanes: 'glitch', colcorrupt: 'glitch',
+};
+const FX_COLLAPSE_KEY = 'mugdump:fxgroups';
+function getCollapsedFxGroups() {
+  const stored = localStorage.getItem(FX_COLLAPSE_KEY);
+  if (stored === null) return new Set(['retro', 'glitch']); // default: only Pixel-perfect open
+  try { return new Set(JSON.parse(stored)); } catch (_) { return new Set(['retro', 'glitch']); }
+}
+function setFxGroupCollapsed(g, collapsed) {
+  const set = getCollapsedFxGroups();
+  if (collapsed) set.add(g); else set.delete(g);
+  try { localStorage.setItem(FX_COLLAPSE_KEY, JSON.stringify([...set])); } catch (_) {}
+}
+function makeFxGroupHeader(g, collapsed) {
+  const h = document.createElement('div');
+  h.className = 'fi-group-header' + (collapsed ? ' collapsed' : '');
+  h.dataset.group = g;
+  const chevron = document.createElement('span');
+  chevron.className = 'fi-group-chevron';
+  chevron.textContent = '▾';
+  const label = document.createElement('span');
+  label.className = 'fi-group-label';
+  label.textContent = FX_GROUP_LABELS[g] || g;
+  const dot = document.createElement('span');
+  dot.className = 'fi-group-dot';
+  dot.title = 'An effect in this group is active';
+  h.appendChild(chevron); h.appendChild(label); h.appendChild(dot);
+  h.addEventListener('click', () => {
+    const nowCollapsed = !h.classList.contains('collapsed');
+    h.classList.toggle('collapsed', nowCollapsed);
+    setFxGroupCollapsed(g, nowCollapsed);
+    document.querySelectorAll(`#filter-accordion .fi-item[data-group="${g}"]`)
+      .forEach(it => { it.style.display = nowCollapsed ? 'none' : ''; });
+  });
+  return h;
+}
+
 function buildDefaultFilterParams() {
   const out = {};
   for (const fd of FILTER_DEFS) {
@@ -6270,6 +6316,16 @@ function syncFilterAccordion(eff) {
       }
     });
   });
+
+  // Flag group headers that contain an active effect, so a collapsed family
+  // still signals there's something switched on inside it.
+  const _fxActiveGroups = new Set();
+  document.querySelectorAll('#filter-accordion .fi-item.fi-active').forEach(it => {
+    if (it.dataset.group) _fxActiveGroups.add(it.dataset.group);
+  });
+  document.querySelectorAll('#filter-accordion .fi-group-header').forEach(h => {
+    h.classList.toggle('has-active', _fxActiveGroups.has(h.dataset.group));
+  });
 }
 
 /**
@@ -6280,6 +6336,9 @@ function setupFilterAccordion() {
   const container = document.getElementById('filter-accordion');
   if (!container) return;
   container.innerHTML = '';
+
+  const collapsedFx = getCollapsedFxGroups();
+  const _fxGroupItems = {};
 
   for (const fd of FILTER_DEFS) {
     const item = document.createElement('div');
@@ -6502,7 +6561,18 @@ function setupFilterAccordion() {
       item.classList.toggle('fi-open');
     });
 
-    container.appendChild(item);
+    const _g = FX_FILTER_GROUP[fd.id] || 'glitch';
+    item.dataset.group = _g;
+    if (collapsedFx.has(_g)) item.style.display = 'none';
+    (_fxGroupItems[_g] = _fxGroupItems[_g] || []).push(item);
+  }
+
+  // Lay the items out under collapsible family headers (Pixel-perfect / Retro / Glitch)
+  for (const g of FX_GROUP_ORDER) {
+    const items = _fxGroupItems[g];
+    if (!items || !items.length) continue;
+    container.appendChild(makeFxGroupHeader(g, collapsedFx.has(g)));
+    for (const it of items) container.appendChild(it);
   }
 }
 
