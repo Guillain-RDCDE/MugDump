@@ -2070,7 +2070,10 @@ function wireButtons() {
   }
 
   if (previewPinBtn && previewGroup) {
-    const savedPin = localStorage.getItem(PREVIEW_PIN_KEY) === 'true';
+    // Pinned by default — the preview is the whole point, it must stay visible at
+    // the top while you scroll the options below. (Still toggleable via 📌.)
+    const storedPin = localStorage.getItem(PREVIEW_PIN_KEY);
+    const savedPin = storedPin === null ? true : storedPin === 'true';
     applyPreviewPin(savedPin);
     previewPinBtn.addEventListener('click', () => {
       const nowPinned = !previewGroup.classList.contains('preview-pinned');
