@@ -150,21 +150,23 @@ window.api = {
   // ── Save PNG batch (zip) ───────────────────────────────────────────────────
   savePngBatch: async (photos) => {
     try {
-      const { default: JSZip } = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
+      // JSZip is bundled locally — a CDN import would be blocked by the page CSP,
+      // which is what used to force the (brutal) one-by-one fallback below.
+      const { default: JSZip } = await import('./jszip.esm.js');
       const zip = new JSZip();
       for (const { dataUrl, name } of photos) {
         zip.file(name, dataUrl.split(',')[1], { base64: true });
       }
       const blob = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(blob);
-      triggerDownload(url, 'gbcam-photos.zip');
+      triggerDownload(url, 'mugdump-photos.zip');
       setTimeout(() => URL.revokeObjectURL(url), 5000);
-      return { dir: '.', count: photos.length };
+      return { dir: '.', count: photos.length, zipped: true };
     } catch (_) {
-      // Fallback: one-by-one (browsers may block multiple downloads)
+      // Last-resort fallback: download one-by-one, throttled so the browser keeps up
       for (const { dataUrl, name } of photos) {
         triggerDownload(dataUrl, name);
-        await new Promise(r => setTimeout(r, 150));
+        await new Promise(r => setTimeout(r, 500));
       }
       return { dir: '.', count: photos.length };
     }
