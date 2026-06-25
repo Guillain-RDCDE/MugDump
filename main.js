@@ -2,6 +2,26 @@ const { app, BrowserWindow, ipcMain, dialog, Menu, shell } = require('electron')
 const path = require('path');
 const fs = require('fs');
 
+// ─── Coerce a file to a 128KB GB Camera SRAM ────────────────────────────────
+// A plain .sav/.srm is already 131072 bytes. An Analogue Pocket savestate (.sta)
+// embeds the cart RAM inside a larger blob; we locate it by the GB Camera
+// management block — the "Magic" string appears twice, 0xFE apart (echo at cart
+// RAM 0x10D2, primary at 0x11D0) — then slice 128KB from the cart-RAM base.
+function coerceGbCamSave(buf) {
+  if (buf.length === 131072) return buf;
+  const isMagic = (p) => buf[p] === 0x4D && buf[p+1] === 0x61 && buf[p+2] === 0x67 && buf[p+3] === 0x69 && buf[p+4] === 0x63; // "Magic"
+  for (let i = 0x10D2; i + 0xFE + 5 <= buf.length; i++) {
+    if (isMagic(i) && isMagic(i + 0xFE)) {       // echo + primary pair = the management block
+      const base = i - 0x10D2;                   // cart RAM offset 0
+      if (base < 0) continue;
+      const out = Buffer.alloc(131072, 0xFF);
+      buf.copy(out, 0, base, Math.min(buf.length, base + 131072));
+      return out;
+    }
+  }
+  return null; // no GB Camera cart RAM found inside
+}
+
 // ─── GB Camera 2bpp preview decoder ─────────────────────────────────────────
 // Inline port of the decode logic from renderer/js/gbcam.js (Node-safe, no DOM).
 // Returns a plain Array of pixel indices (0–3, length 14336) for the first
@@ -167,7 +187,7 @@ ipcMain.handle('open-sav-file', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
     title: 'Open Game Boy Camera .sav file',
     filters: [
-      { name: 'Game Boy Camera Save', extensions: ['sav', 'SAV', 'srm', 'SRM'] },
+      { name: 'Game Boy Camera Save / Savestate', extensions: ['sav', 'SAV', 'srm', 'SRM', 'sta', 'STA'] },
       { name: 'All files', extensions: ['*'] },
     ],
     properties: ['openFile'],
@@ -176,11 +196,12 @@ ipcMain.handle('open-sav-file', async () => {
   if (canceled || filePaths.length === 0) return null;
 
   const filePath = filePaths[0];
-  const buffer = fs.readFileSync(filePath);
+  const raw = fs.readFileSync(filePath);
 
-  // Validate: GB Camera SRAM is always 128KB
-  if (buffer.length !== 131072) {
-    return { error: `Unexpected file size: ${buffer.length} bytes (expected 131072). This might not be a GB Camera save.`, buffer: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength), name: path.basename(filePath) };
+  // Accept a 128KB .sav/.srm, or extract the cart RAM from a Pocket savestate (.sta etc.)
+  const buffer = coerceGbCamSave(raw);
+  if (!buffer) {
+    return { error: `Unexpected file size: ${raw.length} bytes (expected 131072, or a savestate containing a GB Camera save).`, buffer: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength), name: path.basename(filePath) };
   }
 
   return {
@@ -322,7 +343,11 @@ ipcMain.handle('read-file', async (_event, saveObj) => {
   // saveObj may be a string (legacy) or { path } object
   const filePath = typeof saveObj === 'string' ? saveObj : saveObj.path;
   try {
-    const buffer = fs.readFileSync(filePath);
+    const raw = fs.readFileSync(filePath);
+    const buffer = coerceGbCamSave(raw);
+    if (!buffer) {
+      return { error: `Unexpected file size: ${raw.length} bytes (expected 131072, or a savestate containing a GB Camera save).` };
+    }
     return {
       buffer: buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
       name: path.basename(filePath),
