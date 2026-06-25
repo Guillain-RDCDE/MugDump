@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="docs/social-preview.png" width="100%" alt="MugDump — dump and develop your Game Boy Camera mug shots">
+</p>
+
+<p align="center">
   <img src="docs/icon.png" width="120" alt="MugDump">
 </p>
 
