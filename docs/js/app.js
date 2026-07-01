@@ -803,6 +803,25 @@ function setStatus(text, active = false) {
 
 // ── Load SAV ───────────────────────────────────────────────────────────────
 
+// Accept a 131072-byte GB Camera save as-is, or extract the 128 KB cart RAM from a
+// Pocket savestate (.sta) by locating the management-block "Magic" echo/primary pair
+// (echo at cart-RAM 0x10D2, primary 0xFE later). Returns an ArrayBuffer or null.
+function coerceGbCamSave(arrayBuffer) {
+  const buf = new Uint8Array(arrayBuffer);
+  if (buf.length === 131072) return arrayBuffer;
+  const isMagic = (p) => buf[p] === 0x4D && buf[p+1] === 0x61 && buf[p+2] === 0x67 && buf[p+3] === 0x69 && buf[p+4] === 0x63; // "Magic"
+  for (let i = 0x10D2; i + 0xFE + 5 <= buf.length; i++) {
+    if (isMagic(i) && isMagic(i + 0xFE)) {       // echo + primary pair = the management block
+      const base = i - 0x10D2;                   // cart RAM offset 0
+      if (base < 0) continue;
+      const out = new Uint8Array(131072).fill(0xFF);
+      out.set(buf.subarray(base, Math.min(buf.length, base + 131072)), 0);
+      return out.buffer;
+    }
+  }
+  return null; // no GB Camera cart RAM found inside
+}
+
 async function loadSavFile(result) {
   if (!result || result.error) {
     if (result?.error) showToast(`⚠ ${result.error}`);
@@ -810,7 +829,12 @@ async function loadSavFile(result) {
   }
 
   const { buffer, name, path: filePath } = result;
-  const { photos, activeCount, sav } = GBCam.parseSav(buffer);
+  const camBuf = coerceGbCamSave(buffer);
+  if (!camBuf) {
+    showToast(`⚠ Unexpected file (${buffer.byteLength} bytes): expected a 131072-byte GB Camera save, or a savestate (.sta) containing one.`);
+    return;
+  }
+  const { photos, activeCount, sav } = GBCam.parseSav(camBuf);
 
   state.sav = sav;
   state.photos = photos;
@@ -1954,16 +1978,9 @@ function setupDragDrop() {
       const result = await window.api.readFile(file.path);
       await loadSavFile(result);
     } else {
-      // Web / fallback
+      // Web / fallback — loadSavFile coerces .sta savestates + validates size
       const buffer = await file.arrayBuffer();
-      await loadSavFile({
-        buffer,
-        name: file.name,
-        path: null,
-        error: buffer.byteLength !== 131072
-          ? `Unexpected file size: ${buffer.byteLength} bytes (expected 131072 for this save format).`
-          : null,
-      });
+      await loadSavFile({ buffer, name: file.name, path: null });
     }
   });
 }

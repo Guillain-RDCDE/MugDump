@@ -78,17 +78,13 @@ window.api = {
     if ('showOpenFilePicker' in window) {
       try {
         const [handle] = await showOpenFilePicker({
-          types: [{ description: 'Game Boy Camera Save', accept: { 'application/octet-stream': ['.sav', '.SAV', '.srm', '.SRM'] } }],
+          types: [{ description: 'Game Boy Camera Save / Savestate', accept: { 'application/octet-stream': ['.sav', '.SAV', '.srm', '.SRM', '.sta', '.STA'] } }],
           multiple: false,
         });
         const file = await handle.getFile();
         const buffer = await file.arrayBuffer();
-        return {
-          buffer,
-          name: file.name,
-          path: null,
-          error: buffer.byteLength !== 131072 ? `Unexpected size: ${buffer.byteLength} bytes (expected 131072)` : null,
-        };
+        // loadSavFile coerces .sta savestates + validates size (don't reject here)
+        return { buffer, name: file.name, path: null, error: null };
       } catch (e) {
         return e.name === 'AbortError' ? null : { error: e.message };
       }
@@ -97,18 +93,14 @@ window.api = {
     // Fallback: plain file input (Firefox, Safari)
     return new Promise(resolve => {
       const input = Object.assign(document.createElement('input'), {
-        type: 'file', accept: '.sav,.SAV,.srm,.SRM',
+        type: 'file', accept: '.sav,.SAV,.srm,.SRM,.sta,.STA',
       });
       input.onchange = async () => {
         const file = input.files[0];
         if (!file) return resolve(null);
         const buffer = await file.arrayBuffer();
-        resolve({
-          buffer,
-          name: file.name,
-          path: null,
-          error: buffer.byteLength !== 131072 ? `Unexpected size: ${buffer.byteLength} bytes` : null,
-        });
+        // loadSavFile coerces .sta savestates + validates size (don't reject here)
+        resolve({ buffer, name: file.name, path: null, error: null });
       };
       input.click();
     });
