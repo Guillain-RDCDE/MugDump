@@ -1,7 +1,7 @@
 {
   "name": "mugdump",
-  "version": "0.7.0",
-  "description": "MugDump — extract and develop your Game Boy Camera mug shots. Load .sav/.srm saves, apply palettes and effects, export PNG/GIF.",
+  "version": "0.8.0",
+  "description": "MugDump — extract and develop your Game Boy Camera mug shots. Load .sav/.srm saves or Pocket .sta savestates, apply palettes and effects, export PNG/GIF.",
   "author": "Guillain-RDCDE",
   "homepage": "https://guillain-rdcde.github.io/MugDump/",
   "repository": {

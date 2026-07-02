@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = '0.7';
+const APP_VERSION = '0.8'; // keep in sync with package.json "version" and the other app.js copy
 
 // ── Border frames ─────────────────────────────────────────────────────────────
 
