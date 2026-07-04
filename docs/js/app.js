@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = '0.9'; // keep in sync with package.json "version" and the other app.js copy
+const APP_VERSION = '0.10'; // keep in sync with package.json "version" and the other app.js copy
 
 // ── Border frames ─────────────────────────────────────────────────────────────
 
@@ -1511,9 +1511,41 @@ function albumFolderName(name, used) {
   return folder;
 }
 
+// ── Date search over savestate filenames ────────────────────────────────────
+// The timestamp is already in the filename (YYYYMMDD_HHMMSS), so "search by date"
+// is just filtering. Query = a prefix (2026 · 2026-07 · 2026/07/01) or an inclusive
+// range "A..B". Comparison is on the fixed-width YYYY-MM-DD string.
+
+function savestateFileDate(name) {
+  const m = String(name).match(/(20\d{2})[-_]?(\d{2})[-_]?(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+}
+function dateBound(s, high) {
+  const m = String(s).trim().replace(/[/.]/g, '-').match(/^(\d{4})(?:-(\d{1,2}))?(?:-(\d{1,2}))?$/);
+  if (!m) return null;
+  const mo = m[2] ? m[2].padStart(2, '0') : (high ? '12' : '01');
+  const d  = m[3] ? m[3].padStart(2, '0') : (high ? '31' : '01');
+  return `${m[1]}-${mo}-${d}`;
+}
+function dateQueryMatches(name, query) {
+  const q = (query || '').trim();
+  if (!q) return true;                       // no filter → keep everything
+  const fd = savestateFileDate(name);
+  if (!fd) return false;                      // filter set but the file has no date → drop it
+  const parts = q.split(/\s*\.\.\s*/);
+  const lo = dateBound(parts[0], false);
+  const hi = dateBound(parts.length === 2 ? parts[1] : parts[0], true);
+  if (!lo || !hi) return false;               // unparseable query → match nothing
+  return fd >= lo && fd <= hi;
+}
+
 async function exportSavestateAlbums() {
-  const files = await pickMultipleSaveFiles();
-  if (!files.length) return;
+  const all = await pickMultipleSaveFiles();
+  if (!all.length) return;
+
+  const query = (document.getElementById('album-date-filter')?.value || '').trim();
+  const files = query ? all.filter(f => dateQueryMatches(f.name, query)) : all;
+  if (query && !files.length) { showToast(`No savestates match "${query}"`); return; }
 
   const eff = getEffectiveSettings(-1); // neutral: global palette / settings, no per-photo overrides
   const { width } = getExportDimensions();

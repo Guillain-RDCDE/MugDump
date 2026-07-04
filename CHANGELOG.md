@@ -4,6 +4,13 @@ All notable changes to MugDump. MugDump is a fork of
 [DMG DarkRoom](https://github.com/clickysteve/dmg-darkroom); versions below cover
 the MugDump line.
 
+## 0.10 — 2026-07-04
+- **Search savestates by date** — the *Develop savestates into dated albums* flow now
+  takes an optional date filter, so you only develop the rolls you want. Type a prefix
+  (`2026`, `2026-07`, `2026-07-01`, `/` or `-`) or an inclusive range (`2026-07-01..2026-07-15`).
+  The dates come straight from the savestate filenames, so it's an instant search over
+  your whole card — no indexing.
+
 ## 0.9 — 2026-07-04
 - **Develop savestates into dated albums** — pick several Analogue Pocket savestates
   (`.sta`) at once and get one archive with a **dated folder of PNGs per savestate**,
