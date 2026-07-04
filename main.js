@@ -413,7 +413,9 @@ ipcMain.handle('save-png-batch', async (_event, photos) => {
 
   for (const { dataUrl, name } of photos) {
     const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
-    fs.writeFileSync(path.join(dir, name), Buffer.from(base64, 'base64'));
+    const outPath = path.join(dir, name);
+    fs.mkdirSync(path.dirname(outPath), { recursive: true }); // `name` may include a dated sub-folder
+    fs.writeFileSync(outPath, Buffer.from(base64, 'base64'));
   }
 
   return { dir, count: photos.length };

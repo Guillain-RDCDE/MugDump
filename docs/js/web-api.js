@@ -169,7 +169,8 @@ window.api = {
   },
 
   // ── Save PNG batch (zip) ───────────────────────────────────────────────────
-  savePngBatch: async (photos) => {
+  // `name` may include a "folder/" prefix — JSZip creates the sub-folders.
+  savePngBatch: async (photos, zipName = 'mugdump-photos.zip') => {
     try {
       // JSZip is bundled locally — a CDN import would be blocked by the page CSP,
       // which is what used to force the (brutal) one-by-one fallback below.
@@ -180,7 +181,7 @@ window.api = {
       }
       const blob = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(blob);
-      triggerDownload(url, 'mugdump-photos.zip');
+      triggerDownload(url, zipName);
       setTimeout(() => URL.revokeObjectURL(url), 5000);
       return { dir: '.', count: photos.length, zipped: true };
     } catch (_) {

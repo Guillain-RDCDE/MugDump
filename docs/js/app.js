@@ -6,7 +6,7 @@
  *   - palettes.js → window.PALETTES, window.paletteToRGB
  */
 
-const APP_VERSION = '0.8'; // keep in sync with package.json "version" and the other app.js copy
+const APP_VERSION = '0.9'; // keep in sync with package.json "version" and the other app.js copy
 
 // ── Border frames ─────────────────────────────────────────────────────────────
 
@@ -1482,6 +1482,82 @@ async function exportBatchPng() {
   if (result) showToast(`Exported ${result.count} photos`);
 }
 
+// ── Export: dated albums from savestates ─────────────────────────────────────
+// Drop N .sta / .sav files → one zip with a dated sub-folder per savestate
+// (folder named from the savestate's timestamp), each holding its photos as PNG.
+// No infinite-roll bookkeeping needed: each savestate is a self-contained roll,
+// and the filesystem + timestamps do the sorting.
+
+function pickMultipleSaveFiles() {
+  return new Promise(resolve => {
+    const input = Object.assign(document.createElement('input'), {
+      type: 'file', multiple: true, accept: '.sav,.SAV,.srm,.SRM,.sta,.STA',
+    });
+    input.onchange = () => resolve(Array.from(input.files || []));
+    input.click();
+  });
+}
+
+// "20260701_155523_Play Cartridge.sta" → "2026-07-01_15-55-23"; falls back to the
+// sanitised stem, and disambiguates same-timestamp collisions with a numeric suffix.
+function albumFolderName(name, used) {
+  const stem = String(name).replace(/\.[^.]+$/, '');
+  const m = stem.match(/(20\d{2})[-_]?(\d{2})[-_]?(\d{2})[-_ ]?(\d{2})[-_]?(\d{2})[-_]?(\d{2})/);
+  let base = m ? `${m[1]}-${m[2]}-${m[3]}_${m[4]}-${m[5]}-${m[6]}`
+              : (stem.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'album');
+  let folder = base, n = 2;
+  while (used.has(folder)) folder = `${base}_${n++}`;
+  used.add(folder);
+  return folder;
+}
+
+async function exportSavestateAlbums() {
+  const files = await pickMultipleSaveFiles();
+  if (!files.length) return;
+
+  const eff = getEffectiveSettings(-1); // neutral: global palette / settings, no per-photo overrides
+  const { width } = getExportDimensions();
+  const scale = state.exportScale === 'custom'
+    ? Math.max(1, Math.round(width / GBCam.PHOTO_WIDTH))
+    : state.exportScale;
+
+  showToast(`Developing ${files.length} file${files.length !== 1 ? 's' : ''}…`);
+  await new Promise(r => setTimeout(r, 0)); // let the toast paint before the heavy loop
+
+  const used = new Set();
+  const batch = [];
+  let albums = 0, skipped = 0;
+
+  for (const file of files) {
+    let buffer;
+    try { buffer = await file.arrayBuffer(); } catch { skipped++; continue; }
+    const cam = coerceGbCamSave(buffer);
+    if (!cam) { skipped++; continue; }
+    const nonEmpty = GBCam.parseSav(cam).photos.filter(p => !p.isEmpty);
+    if (!nonEmpty.length) { skipped++; continue; }
+
+    const folder = albumFolderName(file.name, used);
+    albums++;
+    nonEmpty.forEach((photo, i) => {
+      const canvas = document.createElement('canvas');
+      const ctx    = canvas.getContext('2d');
+      renderPhotoComplete(ctx, photo, eff, scale, photo.index, { forExport: true });
+      batch.push({
+        dataUrl: canvas.toDataURL('image/png'),
+        name: `${folder}/${folder}_${String(i + 1).padStart(2, '0')}.png`,
+      });
+    });
+  }
+
+  if (!batch.length) { showToast('No Game Boy Camera photos found in those files'); return; }
+
+  const result = await window.api.savePngBatch(batch, 'mugdump-albums.zip');
+  if (result) {
+    showToast(`${batch.length} photo${batch.length !== 1 ? 's' : ''} in ${albums} dated album${albums !== 1 ? 's' : ''}`
+      + (skipped ? ` (${skipped} skipped)` : ''));
+  }
+}
+
 // ── Export: animated GIF ────────────────────────────────────────────────────
 
 function enterGifMode() {
@@ -1994,6 +2070,7 @@ function wireButtons() {
     await loadSavFile(result);
   });
   document.getElementById('btn-open-pocket').addEventListener('click', openPocketModal);
+  document.getElementById('btn-develop-albums')?.addEventListener('click', exportSavestateAlbums);
 
   // Home button (title)
   document.getElementById('btn-home')?.addEventListener('click', () => {

@@ -4,6 +4,14 @@ All notable changes to MugDump. MugDump is a fork of
 [DMG DarkRoom](https://github.com/clickysteve/dmg-darkroom); versions below cover
 the MugDump line.
 
+## 0.9 — 2026-07-04
+- **Develop savestates into dated albums** — pick several Analogue Pocket savestates
+  (`.sta`) at once and get one archive with a **dated folder of PNGs per savestate**,
+  each folder named from that savestate's timestamp. Each savestate is a self-contained
+  roll, so the filesystem and timestamps do the sorting — no infinite-roll bookkeeping.
+  On the web this is a single `.zip`; the desktop app writes the folders straight to a
+  location you choose.
+
 ## 0.7 — 2026-06-17
 - **Delete saves straight off the SD card** — every save in the Analogue Pocket
   picker now has an **✕**; one click (with a confirm) removes it from the card.
