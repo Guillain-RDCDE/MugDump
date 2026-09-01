@@ -13,6 +13,10 @@ Game Boy Camera and turn them into PNGs and GIFs — palettes, effects, frames a
 
 **[▶ Open the web app](https://guillain-rdcde.github.io/MugDump/)** — no install, runs in your browser. · **[Changelog](CHANGELOG.md)**
 
+> **This is a fork.** The original web viewer is [dmg-darkroom](https://github.com/clickysteve/dmg-darkroom) by clickysteve.
+>
+> **What is mine here (38 commits):** Analogue Pocket `.sta` savestate support, in the browser and in a new Electron desktop app; dated albums with date search; delete-from-SD-card; a reworked effects and palette UI; and releases 0.6 through 0.10.
+
 > ⚠️ **Reading the SD card directly (and deleting saves on it) only works in [Chrome](https://www.google.com/chrome/) or [Edge](https://www.microsoft.com/edge)** — it relies on the File System Access API, which Firefox and Safari don't support. In those browsers, just **drag a `.sav` / `.srm` file onto the window** instead, or grab the desktop app. Everything else (palettes, effects, export) works in every browser.
 
 > *mug shot* (the portraits the Game Boy Camera was made for) + *memory dump*
