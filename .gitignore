@@ -4,3 +4,7 @@ dist/
 *.dmg
 test_saves/
 _local/
+
+# ROMs commerciales : jamais redistribuees. Garder les cartouches en local.
+*.gb
+*.gbc
