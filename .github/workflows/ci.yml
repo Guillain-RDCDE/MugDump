@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run build
+      # docs/ is the committed GitHub Pages output: it must match the sources.
+      - name: Check that docs/ is up to date
+        run: git diff --exit-code --stat -- docs || (echo '::error::docs/ is stale — run `npm run build` and commit the result' && exit 1)
+      - name: Web smoke test (Playwright)
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+      - name: Desktop smoke test (Electron under Xvfb)
+        run: xvfb-run -a npm run test:e2e:electron

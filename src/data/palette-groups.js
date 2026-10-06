@@ -1,0 +1,33 @@
+export const PAL_GROUP_ORDER = [
+  'hardware',
+  'gbc',
+  'gbc_game',
+  'gbc_unused',
+  'sgb',
+  'sgb2',
+  'community',
+  'gallery',
+  'helllord',
+  'trashuncle',
+  'wolfbunny',
+  'bgb',
+  'sameboy',
+  'artistic',
+];
+
+export const PAL_GROUP_LABELS = {
+  hardware: 'GB Hardware',
+  gbc: 'GBC Official',
+  gbc_game: 'GBC Game Palettes',
+  gbc_unused: 'GBC Unused',
+  sgb: 'Super Game Boy',
+  sgb2: 'SGB Vaporwave',
+  community: 'Community (Lospec)',
+  gallery: 'Community Gallery',
+  helllord: 'R.A.Helllord',
+  trashuncle: 'Trashuncle',
+  wolfbunny: 'TheWolfBunny64',
+  bgb: 'BGB Emulator',
+  sameboy: 'SameBoy Emulator',
+  artistic: 'Artistic',
+};

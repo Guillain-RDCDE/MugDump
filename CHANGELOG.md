@@ -4,6 +4,28 @@ All notable changes to MugDump. MugDump is a fork of
 [DMG DarkRoom](https://github.com/clickysteve/dmg-darkroom); versions below cover
 the MugDump line.
 
+## 0.11 — 2026-10-06
+- **Architecture overhaul.** The renderer is now a set of ES modules under `src/`
+  (core / data / app / render / ui / features / platform) built with Vite into `docs/`;
+  the Electron app loads that same output, so the web and desktop copies can no
+  longer drift apart. The 6 900-line `app.js` monolith and its duplicate are gone.
+- **One decoder, one GIF encoder.** `src/core/` is shared by the browser, the Electron
+  main process and the tests. GIFs are encoded with gifenc on both platforms, so the
+  desktop app and the web app now produce identical files.
+- **Desktop hardening.** Sandboxed renderer, IPC inputs validated in the main process,
+  external links open in the system browser, Lospec is the only host the app will
+  fetch from, and batch export can no longer write outside the chosen folder.
+- **Tooling.** ESLint, Prettier, unit tests (`node:test`, with synthetic saves instead
+  of real photos), Playwright smoke tests for web and desktop, and a GitHub Actions
+  workflow that also checks `docs/` is up to date. The version is read from
+  `package.json` at build time instead of being hand-copied.
+- Fixed: the **Once** loop mode exported a GIF that still looped forever.
+- Fixed: exporting a single photo at a **custom size** crashed on an undefined width.
+- Fixed: the second **Cancel** button of the Analogue Pocket dialog did nothing (its
+  inline handler was blocked by the page's content-security policy).
+- Removed the unreachable lightbox (replaced long ago by the solo view) and other dead
+  code; Linux desktop builds now look for the Pocket SD card under `/media` and `/mnt`.
+
 ## 0.10 — 2026-07-04
 - **Search savestates by date** — the *Develop savestates into dated albums* flow now
   takes an optional date filter, so you only develop the rolls you want. Type a prefix

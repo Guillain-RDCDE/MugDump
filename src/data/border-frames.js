@@ -1,0 +1,25 @@
+// ── Border frames ─────────────────────────────────────────────────────────────
+
+export const BORDER_FRAMES = [
+  { id: 'int-frame-0', label: '1' },
+  { id: 'int-frame-1', label: '2' },
+  { id: 'int-frame-2', label: '3' },
+  { id: 'int-frame-3', label: '4' },
+  { id: 'int-frame-4', label: '5' },
+  { id: 'int-frame-5', label: '6' },
+  { id: 'int-frame-6', label: '7' },
+  { id: 'int-frame-7', label: '8' },
+  { id: 'int-frame-8', label: '9' },
+  { id: 'int-frame-9', label: '10' },
+  { id: 'int-frame-10', label: '11' },
+  { id: 'int-frame-11', label: '12' },
+  { id: 'int-frame-12', label: '13' },
+  { id: 'int-frame-13', label: '14' },
+  { id: 'int-frame-14', label: '15' },
+  { id: 'int-frame-15', label: '16' },
+  { id: 'int-frame-16', label: '17' },
+  { id: 'int-frame-17', label: '18' },
+  { id: 'jp-frame-0', label: 'JP 1' },
+  { id: 'jp-frame-1', label: 'JP 2' },
+  { id: 'jp-frame-6', label: 'JP 3' },
+];

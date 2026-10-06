@@ -78,34 +78,61 @@ Everything works **per-photo** or **globally** across your whole 30-photo roll, 
 
 ### Run it locally
 
-Desktop app (Electron):
-
 ```bash
 npm install
-npm start
+npm run dev        # Electron + Vite dev server with hot reload
+npm run dev:web    # browser only, at http://localhost:5173
+npm start          # build docs/ then launch the desktop app on it
 ```
 
 Build installers (output in `dist/`):
 
 ```bash
-npm run build:win     # Windows (NSIS)
-npm run build:mac     # macOS (dmg)
-npm run build:linux   # Linux (AppImage)
+npm run dist:win     # Windows (NSIS)
+npm run dist:mac     # macOS (dmg)
+npm run dist:linux   # Linux (AppImage)
 ```
 
-The same code also runs as a static web app — just serve the `docs/` folder.
+Quality checks: `npm run check` (ESLint + Prettier + unit tests), `npm run test:e2e`
+(web smoke test with Playwright) and `npm run test:e2e:electron` (desktop smoke test).
 
 ### How it works
 
 Game Boy Camera SRAM is exactly 128 KB. Photos start at offset `0x2000`, in 30 slots
 of `0x1000` bytes; each is a 128×112 image stored as 2-bits-per-pixel Game Boy tiles
 (16×14 tiles, 16 bytes each). Every pixel is a value 0–3 mapped onto the four colours
-of your palette. `.srm` files are the same SRAM under RetroArch's name.
+of your palette. `.srm` files are the same SRAM under RetroArch's name. An Analogue
+Pocket `.sta` savestate embeds that SRAM in a larger blob; MugDump finds it through the
+camera's management block (`src/core/savestate.js`).
 
-Decoder: [`renderer/js/gbcam.js`](renderer/js/gbcam.js) · editor/UI:
-[`renderer/js/app.js`](renderer/js/app.js). The desktop shell ([`main.js`](main.js)) and
-the browser shim ([`docs/js/web-api.js`](docs/js/web-api.js)) expose the same `window.api`,
-so the app code is identical on desktop and web.
+### Project layout
+
+One source tree serves both targets. `npm run build` compiles `src/` into `docs/`
+(the GitHub Pages site, committed) and the Electron shell loads that same output.
+
+```
+src/
+  main.js          entry point: wires every module at startup
+  index.html       the single page, shared by web and desktop
+  core/            pure logic, no DOM — decoder, savestates, GIF, colours, palette files
+  data/            static data — palettes, border frames, effect definitions
+  app/             state, effective settings, undo, file loading, custom-palette store
+  render/          canvas pipeline — photo + border, transforms, tone, effects
+  ui/              one module per panel or widget (grid, solo view, pickers, GIF builder…)
+  features/        export (PNG, GIF, albums, contact sheet) and .gbcp project files
+  platform/        `api` — browser implementation, or the Electron preload bridge
+  styles/, public/ stylesheet and static assets (frames, icons)
+electron/
+  main.js          window, menu, security settings (sandboxed renderer)
+  preload.cjs      the only bridge between renderer and main (`window.api`)
+  ipc/             one file per concern: files, Pocket SD card, export, network
+tests/
+  unit/            node:test suites for src/core and the data tables
+  e2e/             Playwright smoke tests (web build and Electron) + visual regression tools
+  fixtures/        synthetic Game Boy Camera saves — no ROM or real photo needed
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
 
 ---
 

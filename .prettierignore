@@ -1,0 +1,7 @@
+docs/
+dist/
+node_modules/
+build/
+package-lock.json
+*.md
+src/data/palettes/extended.js

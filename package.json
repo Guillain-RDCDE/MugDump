@@ -1,36 +1,61 @@
 {
   "name": "mugdump",
-  "version": "0.10.0",
-  "description": "MugDump — extract and develop your Game Boy Camera mug shots. Load .sav/.srm saves or Pocket .sta savestates, apply palettes and effects, export PNG/GIF.",
-  "author": "Guillain-RDCDE",
+  "version": "0.11.0",
+  "description": "MugDump — dump and develop your Game Boy Camera mug shots. Load .sav/.srm saves or Analogue Pocket .sta savestates, apply palettes and effects, export PNG/GIF.",
+  "author": "Guillain d'Erceville",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
   "homepage": "https://guillain-rdcde.github.io/MugDump/",
   "repository": {
     "type": "git",
     "url": "https://github.com/Guillain-RDCDE/MugDump.git"
   },
-  "main": "main.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "electron/main.js",
   "scripts": {
-    "start": "electron .",
-    "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux"
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "npm run build && electron .",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node --test 'tests/unit/**/*.test.mjs'",
+    "test:e2e": "node tests/e2e/web-smoke.mjs",
+    "test:e2e:electron": "node tests/e2e/electron-smoke.mjs",
+    "check": "npm run lint && npm run format:check && npm test",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
-    "omggif": "^1.0.10"
+    "gifenc": "^1.0.3",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
     "electron": "^30.0.0",
-    "electron-builder": "^24.13.3"
+    "electron-builder": "^24.13.3",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0",
+    "pixelmatch": "^8.0.0",
+    "playwright": "^1.63.0",
+    "pngjs": "^7.0.0",
+    "prettier": "^3.0.0",
+    "vite": "^7.0.0"
   },
   "build": {
     "appId": "com.rdcde.mugdump",
     "productName": "MugDump",
     "files": [
-      "main.js",
-      "preload.js",
-      "src/**/*",
-      "renderer/**/*",
-      "build/**/*"
+      "electron/**/*",
+      "src/core/**/*",
+      "docs/**/*",
+      "package.json"
     ],
     "mac": {
       "category": "public.app-category.photography",
