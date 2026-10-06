@@ -12,6 +12,8 @@ Node 22 is the supported version (see `.nvmrc`).
 
 ## Before you commit
 
+All work happens directly on `main`; the repository keeps no other branch.
+
 ```bash
 npm run check      # ESLint + Prettier + type-check (tsc on JSDoc) + unit tests
 npm run build      # regenerates docs/ — commit it with your change
