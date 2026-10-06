@@ -277,6 +277,49 @@ This permanently removes the file. This cannot be undone.`
 }
 const isElectron = typeof window !== "undefined" && Boolean(window.api);
 const api = isElectron ? window.api : createWebApi();
+const STORAGE_KEYS = Object.freeze({
+  customPalettes: "gbcam_custom_palettes",
+  recentPalettes: "gbcam_recent_palettes",
+  favPalettes: "gbcam_fav_palettes",
+  lastSavPath: "gbcam_last_sav_path",
+  sidebarCollapsed: "gbcam_sidebar_collapsed",
+  paletteGridSize: "gbcam_pgrid_size",
+  paletteGridCollapsed: "mugdump:pgrid:collapsed",
+  effectGroupsCollapsed: "mugdump:fxgroups",
+  sectionStates: "mugdump:section-states",
+  previewPinned: "mugdump:previewPinned",
+  previewScale: "mugdump:previewScale",
+  theme: "mugdump:theme",
+  presets: "mugdump:presets:v1"
+});
+function readString(key, fallback = null) {
+  try {
+    const v = localStorage.getItem(key);
+    return v === null ? fallback : v;
+  } catch {
+    return fallback;
+  }
+}
+function writeString(key, value) {
+  try {
+    localStorage.setItem(key, String(value));
+  } catch {
+  }
+}
+function readJson(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+function writeJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+  }
+}
 function hexToRgb(hex) {
   const n = parseInt(hex.replace("#", ""), 16);
   return [n >> 16 & 255, n >> 8 & 255, n & 255];
@@ -1833,8 +1876,6 @@ const state = {
   // per-filter granular parameters (see FILTER_DEFS)
   photoTransforms: {},
   // { photoIndex: { rotate: 0, flipH: false, flipV: false } }
-  hideEmpty: false,
-  // whether to collapse empty grid slots
   presentationMode: false,
   // fullscreen presentation overlay active
   gifMode: false,
@@ -2057,6 +2098,294 @@ function getDisplayPaletteId() {
   }
   return state.palette.id;
 }
+function getCollapsedFxGroups() {
+  return new Set(readJson(STORAGE_KEYS.effectGroupsCollapsed, ["retro", "glitch"]));
+}
+function setFxGroupCollapsed(g, collapsed) {
+  const set = getCollapsedFxGroups();
+  if (collapsed) set.add(g);
+  else set.delete(g);
+  writeJson(STORAGE_KEYS.effectGroupsCollapsed, [...set]);
+}
+function makeFxGroupHeader(g, collapsed) {
+  const h = document.createElement("div");
+  h.className = "fi-group-header" + (collapsed ? " collapsed" : "");
+  h.dataset.group = g;
+  const chevron = document.createElement("span");
+  chevron.className = "fi-group-chevron";
+  chevron.textContent = "▾";
+  const label = document.createElement("span");
+  label.className = "fi-group-label";
+  label.textContent = FX_GROUP_LABELS[g] || g;
+  const dot = document.createElement("span");
+  dot.className = "fi-group-dot";
+  dot.title = "An effect in this group is active";
+  h.appendChild(chevron);
+  h.appendChild(label);
+  h.appendChild(dot);
+  h.addEventListener("click", () => {
+    const nowCollapsed = !h.classList.contains("collapsed");
+    h.classList.toggle("collapsed", nowCollapsed);
+    setFxGroupCollapsed(g, nowCollapsed);
+    document.querySelectorAll(`#filter-accordion .fi-item[data-group="${g}"]`).forEach((it2) => {
+      it2.style.display = nowCollapsed ? "none" : "";
+    });
+  });
+  return h;
+}
+function syncFilterAccordion(eff) {
+  const af = eff ? eff.activeFilters : state.activeFilters;
+  const fp = eff ? eff.filterParams : state.filterParams;
+  const fv = eff ? eff.filterVariant : state.filterVariant;
+  document.querySelectorAll(".fi-item").forEach((item) => {
+    const filterId = item.dataset.filter;
+    const active = af.has(filterId);
+    const cb = item.querySelector(".fi-check");
+    if (cb) cb.checked = active;
+    item.classList.toggle("fi-active", active);
+    if (active) item.classList.add("fi-open");
+    const fp_f = fp && fp[filterId] || {};
+    item.querySelectorAll("[data-fi-key]").forEach((el) => {
+      const key = el.dataset.fiKey;
+      const stateKey = el.dataset.fiStatekey;
+      const curVal = stateKey ? fv : fp_f[key] ?? el._fiDef;
+      if (el.tagName === "INPUT" && el.type === "range") {
+        el.value = curVal;
+        const valEl = el.previousElementSibling?.querySelector(".fi-val") || el.parentElement?.querySelector(".fi-val");
+        if (valEl && el._fiFmt) valEl.textContent = el._fiFmt(Number(curVal));
+      } else if (el.classList.contains("seg-control")) {
+        el.querySelectorAll(".seg-btn").forEach((btn) => {
+          btn.classList.toggle("active", btn.dataset.val === String(curVal));
+        });
+      }
+    });
+  });
+  const _fxActiveGroups = /* @__PURE__ */ new Set();
+  document.querySelectorAll("#filter-accordion .fi-item.fi-active").forEach((it2) => {
+    if (it2.dataset.group) _fxActiveGroups.add(it2.dataset.group);
+  });
+  document.querySelectorAll("#filter-accordion .fi-group-header").forEach((h) => {
+    h.classList.toggle("has-active", _fxActiveGroups.has(h.dataset.group));
+  });
+}
+function setupFilterAccordion() {
+  const container = document.getElementById("filter-accordion");
+  if (!container) return;
+  container.innerHTML = "";
+  const collapsedFx = getCollapsedFxGroups();
+  const _fxGroupItems = {};
+  for (const fd of FILTER_DEFS) {
+    const item = document.createElement("div");
+    item.className = "fi-item";
+    item.dataset.filter = fd.id;
+    const header = document.createElement("div");
+    header.className = "fi-header";
+    const chevron = document.createElement("span");
+    chevron.className = "fi-chevron section-chevron";
+    chevron.setAttribute("aria-hidden", "true");
+    chevron.textContent = "▾";
+    const dragHandle = document.createElement("span");
+    dragHandle.className = "fi-drag-handle";
+    dragHandle.setAttribute("aria-hidden", "true");
+    dragHandle.textContent = "⋮⋮";
+    dragHandle.title = "Drag to reorder";
+    const lbl = document.createElement("span");
+    lbl.className = "fi-label";
+    lbl.textContent = fd.label;
+    const checkWrap = document.createElement("label");
+    checkWrap.className = "section-check-wrap fi-check-wrap";
+    checkWrap.title = `Enable ${fd.label}`;
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "fi-check";
+    cb.dataset.filter = fd.id;
+    checkWrap.appendChild(cb);
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "btn btn-ghost btn-xs btn-icon fi-reset";
+    resetBtn.title = `Reset ${fd.label} to defaults`;
+    resetBtn.textContent = "↺";
+    resetBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      pushUndo();
+      const defaults = buildDefaultFilterParams()[fd.id] || {};
+      const fp = getWritableFilterParams(fd.id);
+      Object.assign(fp, defaults);
+      item.querySelectorAll('input[type="range"][data-fi-key]').forEach((slider) => {
+        const key = slider.dataset.fiKey;
+        if (key in defaults) {
+          slider.value = defaults[key];
+          const valEl = slider.closest(".range-wrap")?.querySelector(".fi-val");
+          if (valEl && slider._fiFmt) valEl.textContent = slider._fiFmt(defaults[key]);
+        }
+      });
+      item.querySelectorAll(".seg-control[data-fi-key]").forEach((seg) => {
+        const key = seg.dataset.fiKey;
+        if (key in defaults) {
+          seg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.val === String(defaults[key])));
+        }
+      });
+      repaintInteractive();
+    });
+    header.appendChild(dragHandle);
+    header.appendChild(chevron);
+    header.appendChild(lbl);
+    header.appendChild(resetBtn);
+    header.appendChild(checkWrap);
+    item.draggable = false;
+    header.addEventListener("mousedown", () => {
+      item.draggable = true;
+    });
+    item.addEventListener("dragend", () => {
+      item.draggable = false;
+      item.classList.remove("fi-dragging");
+      document.querySelectorAll(".fi-item").forEach((el) => el.classList.remove("fi-drag-over"));
+      updateFilterOrder(true);
+    });
+    document.addEventListener(
+      "mouseup",
+      () => {
+        item.draggable = false;
+      },
+      { passive: true }
+    );
+    item.addEventListener("dragstart", (e) => {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/html", item.innerHTML);
+      item.classList.add("fi-dragging");
+    });
+    item.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const dragging = document.querySelector(".fi-item.fi-dragging");
+      if (dragging && dragging !== item) {
+        item.classList.add("fi-drag-over");
+        const rect = item.getBoundingClientRect();
+        const midpoint = rect.top + rect.height / 2;
+        if (e.clientY < midpoint) {
+          item.parentNode.insertBefore(dragging, item);
+        } else {
+          item.parentNode.insertBefore(dragging, item.nextSibling);
+        }
+        updateFilterOrder();
+      }
+    });
+    item.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    item.addEventListener("dragleave", () => {
+      item.classList.remove("fi-drag-over");
+    });
+    item.appendChild(header);
+    const outer = document.createElement("div");
+    outer.className = "fi-body-outer";
+    const inner = document.createElement("div");
+    inner.className = "fi-body-inner";
+    const content = document.createElement("div");
+    content.className = "fi-body-content";
+    inner.appendChild(content);
+    for (const p of fd.params) {
+      if (p.type === "range") {
+        const wrap = document.createElement("div");
+        wrap.className = "range-wrap fp-row";
+        const hdr2 = document.createElement("div");
+        hdr2.className = "range-header";
+        const pLbl = document.createElement("span");
+        pLbl.className = "ctrl-label";
+        pLbl.textContent = p.label;
+        const pVal = document.createElement("span");
+        pVal.className = "range-val fi-val";
+        pVal.textContent = p.fmt(p.def);
+        hdr2.appendChild(pLbl);
+        hdr2.appendChild(pVal);
+        const slider = document.createElement("input");
+        slider.type = "range";
+        slider.min = p.min;
+        slider.max = p.max;
+        slider.step = p.step;
+        slider.value = p.def;
+        slider.dataset.fiKey = p.key;
+        if (p.stateKey) slider.dataset.fiStatekey = p.stateKey;
+        slider._fiDef = p.def;
+        slider._fiFmt = p.fmt;
+        slider.addEventListener("pointerdown", () => {
+          pushUndo();
+          if (!cb.checked) enableFilter(fd.id);
+        });
+        slider.addEventListener("input", () => {
+          const v = parseFloat(slider.value);
+          pVal.textContent = p.fmt(v);
+          if (p.stateKey) {
+            setScopedSetting(p.stateKey, slider.value);
+          } else {
+            const fp = getWritableFilterParams(fd.id);
+            fp[p.key] = v;
+          }
+          repaintInteractive();
+        });
+        wrap.appendChild(hdr2);
+        wrap.appendChild(slider);
+        content.appendChild(wrap);
+      } else if (p.type === "seg") {
+        const wrap = document.createElement("div");
+        wrap.className = "fp-row";
+        const pLbl = document.createElement("div");
+        pLbl.className = "ctrl-label";
+        pLbl.style.marginBottom = "4px";
+        pLbl.textContent = p.label;
+        const seg = document.createElement("div");
+        seg.className = "seg-control";
+        seg.dataset.fiKey = p.key;
+        if (p.stateKey) seg.dataset.fiStatekey = p.stateKey;
+        seg._fiDef = p.def;
+        for (const [optVal, optLabel] of p.opts) {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "seg-btn" + (optVal === p.def ? " active" : "");
+          btn.textContent = optLabel;
+          btn.dataset.val = optVal;
+          btn.addEventListener("click", () => {
+            pushUndo();
+            if (!cb.checked) enableFilter(fd.id);
+            seg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
+            if (p.stateKey) {
+              setScopedSetting(p.stateKey, optVal);
+            } else {
+              const fp = getWritableFilterParams(fd.id);
+              fp[p.key] = optVal;
+            }
+            repaintInteractive();
+          });
+          seg.appendChild(btn);
+        }
+        wrap.appendChild(pLbl);
+        wrap.appendChild(seg);
+        content.appendChild(wrap);
+      }
+    }
+    outer.appendChild(inner);
+    item.appendChild(outer);
+    cb.addEventListener("change", () => {
+      toggleFilter(fd.id);
+      if (cb.checked) item.classList.add("fi-open");
+    });
+    header.addEventListener("click", (e) => {
+      if (e.target.closest(".fi-check-wrap")) return;
+      item.classList.toggle("fi-open");
+    });
+    const _g = FX_FILTER_GROUP[fd.id] || "glitch";
+    item.dataset.group = _g;
+    if (collapsedFx.has(_g)) item.style.display = "none";
+    (_fxGroupItems[_g] = _fxGroupItems[_g] || []).push(item);
+  }
+  for (const g of FX_GROUP_ORDER) {
+    const items = _fxGroupItems[g];
+    if (!items || !items.length) continue;
+    container.appendChild(makeFxGroupHeader(g, collapsedFx.has(g)));
+    for (const it2 of items) container.appendChild(it2);
+  }
+}
 const BORDER_FRAMES = [
   { id: "int-frame-0", label: "1" },
   { id: "int-frame-1", label: "2" },
@@ -2080,7 +2409,241 @@ const BORDER_FRAMES = [
   { id: "jp-frame-1", label: "JP 2" },
   { id: "jp-frame-6", label: "JP 3" }
 ];
-function _seededRand(seed1, seed2) {
+function apply$k({ ec, width, height, s, params, variant }) {
+  const cfgs = {
+    fine: { gap: 0.22, alpha: 0.45 },
+    // subtle gap, light darkening
+    medium: { gap: 0.4, alpha: 0.7 },
+    // classic CRT look
+    thick: { gap: 0.58, alpha: 0.84 },
+    // heavy scanlines
+    wide: { gap: 0.76, alpha: 0.94 }
+    // almost half the row is dark
+  };
+  const cfg = cfgs[variant] || cfgs.medium;
+  const crtMix = (params.mix ?? 100) / 100;
+  const rowH = Math.max(1, s);
+  const gapH = Math.min(Math.max(1, Math.round(rowH * cfg.gap)), rowH - 1);
+  const brightH = Math.max(1, rowH - gapH);
+  const numCrtRows = Math.ceil(height / rowH);
+  for (let row = 0; row < numCrtRows; row++) {
+    const rowTop = row * rowH;
+    ec.fillStyle = `rgba(0,0,0,${cfg.alpha * crtMix})`;
+    ec.fillRect(0, rowTop + brightH, width, gapH);
+  }
+  const curve = params.curve ?? "none";
+  if (curve !== "none") {
+    const cx = width / 2, cy = height / 2;
+    const isStrong = curve === "strong";
+    const edgeDark = isStrong ? 0.62 : 0.34;
+    const innerR = Math.min(width, height) * (isStrong ? 0.15 : 0.28);
+    const outerR = Math.max(width, height) * 0.88;
+    const edgeGrad = ec.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
+    edgeGrad.addColorStop(0, "rgba(0,0,0,0)");
+    edgeGrad.addColorStop(1, `rgba(0,0,0,${edgeDark})`);
+    ec.fillStyle = edgeGrad;
+    ec.fillRect(0, 0, width, height);
+    const specA = isStrong ? 0.14 : 0.07;
+    const specGrad = ec.createRadialGradient(cx, height * 0.07, 0, cx, height * 0.28, width * 0.55);
+    specGrad.addColorStop(0, `rgba(255,255,255,${specA})`);
+    specGrad.addColorStop(1, "rgba(255,255,255,0)");
+    ec.fillStyle = specGrad;
+    ec.fillRect(0, 0, width, height);
+  }
+}
+function apply$j({ ec, width, height, s, params }) {
+  const spStr = (params.subpixel ?? 30) / 100;
+  const lcdBleed = (params.bleed ?? 0) / 100;
+  const sepH = Math.max(1, Math.round(s * 0.15));
+  const sepW = Math.max(1, Math.round(s * 0.12));
+  for (let y = s - sepH; y < height; y += s) {
+    ec.fillStyle = "rgba(0,0,0,0.38)";
+    ec.fillRect(0, y, width, sepH);
+  }
+  for (let x = s; x < width; x += s) {
+    ec.fillStyle = "rgba(0,0,0,0.22)";
+    ec.fillRect(x - sepW, 0, sepW, height);
+  }
+  if (s >= 4 && spStr > 0) {
+    const cw = Math.max(1, Math.round(s / 3));
+    for (let x = 0; x < width; x += s) {
+      ec.fillStyle = `rgba(255,80,80,${spStr})`;
+      ec.fillRect(x, 0, cw, height);
+      ec.fillStyle = `rgba(80,255,80,${spStr})`;
+      ec.fillRect(x + cw, 0, cw, height);
+      ec.fillStyle = `rgba(80,80,255,${spStr})`;
+      ec.fillRect(x + cw * 2, 0, cw, height);
+    }
+  }
+  if (lcdBleed > 0) {
+    const corners = [
+      [0, 0],
+      [width, 0],
+      [0, height],
+      [width, height]
+    ];
+    const bleedR = Math.max(width, height) * 0.6;
+    for (const [cx2, cy2] of corners) {
+      const bg = ec.createRadialGradient(cx2, cy2, 0, cx2, cy2, bleedR);
+      bg.addColorStop(0, `rgba(255,255,255,${lcdBleed * 0.18})`);
+      bg.addColorStop(1, "rgba(255,255,255,0)");
+      ec.fillStyle = bg;
+      ec.fillRect(0, 0, width, height);
+    }
+  }
+}
+function apply$i({ ec, width, height, s, params }) {
+  const gridOpacity = (params.opacity ?? 30) / 100;
+  const lineWBase = params.weight ?? 1;
+  const lineW = Math.max(1, Math.round(lineWBase * s / 4));
+  if (s >= 2) {
+    ec.strokeStyle = `rgba(0,0,0,${gridOpacity})`;
+    ec.lineWidth = lineW;
+    const numGridCols = Math.ceil(width / s);
+    for (let col = 1; col <= numGridCols; col++) {
+      const x = col * s - lineW / 2;
+      ec.beginPath();
+      ec.moveTo(x, 0);
+      ec.lineTo(x, height);
+      ec.stroke();
+    }
+    const numGridRows = Math.ceil(height / s);
+    for (let row = 1; row <= numGridRows; row++) {
+      const y = row * s - lineW / 2;
+      ec.beginPath();
+      ec.moveTo(0, y);
+      ec.lineTo(width, y);
+      ec.stroke();
+    }
+  }
+}
+function apply$h({ ec, width, height, params }) {
+  const _fv = params.falloff ?? 50;
+  const _shape = (params.shape ?? 0) / 100;
+  const _t = (typeof _fv === "string" ? { soft: 20, medium: 50, hard: 80 }[_fv] ?? 50 : _fv) / 100;
+  const cx = width / 2, cy = height / 2;
+  const innerMult = 0.2 - _t * 0.18;
+  const outerMult = 0.75 - _t * 0.15;
+  const darkMax = 0.3 + _t * 0.68;
+  if (_shape > 0.05) {
+    ec.save();
+    ec.translate(cx, cy);
+    ec.scale(1, width / height * (1 - _shape * 0.4) + _shape * (height / width * 1.4));
+    ec.translate(-cx, -cy);
+    const squishR = Math.min(width, height) * Math.max(0, innerMult + _shape * 0.05);
+    const squishOuter = Math.max(width, height) * (outerMult + _shape * 0.05);
+    const gSq = ec.createRadialGradient(cx, cy, squishR, cx, cy, squishOuter);
+    gSq.addColorStop(0, "rgba(0,0,0,0)");
+    gSq.addColorStop(0.5, `rgba(0,0,0,${(darkMax * 0.3).toFixed(2)})`);
+    gSq.addColorStop(1, `rgba(0,0,0,${darkMax})`);
+    ec.fillStyle = gSq;
+    ec.fillRect(-width, -height, width * 3, height * 3);
+    ec.restore();
+  } else {
+    const inner = Math.min(width, height) * Math.max(0, innerMult);
+    const outer = Math.max(width, height) * outerMult;
+    const grad = ec.createRadialGradient(cx, cy, inner, cx, cy, outer);
+    grad.addColorStop(0, "rgba(0,0,0,0)");
+    grad.addColorStop(0.5, `rgba(0,0,0,${(darkMax * 0.25).toFixed(2)})`);
+    grad.addColorStop(1, `rgba(0,0,0,${darkMax})`);
+    ec.fillStyle = grad;
+    ec.fillRect(0, 0, width, height);
+  }
+}
+function apply$g({ ec, width, height, s, params }) {
+  const htRad = (params.radius ?? 38) / 100;
+  const htDarkness = (params.darkness ?? 35) / 100;
+  const htShape = params.shape ?? "circle";
+  const r = Math.max(1, Math.round(s * htRad));
+  ec.fillStyle = `rgba(0,0,0,${htDarkness.toFixed(2)})`;
+  for (let y = Math.round(s * 0.5); y < height; y += s) {
+    for (let x = Math.round(s * 0.5); x < width; x += s) {
+      ec.beginPath();
+      if (htShape === "circle") {
+        ec.arc(x, y, r, 0, Math.PI * 2);
+      } else if (htShape === "square") {
+        ec.rect(x - r, y - r, r * 2, r * 2);
+      } else if (htShape === "diamond") {
+        ec.moveTo(x, y - r);
+        ec.lineTo(x + r, y);
+        ec.lineTo(x, y + r);
+        ec.lineTo(x - r, y);
+        ec.closePath();
+      }
+      ec.fill();
+    }
+  }
+}
+function apply$f({ ec, width, height, s, params }) {
+  ec.fillStyle = "rgba(0,0,0,0.88)";
+  ec.fillRect(0, 0, width, height);
+  ec.globalCompositeOperation = "destination-out";
+  const dotRadPct = (params.radius ?? 44) / 100;
+  const halationPct = (params.halation ?? 0) / 100;
+  const dotR = Math.max(1, Math.round(s * dotRadPct));
+  const dotRows = Math.ceil(height / s);
+  const dotCols = Math.ceil(width / s);
+  for (let py = 0; py < dotRows; py++) {
+    for (let px = 0; px < dotCols; px++) {
+      const cx = Math.round(px * s + s * 0.5);
+      const cy = Math.round(py * s + s * 0.5);
+      ec.beginPath();
+      ec.arc(cx, cy, dotR, 0, Math.PI * 2);
+      ec.fill();
+    }
+  }
+  ec.globalCompositeOperation = "source-over";
+  if (halationPct > 0) {
+    for (let py = 0; py < dotRows; py++) {
+      for (let px = 0; px < dotCols; px++) {
+        const cx2 = Math.round(px * s + s * 0.5);
+        const cy2 = Math.round(py * s + s * 0.5);
+        const gR = dotR + Math.round(s * halationPct * 0.8);
+        const hGrad = ec.createRadialGradient(cx2, cy2, dotR * 0.8, cx2, cy2, gR);
+        hGrad.addColorStop(0, `rgba(255,255,255,${halationPct * 0.3})`);
+        hGrad.addColorStop(1, "rgba(255,255,255,0)");
+        ec.fillStyle = hGrad;
+        ec.beginPath();
+        ec.arc(cx2, cy2, gR, 0, Math.PI * 2);
+        ec.fill();
+      }
+    }
+  }
+}
+function apply$e({ ctx, width, height, s, params }) {
+  const glowBlurPct = (params.blur ?? 110) / 100;
+  const glowIntensity = (params.intensity ?? 80) / 100;
+  const ph = params.phosphor ?? "none";
+  if (glowIntensity <= 0 && ph === "none") return;
+  const phColors = {
+    green: "rgba(0,255,80,0.40)",
+    amber: "rgba(255,170,0,0.42)",
+    blue: "rgba(80,160,255,0.40)"
+  };
+  const bloomSrc = Object.assign(document.createElement("canvas"), { width, height });
+  const bsc = bloomSrc.getContext("2d");
+  bsc.drawImage(ctx.canvas, 0, 0);
+  if (ph !== "none" && phColors[ph]) {
+    bsc.globalCompositeOperation = "source-atop";
+    bsc.fillStyle = phColors[ph];
+    bsc.fillRect(0, 0, width, height);
+    bsc.globalCompositeOperation = "source-over";
+  }
+  const blurPx = Math.round(s * 3.5 * glowBlurPct);
+  const bloom = Object.assign(document.createElement("canvas"), { width, height });
+  const bc = bloom.getContext("2d");
+  if (blurPx > 0) {
+    bc.filter = `blur(${blurPx}px)`;
+  }
+  bc.drawImage(bloomSrc, 0, 0);
+  bc.filter = "none";
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, Math.max(0, glowIntensity));
+  ctx.globalCompositeOperation = "screen";
+  ctx.drawImage(bloom, 0, 0);
+  ctx.restore();
+}
+function seededRand(seed1, seed2) {
   let h = seed1 * 1664525 + seed2 * 1013904223 + 2654435769 | 0;
   h ^= h >>> 16;
   h = Math.imul(h, 2246822507);
@@ -2089,543 +2652,241 @@ function _seededRand(seed1, seed2) {
   h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
 }
-function applyExportFilter(ctx, width, height, scale, filter, intensity = 1, variant = "medium", filterParams, photoSeed = 0) {
-  filterParams = filterParams || state.filterParams;
-  if (!filter || filter === "none") return;
-  if (intensity <= 0) return;
-  const s = Math.max(1, Math.round(scale));
-  const eff = Object.assign(document.createElement("canvas"), { width, height });
-  const ec = eff.getContext("2d");
-  if (filter === "crt") {
-    const cfgs = {
-      fine: { gap: 0.22, alpha: 0.45 },
-      // subtle gap, light darkening
-      medium: { gap: 0.4, alpha: 0.7 },
-      // classic CRT look
-      thick: { gap: 0.58, alpha: 0.84 },
-      // heavy scanlines
-      wide: { gap: 0.76, alpha: 0.94 }
-      // almost half the row is dark
-    };
-    const cfg = cfgs[variant] || cfgs.medium;
-    const crtMix = ((filterParams.crt || {}).mix ?? 100) / 100;
-    const rowH = Math.max(1, s);
-    const gapH = Math.min(Math.max(1, Math.round(rowH * cfg.gap)), rowH - 1);
-    const brightH = Math.max(1, rowH - gapH);
-    const numCrtRows = Math.ceil(height / rowH);
-    for (let row = 0; row < numCrtRows; row++) {
-      const rowTop = row * rowH;
-      ec.fillStyle = `rgba(0,0,0,${cfg.alpha * crtMix})`;
-      ec.fillRect(0, rowTop + brightH, width, gapH);
+function blendIntensity(out, src, intensity) {
+  const t = Math.min(1, Math.max(0, intensity));
+  if (t >= 1) return;
+  for (let i = 0; i < out.length; i += 4) {
+    out[i] = Math.round(src[i] * (1 - t) + out[i] * t);
+    out[i + 1] = Math.round(src[i + 1] * (1 - t) + out[i + 1] * t);
+    out[i + 2] = Math.round(src[i + 2] * (1 - t) + out[i + 2] * t);
+  }
+}
+function apply$d({ ctx, width, height, s, params, intensity }) {
+  const cp = params;
+  const hpx = Math.round(s * (cp.shiftH ?? 75) / 100);
+  const vpx = Math.round(s * (cp.shiftV ?? 0) / 100);
+  const rpx = Math.round(s * (cp.shiftR ?? 0) / 100);
+  const orig = ctx.getImageData(0, 0, width, height);
+  const dst = new ImageData(width, height);
+  const d = orig.data, o = dst.data;
+  const cx2 = width / 2, cy2 = height / 2;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      let nx = 0, ny = 0;
+      if (rpx !== 0) {
+        const dx = x - cx2, dy = y - cy2;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        nx = dx / dist;
+        ny = dy / dist;
+      }
+      const rx = Math.min(width - 1, Math.max(0, Math.round(x + hpx + nx * rpx)));
+      const ry = Math.min(height - 1, Math.max(0, Math.round(y + vpx + ny * rpx)));
+      const bx = Math.min(width - 1, Math.max(0, Math.round(x - hpx - nx * rpx)));
+      const by = Math.min(height - 1, Math.max(0, Math.round(y - vpx - ny * rpx)));
+      const ri = (ry * width + rx) * 4;
+      const bi = (by * width + bx) * 4;
+      o[i] = d[ri];
+      o[i + 1] = d[i + 1];
+      o[i + 2] = d[bi + 2];
+      o[i + 3] = 255;
     }
-    const curve = (filterParams.crt || {}).curve ?? "none";
-    if (curve !== "none") {
-      const cx = width / 2, cy = height / 2;
-      const isStrong = curve === "strong";
-      const edgeDark = isStrong ? 0.62 : 0.34;
-      const innerR = Math.min(width, height) * (isStrong ? 0.15 : 0.28);
-      const outerR = Math.max(width, height) * 0.88;
-      const edgeGrad = ec.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
-      edgeGrad.addColorStop(0, "rgba(0,0,0,0)");
-      edgeGrad.addColorStop(1, `rgba(0,0,0,${edgeDark})`);
-      ec.fillStyle = edgeGrad;
-      ec.fillRect(0, 0, width, height);
-      const specA = isStrong ? 0.14 : 0.07;
-      const specGrad = ec.createRadialGradient(
-        cx,
-        height * 0.07,
-        0,
-        cx,
-        height * 0.28,
-        width * 0.55
+  }
+  blendIntensity(o, d, intensity);
+  ctx.putImageData(dst, 0, 0);
+}
+function apply$c({ ctx, width, height, s, params, intensity }) {
+  const jitterPct = (params.amount ?? 40) / 100;
+  const jitterFreq = (params.frequency ?? 50) / 100;
+  const maxShift = Math.max(1, Math.round(s * jitterPct * 3));
+  const orig = ctx.getImageData(0, 0, width, height);
+  const dst = new ImageData(width, height);
+  const d = orig.data, o = dst.data;
+  const tileH = Math.max(1, s);
+  for (let y = 0; y < height; y++) {
+    const tileY = Math.floor(y / tileH);
+    const frac = Math.sin(tileY * 43758.5453123) * 43758.5453123 % 1;
+    const norm = frac < 0 ? frac + 1 : frac;
+    const shouldJitter = norm > 1 - jitterFreq;
+    const shift = shouldJitter ? Math.round((norm * 2 - 1) * maxShift) : 0;
+    for (let x = 0; x < width; x++) {
+      const sx = Math.min(width - 1, Math.max(0, x + shift));
+      const i = (y * width + x) * 4;
+      const si = (y * width + sx) * 4;
+      o[i] = d[si];
+      o[i + 1] = d[si + 1];
+      o[i + 2] = d[si + 2];
+      o[i + 3] = 255;
+    }
+  }
+  blendIntensity(o, d, intensity);
+  ctx.putImageData(dst, 0, 0);
+}
+function apply$b({ ctx, width, height, params, intensity, photoSeed }) {
+  const noiseAmt = (params.amount ?? 40) / 100;
+  const noiseType = params.type ?? "film";
+  const orig = ctx.getImageData(0, 0, width, height);
+  const d = orig.data;
+  const src = new Uint8ClampedArray(d);
+  if (noiseType === "film") {
+    for (let i = 0; i < d.length; i += 4) {
+      const g = (seededRand(photoSeed, i) - 0.5) * noiseAmt * 200;
+      d[i] = Math.min(255, Math.max(0, d[i] + g));
+      d[i + 1] = Math.min(255, Math.max(0, d[i + 1] + g));
+      d[i + 2] = Math.min(255, Math.max(0, d[i + 2] + g));
+    }
+  } else if (noiseType === "static") {
+    for (let i = 0; i < d.length; i += 4) {
+      d[i] = Math.min(255, Math.max(0, d[i] + (seededRand(photoSeed, i) - 0.5) * noiseAmt * 200));
+      d[i + 1] = Math.min(
+        255,
+        Math.max(0, d[i + 1] + (seededRand(photoSeed, i + 1) - 0.5) * noiseAmt * 200)
       );
-      specGrad.addColorStop(0, `rgba(255,255,255,${specA})`);
-      specGrad.addColorStop(1, "rgba(255,255,255,0)");
-      ec.fillStyle = specGrad;
-      ec.fillRect(0, 0, width, height);
+      d[i + 2] = Math.min(
+        255,
+        Math.max(0, d[i + 2] + (seededRand(photoSeed, i + 2) - 0.5) * noiseAmt * 200)
+      );
     }
-  } else if (filter === "lcd") {
-    const spStr = ((filterParams.lcd || {}).subpixel ?? 30) / 100;
-    const lcdBleed = ((filterParams.lcd || {}).bleed ?? 0) / 100;
-    const sepH = Math.max(1, Math.round(s * 0.15));
-    const sepW = Math.max(1, Math.round(s * 0.12));
-    for (let y = s - sepH; y < height; y += s) {
-      ec.fillStyle = "rgba(0,0,0,0.38)";
-      ec.fillRect(0, y, width, sepH);
-    }
-    for (let x = s; x < width; x += s) {
-      ec.fillStyle = "rgba(0,0,0,0.22)";
-      ec.fillRect(x - sepW, 0, sepW, height);
-    }
-    if (s >= 4 && spStr > 0) {
-      const cw = Math.max(1, Math.round(s / 3));
-      for (let x = 0; x < width; x += s) {
-        ec.fillStyle = `rgba(255,80,80,${spStr})`;
-        ec.fillRect(x, 0, cw, height);
-        ec.fillStyle = `rgba(80,255,80,${spStr})`;
-        ec.fillRect(x + cw, 0, cw, height);
-        ec.fillStyle = `rgba(80,80,255,${spStr})`;
-        ec.fillRect(x + cw * 2, 0, cw, height);
-      }
-    }
-    if (lcdBleed > 0) {
-      const corners = [
-        [0, 0],
-        [width, 0],
-        [0, height],
-        [width, height]
-      ];
-      const bleedR = Math.max(width, height) * 0.6;
-      for (const [cx2, cy2] of corners) {
-        const bg = ec.createRadialGradient(cx2, cy2, 0, cx2, cy2, bleedR);
-        bg.addColorStop(0, `rgba(255,255,255,${lcdBleed * 0.18})`);
-        bg.addColorStop(1, "rgba(255,255,255,0)");
-        ec.fillStyle = bg;
-        ec.fillRect(0, 0, width, height);
-      }
-    }
-  } else if (filter === "grid") {
-    const gridOpacity = ((filterParams.grid || {}).opacity ?? 30) / 100;
-    const lineWBase = (filterParams.grid || {}).weight ?? 1;
-    const lineW = Math.max(1, Math.round(lineWBase * s / 4));
-    if (s >= 2) {
-      ec.strokeStyle = `rgba(0,0,0,${gridOpacity})`;
-      ec.lineWidth = lineW;
-      const numGridCols = Math.ceil(width / s);
-      for (let col = 1; col <= numGridCols; col++) {
-        const x = col * s - lineW / 2;
-        ec.beginPath();
-        ec.moveTo(x, 0);
-        ec.lineTo(x, height);
-        ec.stroke();
-      }
-      const numGridRows = Math.ceil(height / s);
-      for (let row = 1; row <= numGridRows; row++) {
-        const y = row * s - lineW / 2;
-        ec.beginPath();
-        ec.moveTo(0, y);
-        ec.lineTo(width, y);
-        ec.stroke();
-      }
-    }
-  } else if (filter === "vignette") {
-    const _fv = (filterParams.vignette || {}).falloff ?? 50;
-    const _shape = ((filterParams.vignette || {}).shape ?? 0) / 100;
-    const _t = (typeof _fv === "string" ? { soft: 20, medium: 50, hard: 80 }[_fv] ?? 50 : _fv) / 100;
-    const cx = width / 2, cy = height / 2;
-    const innerMult = 0.2 - _t * 0.18;
-    const outerMult = 0.75 - _t * 0.15;
-    const darkMax = 0.3 + _t * 0.68;
-    if (_shape > 0.05) {
-      ec.save();
-      ec.translate(cx, cy);
-      ec.scale(1, width / height * (1 - _shape * 0.4) + _shape * (height / width * 1.4));
-      ec.translate(-cx, -cy);
-      const squishR = Math.min(width, height) * Math.max(0, innerMult + _shape * 0.05);
-      const squishOuter = Math.max(width, height) * (outerMult + _shape * 0.05);
-      const gSq = ec.createRadialGradient(cx, cy, squishR, cx, cy, squishOuter);
-      gSq.addColorStop(0, "rgba(0,0,0,0)");
-      gSq.addColorStop(0.5, `rgba(0,0,0,${(darkMax * 0.3).toFixed(2)})`);
-      gSq.addColorStop(1, `rgba(0,0,0,${darkMax})`);
-      ec.fillStyle = gSq;
-      ec.fillRect(-width, -height, width * 3, height * 3);
-      ec.restore();
-    } else {
-      const inner = Math.min(width, height) * Math.max(0, innerMult);
-      const outer = Math.max(width, height) * outerMult;
-      const grad = ec.createRadialGradient(cx, cy, inner, cx, cy, outer);
-      grad.addColorStop(0, "rgba(0,0,0,0)");
-      grad.addColorStop(0.5, `rgba(0,0,0,${(darkMax * 0.25).toFixed(2)})`);
-      grad.addColorStop(1, `rgba(0,0,0,${darkMax})`);
-      ec.fillStyle = grad;
-      ec.fillRect(0, 0, width, height);
-    }
-  } else if (filter === "halftone") {
-    const htRad = ((filterParams.halftone || {}).radius ?? 38) / 100;
-    const htDarkness = ((filterParams.halftone || {}).darkness ?? 35) / 100;
-    const htShape = (filterParams.halftone || {}).shape ?? "circle";
-    const r = Math.max(1, Math.round(s * htRad));
-    ec.fillStyle = `rgba(0,0,0,${htDarkness.toFixed(2)})`;
-    for (let y = Math.round(s * 0.5); y < height; y += s) {
-      for (let x = Math.round(s * 0.5); x < width; x += s) {
-        ec.beginPath();
-        if (htShape === "circle") {
-          ec.arc(x, y, r, 0, Math.PI * 2);
-        } else if (htShape === "square") {
-          ec.rect(x - r, y - r, r * 2, r * 2);
-        } else if (htShape === "diamond") {
-          ec.moveTo(x, y - r);
-          ec.lineTo(x + r, y);
-          ec.lineTo(x, y + r);
-          ec.lineTo(x - r, y);
-          ec.closePath();
-        }
-        ec.fill();
-      }
-    }
-  } else if (filter === "dot") {
-    ec.fillStyle = "rgba(0,0,0,0.88)";
-    ec.fillRect(0, 0, width, height);
-    ec.globalCompositeOperation = "destination-out";
-    const dotRadPct = ((filterParams.dot || {}).radius ?? 44) / 100;
-    const halationPct = ((filterParams.dot || {}).halation ?? 0) / 100;
-    const dotR = Math.max(1, Math.round(s * dotRadPct));
-    const dotRows = Math.ceil(height / s);
-    const dotCols = Math.ceil(width / s);
-    for (let py = 0; py < dotRows; py++) {
-      for (let px = 0; px < dotCols; px++) {
-        const cx = Math.round(px * s + s * 0.5);
-        const cy = Math.round(py * s + s * 0.5);
-        ec.beginPath();
-        ec.arc(cx, cy, dotR, 0, Math.PI * 2);
-        ec.fill();
-      }
-    }
-    ec.globalCompositeOperation = "source-over";
-    if (halationPct > 0) {
-      for (let py = 0; py < dotRows; py++) {
-        for (let px = 0; px < dotCols; px++) {
-          const cx2 = Math.round(px * s + s * 0.5);
-          const cy2 = Math.round(py * s + s * 0.5);
-          const gR = dotR + Math.round(s * halationPct * 0.8);
-          const hGrad = ec.createRadialGradient(cx2, cy2, dotR * 0.8, cx2, cy2, gR);
-          hGrad.addColorStop(0, `rgba(255,255,255,${halationPct * 0.3})`);
-          hGrad.addColorStop(1, "rgba(255,255,255,0)");
-          ec.fillStyle = hGrad;
-          ec.beginPath();
-          ec.arc(cx2, cy2, gR, 0, Math.PI * 2);
-          ec.fill();
-        }
-      }
-    }
-  } else if (filter === "glow") {
-    const glowBlurPct = ((filterParams.glow || {}).blur ?? 110) / 100;
-    const glowIntensity = ((filterParams.glow || {}).intensity ?? 80) / 100;
-    const ph = (filterParams.glow || {}).phosphor ?? "none";
-    if (glowIntensity <= 0 && ph === "none") return;
-    const phColors = {
-      green: "rgba(0,255,80,0.40)",
-      amber: "rgba(255,170,0,0.42)",
-      blue: "rgba(80,160,255,0.40)"
-    };
-    const bloomSrc = Object.assign(document.createElement("canvas"), { width, height });
-    const bsc = bloomSrc.getContext("2d");
-    bsc.drawImage(ctx.canvas, 0, 0);
-    if (ph !== "none" && phColors[ph]) {
-      bsc.globalCompositeOperation = "source-atop";
-      bsc.fillStyle = phColors[ph];
-      bsc.fillRect(0, 0, width, height);
-      bsc.globalCompositeOperation = "source-over";
-    }
-    const blurPx = Math.round(s * 3.5 * glowBlurPct);
-    const bloom = Object.assign(document.createElement("canvas"), { width, height });
-    const bc = bloom.getContext("2d");
-    if (blurPx > 0) {
-      bc.filter = `blur(${blurPx}px)`;
-    }
-    bc.drawImage(bloomSrc, 0, 0);
-    bc.filter = "none";
-    ctx.save();
-    ctx.globalAlpha = Math.min(1, Math.max(0, glowIntensity));
-    ctx.globalCompositeOperation = "screen";
-    ctx.drawImage(bloom, 0, 0);
-    ctx.restore();
-    return;
-  } else if (filter === "chroma") {
-    const cp = filterParams.chroma || {};
-    const hpx = Math.round(s * (cp.shiftH ?? 75) / 100);
-    const vpx = Math.round(s * (cp.shiftV ?? 0) / 100);
-    const rpx = Math.round(s * (cp.shiftR ?? 0) / 100);
-    const orig = ctx.getImageData(0, 0, width, height);
-    const dst = new ImageData(width, height);
-    const d = orig.data, o = dst.data;
-    const cx2 = width / 2, cy2 = height / 2;
+  } else if (noiseType === "bands") {
     for (let y = 0; y < height; y++) {
+      const rowNoise = (seededRand(photoSeed, y) - 0.5) * noiseAmt * 180;
       for (let x = 0; x < width; x++) {
         const i = (y * width + x) * 4;
-        let nx = 0, ny = 0;
-        if (rpx !== 0) {
-          const dx = x - cx2, dy = y - cy2;
-          const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-          nx = dx / dist;
-          ny = dy / dist;
-        }
-        const rx = Math.min(width - 1, Math.max(0, Math.round(x + hpx + nx * rpx)));
-        const ry = Math.min(height - 1, Math.max(0, Math.round(y + vpx + ny * rpx)));
-        const bx = Math.min(width - 1, Math.max(0, Math.round(x - hpx - nx * rpx)));
-        const by = Math.min(height - 1, Math.max(0, Math.round(y - vpx - ny * rpx)));
-        const ri = (ry * width + rx) * 4;
-        const bi = (by * width + bx) * 4;
-        o[i] = d[ri];
-        o[i + 1] = d[i + 1];
-        o[i + 2] = d[bi + 2];
-        o[i + 3] = 255;
+        d[i] = Math.min(255, Math.max(0, d[i] + rowNoise));
+        d[i + 1] = Math.min(255, Math.max(0, d[i + 1] + rowNoise));
+        d[i + 2] = Math.min(255, Math.max(0, d[i + 2] + rowNoise));
       }
     }
-    const t = Math.min(1, Math.max(0, intensity));
-    if (t < 1) {
-      for (let i = 0; i < o.length; i += 4) {
-        o[i] = Math.round(d[i] * (1 - t) + o[i] * t);
-        o[i + 1] = Math.round(d[i + 1] * (1 - t) + o[i + 1] * t);
-        o[i + 2] = Math.round(d[i + 2] * (1 - t) + o[i + 2] * t);
-      }
+  }
+  blendIntensity(d, src, intensity);
+  ctx.putImageData(orig, 0, 0);
+}
+function apply$a({ ctx, width, height, s, params, intensity }) {
+  const ghostOffset = (params.offset ?? 60) / 100;
+  const ghostFade = (params.fade ?? 70) / 100;
+  const shift2 = Math.max(2, Math.round(s * ghostOffset));
+  const orig = ctx.getImageData(0, 0, width, height);
+  const dst = new ImageData(width, height);
+  const d = orig.data, o = dst.data;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const g1x = Math.max(0, x - shift2);
+      const g1i = (y * width + g1x) * 4;
+      const g2x = Math.max(0, x - shift2 * 2);
+      const g2i = (y * width + g2x) * 4;
+      const a1 = (1 - ghostFade) * 0.8;
+      const a2 = (1 - ghostFade) * 0.35;
+      o[i] = Math.min(255, d[i] + d[g1i] * a1 + d[g2i] * a2);
+      o[i + 1] = Math.min(255, d[i + 1] + d[g1i + 1] * a1 + d[g2i + 1] * a2);
+      o[i + 2] = Math.min(255, d[i + 2] + d[g1i + 2] * a1 + d[g2i + 2] * a2);
+      o[i + 3] = 255;
     }
-    ctx.putImageData(dst, 0, 0);
-    return;
-  } else if (filter === "jitter") {
-    const jitterPct = ((filterParams.jitter || {}).amount ?? 40) / 100;
-    const jitterFreq = ((filterParams.jitter || {}).frequency ?? 50) / 100;
-    const maxShift = Math.max(1, Math.round(s * jitterPct * 3));
-    const orig = ctx.getImageData(0, 0, width, height);
-    const dst = new ImageData(width, height);
-    const d = orig.data, o = dst.data;
-    const tileH = Math.max(1, s);
-    for (let y = 0; y < height; y++) {
-      const tileY = Math.floor(y / tileH);
-      const frac = Math.sin(tileY * 43758.5453123) * 43758.5453123 % 1;
-      const norm = frac < 0 ? frac + 1 : frac;
-      const shouldJitter = norm > 1 - jitterFreq;
-      const shift = shouldJitter ? Math.round((norm * 2 - 1) * maxShift) : 0;
-      for (let x = 0; x < width; x++) {
-        const sx = Math.min(width - 1, Math.max(0, x + shift));
+  }
+  blendIntensity(o, d, intensity);
+  ctx.putImageData(dst, 0, 0);
+}
+function apply$9({ ctx, width, height, params, intensity }) {
+  const threshPct = (params.threshold ?? 50) / 100;
+  const dir = params.direction ?? "down";
+  const src = ctx.getImageData(0, 0, width, height);
+  const sd = src.data;
+  const out = new Uint8ClampedArray(sd);
+  const lum = (i) => (sd[i] * 0.299 + sd[i + 1] * 0.587 + sd[i + 2] * 0.114) / 255;
+  const sortRun = (pixels, ascending) => {
+    const run = pixels.map((i) => [lum(i), sd[i], sd[i + 1], sd[i + 2], sd[i + 3]]);
+    run.sort((a, b) => ascending ? a[0] - b[0] : b[0] - a[0]);
+    for (let j = 0; j < run.length; j++) {
+      const ri = pixels[j];
+      out[ri] = run[j][1];
+      out[ri + 1] = run[j][2];
+      out[ri + 2] = run[j][3];
+      out[ri + 3] = run[j][4];
+    }
+  };
+  if (dir === "down" || dir === "vertical") {
+    for (let x = 0; x < width; x++) {
+      let run = [];
+      for (let y = 0; y <= height; y++) {
         const i = (y * width + x) * 4;
-        const si = (y * width + sx) * 4;
-        o[i] = d[si];
-        o[i + 1] = d[si + 1];
-        o[i + 2] = d[si + 2];
-        o[i + 3] = 255;
-      }
-    }
-    const t = Math.min(1, Math.max(0, intensity));
-    if (t < 1) {
-      for (let i = 0; i < o.length; i += 4) {
-        o[i] = Math.round(d[i] * (1 - t) + o[i] * t);
-        o[i + 1] = Math.round(d[i + 1] * (1 - t) + o[i + 1] * t);
-        o[i + 2] = Math.round(d[i + 2] * (1 - t) + o[i + 2] * t);
-      }
-    }
-    ctx.putImageData(dst, 0, 0);
-    return;
-  } else if (filter === "noise") {
-    const noiseAmt = ((filterParams.noise || {}).amount ?? 40) / 100;
-    const noiseType = (filterParams.noise || {}).type ?? "film";
-    const orig = ctx.getImageData(0, 0, width, height);
-    const d = orig.data;
-    const src = new Uint8ClampedArray(d);
-    if (noiseType === "film") {
-      for (let i = 0; i < d.length; i += 4) {
-        const g = (_seededRand(photoSeed, i) - 0.5) * noiseAmt * 200;
-        d[i] = Math.min(255, Math.max(0, d[i] + g));
-        d[i + 1] = Math.min(255, Math.max(0, d[i + 1] + g));
-        d[i + 2] = Math.min(255, Math.max(0, d[i + 2] + g));
-      }
-    } else if (noiseType === "static") {
-      for (let i = 0; i < d.length; i += 4) {
-        d[i] = Math.min(
-          255,
-          Math.max(0, d[i] + (_seededRand(photoSeed, i) - 0.5) * noiseAmt * 200)
-        );
-        d[i + 1] = Math.min(
-          255,
-          Math.max(0, d[i + 1] + (_seededRand(photoSeed, i + 1) - 0.5) * noiseAmt * 200)
-        );
-        d[i + 2] = Math.min(
-          255,
-          Math.max(0, d[i + 2] + (_seededRand(photoSeed, i + 2) - 0.5) * noiseAmt * 200)
-        );
-      }
-    } else if (noiseType === "bands") {
-      for (let y = 0; y < height; y++) {
-        const rowNoise = (_seededRand(photoSeed, y) - 0.5) * noiseAmt * 180;
-        for (let x = 0; x < width; x++) {
-          const i = (y * width + x) * 4;
-          d[i] = Math.min(255, Math.max(0, d[i] + rowNoise));
-          d[i + 1] = Math.min(255, Math.max(0, d[i + 1] + rowNoise));
-          d[i + 2] = Math.min(255, Math.max(0, d[i + 2] + rowNoise));
+        const l = y < height ? lum(i) : -1;
+        if (l >= threshPct) {
+          run.push(i);
+        } else if (run.length > 0) {
+          sortRun(run, true);
+          run = [];
         }
       }
     }
-    const t = Math.min(1, Math.max(0, intensity));
-    if (t < 1) {
-      for (let i = 0; i < d.length; i += 4) {
-        d[i] = Math.round(src[i] * (1 - t) + d[i] * t);
-        d[i + 1] = Math.round(src[i + 1] * (1 - t) + d[i + 1] * t);
-        d[i + 2] = Math.round(src[i + 2] * (1 - t) + d[i + 2] * t);
+  } else if (dir === "up") {
+    for (let x = 0; x < width; x++) {
+      let run = [];
+      for (let y = height - 1; y >= -1; y--) {
+        const i = (Math.max(0, y) * width + x) * 4;
+        const l = y >= 0 ? lum(i) : -1;
+        if (y >= 0 && l >= threshPct) {
+          run.push(i);
+        } else if (run.length > 0) {
+          sortRun(run, false);
+          run = [];
+        }
       }
     }
-    ctx.putImageData(orig, 0, 0);
-    return;
-  } else if (filter === "ghosting") {
-    const ghostOffset = ((filterParams.ghosting || {}).offset ?? 60) / 100;
-    const ghostFade = ((filterParams.ghosting || {}).fade ?? 70) / 100;
-    const shift2 = Math.max(2, Math.round(s * ghostOffset));
-    const orig = ctx.getImageData(0, 0, width, height);
-    const dst = new ImageData(width, height);
-    const d = orig.data, o = dst.data;
+  } else if (dir === "right" || dir === "horizontal") {
     for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
+      let run = [];
+      for (let x = 0; x <= width; x++) {
         const i = (y * width + x) * 4;
-        const g1x = Math.max(0, x - shift2);
-        const g1i = (y * width + g1x) * 4;
-        const g2x = Math.max(0, x - shift2 * 2);
-        const g2i = (y * width + g2x) * 4;
-        const a1 = (1 - ghostFade) * 0.8;
-        const a2 = (1 - ghostFade) * 0.35;
-        o[i] = Math.min(255, d[i] + d[g1i] * a1 + d[g2i] * a2);
-        o[i + 1] = Math.min(255, d[i + 1] + d[g1i + 1] * a1 + d[g2i + 1] * a2);
-        o[i + 2] = Math.min(255, d[i + 2] + d[g1i + 2] * a1 + d[g2i + 2] * a2);
-        o[i + 3] = 255;
-      }
-    }
-    const tg = Math.min(1, Math.max(0, intensity));
-    if (tg < 1) {
-      for (let i = 0; i < o.length; i += 4) {
-        o[i] = Math.round(d[i] * (1 - tg) + o[i] * tg);
-        o[i + 1] = Math.round(d[i + 1] * (1 - tg) + o[i + 1] * tg);
-        o[i + 2] = Math.round(d[i + 2] * (1 - tg) + o[i + 2] * tg);
-      }
-    }
-    ctx.putImageData(dst, 0, 0);
-    return;
-  } else if (filter === "pixsort") {
-    const threshPct = ((filterParams.pixsort || {}).threshold ?? 50) / 100;
-    const dir = (filterParams.pixsort || {}).direction ?? "down";
-    const src = ctx.getImageData(0, 0, width, height);
-    const sd = src.data;
-    const out = new Uint8ClampedArray(sd);
-    const lum = (i) => (sd[i] * 0.299 + sd[i + 1] * 0.587 + sd[i + 2] * 0.114) / 255;
-    const sortRun = (pixels, ascending) => {
-      const run = pixels.map((i) => [lum(i), sd[i], sd[i + 1], sd[i + 2], sd[i + 3]]);
-      run.sort((a, b) => ascending ? a[0] - b[0] : b[0] - a[0]);
-      for (let j = 0; j < run.length; j++) {
-        const ri = pixels[j];
-        out[ri] = run[j][1];
-        out[ri + 1] = run[j][2];
-        out[ri + 2] = run[j][3];
-        out[ri + 3] = run[j][4];
-      }
-    };
-    if (dir === "down" || dir === "vertical") {
-      for (let x = 0; x < width; x++) {
-        let run = [];
-        for (let y = 0; y <= height; y++) {
-          const i = (y * width + x) * 4;
-          const l = y < height ? lum(i) : -1;
-          if (l >= threshPct) {
-            run.push(i);
-          } else if (run.length > 0) {
-            sortRun(run, true);
-            run = [];
-          }
-        }
-      }
-    } else if (dir === "up") {
-      for (let x = 0; x < width; x++) {
-        let run = [];
-        for (let y = height - 1; y >= -1; y--) {
-          const i = (Math.max(0, y) * width + x) * 4;
-          const l = y >= 0 ? lum(i) : -1;
-          if (y >= 0 && l >= threshPct) {
-            run.push(i);
-          } else if (run.length > 0) {
-            sortRun(run, false);
-            run = [];
-          }
-        }
-      }
-    } else if (dir === "right" || dir === "horizontal") {
-      for (let y = 0; y < height; y++) {
-        let run = [];
-        for (let x = 0; x <= width; x++) {
-          const i = (y * width + x) * 4;
-          const l = x < width ? lum(i) : -1;
-          if (x < width && l >= threshPct) {
-            run.push(i);
-          } else if (run.length > 0) {
-            sortRun(run, true);
-            run = [];
-          }
-        }
-      }
-    } else if (dir === "left") {
-      for (let y = 0; y < height; y++) {
-        let run = [];
-        for (let x = width - 1; x >= -1; x--) {
-          const i = (y * width + Math.max(0, x)) * 4;
-          const l = x >= 0 ? lum(i) : -1;
-          if (x >= 0 && l >= threshPct) {
-            run.push(i);
-          } else if (run.length > 0) {
-            sortRun(run, false);
-            run = [];
-          }
+        const l = x < width ? lum(i) : -1;
+        if (x < width && l >= threshPct) {
+          run.push(i);
+        } else if (run.length > 0) {
+          sortRun(run, true);
+          run = [];
         }
       }
     }
-    const tp = Math.min(1, Math.max(0, intensity));
-    if (tp < 1) {
-      for (let i = 0; i < out.length; i += 4) {
-        out[i] = Math.round(sd[i] * (1 - tp) + out[i] * tp);
-        out[i + 1] = Math.round(sd[i + 1] * (1 - tp) + out[i + 1] * tp);
-        out[i + 2] = Math.round(sd[i + 2] * (1 - tp) + out[i + 2] * tp);
-      }
-    }
-    ctx.putImageData(new ImageData(out, width, height), 0, 0);
-    return;
-  } else if (filter === "blkglitch") {
-    const shiftPct = ((filterParams.blkglitch || {}).shift ?? 40) / 100;
-    const densityPct = ((filterParams.blkglitch || {}).density ?? 30) / 100;
-    const sizePct = ((filterParams.blkglitch || {}).size ?? 20) / 100;
-    const maxHeightPct = ((filterParams.blkglitch || {}).maxheight ?? 30) / 100;
-    const src = ctx.getImageData(0, 0, width, height);
-    const sd = src.data;
-    const out = new Uint8ClampedArray(sd);
-    const maxShift = Math.max(1, Math.round(width * shiftPct * 0.5));
-    const maxBlockH = Math.max(1, Math.round(height * maxHeightPct * sizePct));
-    const numBlocks = Math.max(1, Math.round(densityPct * 25));
-    let _rngBg = photoSeed * 1664525 + 1013904223 | 0;
-    const _randBg = () => {
-      _rngBg = _rngBg * 1664525 + 1013904223 | 0;
-      return (_rngBg >>> 0) / 4294967296;
-    };
-    for (let b = 0; b < numBlocks; b++) {
-      const y0 = Math.floor(_randBg() * height);
-      const bh = Math.max(1, Math.ceil(_randBg() * maxBlockH));
-      const dxs = Math.round((_randBg() - 0.5) * 2 * maxShift);
-      for (let y = y0; y < Math.min(height, y0 + bh); y++) {
-        for (let x = 0; x < width; x++) {
-          const srcX = ((x - dxs) % width + width) % width;
-          const di = (y * width + x) * 4;
-          const si = (y * width + srcX) * 4;
-          out[di] = sd[si];
-          out[di + 1] = sd[si + 1];
-          out[di + 2] = sd[si + 2];
-          out[di + 3] = sd[si + 3];
-        }
-      }
-    }
-    const tb = Math.min(1, Math.max(0, intensity));
-    if (tb < 1) {
-      for (let i = 0; i < out.length; i += 4) {
-        out[i] = Math.round(sd[i] * (1 - tb) + out[i] * tb);
-        out[i + 1] = Math.round(sd[i + 1] * (1 - tb) + out[i + 1] * tb);
-        out[i + 2] = Math.round(sd[i + 2] * (1 - tb) + out[i + 2] * tb);
-      }
-    }
-    ctx.putImageData(new ImageData(out, width, height), 0, 0);
-    return;
-  } else if (filter === "wavewarp") {
-    const ampPct = ((filterParams.wavewarp || {}).amplitude ?? 30) / 100;
-    const freqPct = ((filterParams.wavewarp || {}).frequency ?? 40) / 100;
-    const amplitude = Math.max(1, Math.round(width * ampPct * 0.25));
-    const cycles = 1 + freqPct * 7;
-    const src = ctx.getImageData(0, 0, width, height);
-    const sd = src.data;
-    const out = new Uint8ClampedArray(sd.length);
+  } else if (dir === "left") {
     for (let y = 0; y < height; y++) {
-      const offsetX = Math.round(Math.sin(y / height * cycles * Math.PI * 2) * amplitude);
+      let run = [];
+      for (let x = width - 1; x >= -1; x--) {
+        const i = (y * width + Math.max(0, x)) * 4;
+        const l = x >= 0 ? lum(i) : -1;
+        if (x >= 0 && l >= threshPct) {
+          run.push(i);
+        } else if (run.length > 0) {
+          sortRun(run, false);
+          run = [];
+        }
+      }
+    }
+  }
+  blendIntensity(out, sd, intensity);
+  ctx.putImageData(new ImageData(out, width, height), 0, 0);
+}
+function apply$8({ ctx, width, height, params, intensity, photoSeed }) {
+  const shiftPct = (params.shift ?? 40) / 100;
+  const densityPct = (params.density ?? 30) / 100;
+  const sizePct = (params.size ?? 20) / 100;
+  const maxHeightPct = (params.maxheight ?? 30) / 100;
+  const src = ctx.getImageData(0, 0, width, height);
+  const sd = src.data;
+  const out = new Uint8ClampedArray(sd);
+  const maxShift = Math.max(1, Math.round(width * shiftPct * 0.5));
+  const maxBlockH = Math.max(1, Math.round(height * maxHeightPct * sizePct));
+  const numBlocks = Math.max(1, Math.round(densityPct * 25));
+  let _rngBg = photoSeed * 1664525 + 1013904223 | 0;
+  const _randBg = () => {
+    _rngBg = _rngBg * 1664525 + 1013904223 | 0;
+    return (_rngBg >>> 0) / 4294967296;
+  };
+  for (let b = 0; b < numBlocks; b++) {
+    const y0 = Math.floor(_randBg() * height);
+    const bh = Math.max(1, Math.ceil(_randBg() * maxBlockH));
+    const dxs = Math.round((_randBg() - 0.5) * 2 * maxShift);
+    for (let y = y0; y < Math.min(height, y0 + bh); y++) {
       for (let x = 0; x < width; x++) {
-        const srcX = ((x - offsetX) % width + width) % width;
+        const srcX = ((x - dxs) % width + width) % width;
         const di = (y * width + x) * 4;
         const si = (y * width + srcX) * 4;
         out[di] = sd[si];
@@ -2634,263 +2895,281 @@ function applyExportFilter(ctx, width, height, scale, filter, intensity = 1, var
         out[di + 3] = sd[si + 3];
       }
     }
-    const tw = Math.min(1, Math.max(0, intensity));
-    if (tw < 1) {
-      for (let i = 0; i < out.length; i += 4) {
-        out[i] = Math.round(sd[i] * (1 - tw) + out[i] * tw);
-        out[i + 1] = Math.round(sd[i + 1] * (1 - tw) + out[i + 1] * tw);
-        out[i + 2] = Math.round(sd[i + 2] * (1 - tw) + out[i + 2] * tw);
+  }
+  blendIntensity(out, sd, intensity);
+  ctx.putImageData(new ImageData(out, width, height), 0, 0);
+}
+function apply$7({ ctx, width, height, params, intensity }) {
+  const ampPct = (params.amplitude ?? 30) / 100;
+  const freqPct = (params.frequency ?? 40) / 100;
+  const amplitude = Math.max(1, Math.round(width * ampPct * 0.25));
+  const cycles = 1 + freqPct * 7;
+  const src = ctx.getImageData(0, 0, width, height);
+  const sd = src.data;
+  const out = new Uint8ClampedArray(sd.length);
+  for (let y = 0; y < height; y++) {
+    const offsetX = Math.round(Math.sin(y / height * cycles * Math.PI * 2) * amplitude);
+    for (let x = 0; x < width; x++) {
+      const srcX = ((x - offsetX) % width + width) % width;
+      const di = (y * width + x) * 4;
+      const si = (y * width + srcX) * 4;
+      out[di] = sd[si];
+      out[di + 1] = sd[si + 1];
+      out[di + 2] = sd[si + 2];
+      out[di + 3] = sd[si + 3];
+    }
+  }
+  blendIntensity(out, sd, intensity);
+  ctx.putImageData(new ImageData(out, width, height), 0, 0);
+}
+function apply$6({ ctx, width, height, params, intensity }) {
+  const zoomAmt = (params.amount ?? 30) / 100;
+  const steps = 12;
+  const maxExpand = 0.6;
+  const tmp = Object.assign(document.createElement("canvas"), { width, height });
+  tmp.getContext("2d").drawImage(ctx.canvas, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(tmp, 0, 0);
+  const blendAlpha = Math.min(0.9, zoomAmt) / steps * Math.min(1, Math.max(0, intensity));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const sc = 1 + t * zoomAmt * maxExpand;
+    const dx = (width - width * sc) / 2;
+    const dy = (height - height * sc) / 2;
+    ctx.globalAlpha = blendAlpha * (1 - t * 0.4);
+    ctx.drawImage(tmp, dx, dy, width * sc, height * sc);
+  }
+  ctx.globalAlpha = 1;
+}
+function apply$5({ ctx, width, height, params, intensity }) {
+  const levels = params.levels ?? 4;
+  const bayerMatrix = [
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5]
+  ];
+  const step = Math.floor(256 / levels);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const bayerOrig = new Uint8ClampedArray(data);
+  for (let i = 0; i < data.length; i += 4) {
+    const pixelIndex = i / 4;
+    const row = Math.floor(pixelIndex / width) % 4;
+    const col = pixelIndex % width % 4;
+    const threshold = bayerMatrix[row][col] / 16 * 255;
+    for (let c = 0; c < 3; c++) {
+      const quantized = Math.floor(data[i + c] / step) * step;
+      data[i + c] = data[i + c] > quantized + threshold ? quantized + step : quantized;
+    }
+  }
+  blendIntensity(data, bayerOrig, intensity);
+  ctx.putImageData(imageData, 0, 0);
+}
+function apply$4({ ctx, width, height, params, intensity }) {
+  const levels = params.levels ?? 2;
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const floydOrig = new Uint8ClampedArray(data);
+  const lums = new Float32Array(width * height);
+  const errors = new Float32Array(width * height);
+  for (let i = 0; i < width * height; i++) {
+    lums[i] = data[i * 4] * 0.299 + data[i * 4 + 1] * 0.587 + data[i * 4 + 2] * 0.114;
+  }
+  const step = 255 / (levels - 1);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      const val = Math.max(0, Math.min(255, lums[idx] + errors[idx]));
+      const quantized = Math.round(val / step) * step;
+      const err = val - quantized;
+      lums[idx] = quantized;
+      if (x + 1 < width) errors[idx + 1] += err * 7 / 16;
+      if (y + 1 < height) {
+        if (x - 1 >= 0) errors[idx + width - 1] += err * 3 / 16;
+        errors[idx + width] += err * 5 / 16;
+        if (x + 1 < width) errors[idx + width + 1] += err * 1 / 16;
       }
     }
-    ctx.putImageData(new ImageData(out, width, height), 0, 0);
-    return;
-  } else if (filter === "zoomblur") {
-    const zoomAmt = ((filterParams.zoomblur || {}).amount ?? 30) / 100;
-    const steps = 12;
-    const maxExpand = 0.6;
-    const tmp = Object.assign(document.createElement("canvas"), { width, height });
-    tmp.getContext("2d").drawImage(ctx.canvas, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-    ctx.drawImage(tmp, 0, 0);
-    const blendAlpha = Math.min(0.9, zoomAmt) / steps * Math.min(1, Math.max(0, intensity));
-    for (let i = 1; i <= steps; i++) {
-      const t = i / steps;
-      const sc = 1 + t * zoomAmt * maxExpand;
-      const dx = (width - width * sc) / 2;
-      const dy = (height - height * sc) / 2;
-      ctx.globalAlpha = blendAlpha * (1 - t * 0.4);
-      ctx.drawImage(tmp, dx, dy, width * sc, height * sc);
+  }
+  for (let i = 0; i < width * height; i++) {
+    const v = Math.round(lums[i]);
+    data[i * 4] = v;
+    data[i * 4 + 1] = v;
+    data[i * 4 + 2] = v;
+  }
+  blendIntensity(data, floydOrig, intensity);
+  ctx.putImageData(imageData, 0, 0);
+}
+function apply$3({ ctx, width, height, s, params, intensity }) {
+  const amt = (params.intensity ?? 60) / 100;
+  const src = ctx.getImageData(0, 0, width, height);
+  const sd = src.data;
+  const out = new Uint8ClampedArray(sd);
+  const fieldOffset = Math.round(amt * s * 2);
+  const darken = 1 - amt * 0.65;
+  for (let y = 0; y < height; y++) {
+    const isOdd = y % 2 === 1;
+    const dx = isOdd ? fieldOffset : 0;
+    const dark = isOdd ? darken : 1;
+    for (let x = 0; x < width; x++) {
+      const srcX = Math.min(width - 1, Math.max(0, x - dx));
+      const di = (y * width + x) * 4;
+      const si = (y * width + srcX) * 4;
+      out[di] = sd[si] * dark;
+      out[di + 1] = sd[si + 1] * dark;
+      out[di + 2] = sd[si + 2] * dark;
+      out[di + 3] = sd[si + 3];
     }
-    ctx.globalAlpha = 1;
-    return;
-  } else if (filter === "bayer") {
-    const levels = (filterParams.bayer || {}).levels ?? 4;
-    const bayerMatrix = [
-      [0, 8, 2, 10],
-      [12, 4, 14, 6],
-      [3, 11, 1, 9],
-      [15, 7, 13, 5]
-    ];
-    const step = Math.floor(256 / levels);
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = imageData.data;
-    const bayerOrig = new Uint8ClampedArray(data);
-    for (let i = 0; i < data.length; i += 4) {
-      const pixelIndex = i / 4;
-      const row = Math.floor(pixelIndex / width) % 4;
-      const col = pixelIndex % width % 4;
-      const threshold = bayerMatrix[row][col] / 16 * 255;
-      for (let c = 0; c < 3; c++) {
-        const quantized = Math.floor(data[i + c] / step) * step;
-        data[i + c] = data[i + c] > quantized + threshold ? quantized + step : quantized;
+  }
+  blendIntensity(out, sd, intensity);
+  ctx.putImageData(new ImageData(out, width, height), 0, 0);
+}
+function apply$2({ ctx, width, height, params, intensity }) {
+  const mode = params.mode ?? "rgb";
+  const channelMap = {
+    rgb: [0, 1, 2],
+    rbg: [0, 2, 1],
+    grb: [1, 0, 2],
+    gbr: [1, 2, 0],
+    brg: [2, 0, 1],
+    bgr: [2, 1, 0]
+  };
+  const map = channelMap[mode] || [0, 1, 2];
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+  const tmp = new Uint8ClampedArray(data);
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = tmp[i + map[0]];
+    data[i + 1] = tmp[i + map[1]];
+    data[i + 2] = tmp[i + map[2]];
+  }
+  blendIntensity(data, tmp, intensity);
+  ctx.putImageData(imageData, 0, 0);
+}
+function apply$1({ ctx, width, height, params, intensity, photoSeed }) {
+  const shiftPct = (params.shift ?? 50) / 100;
+  const scatterPct = (params.scatter ?? 40) / 100;
+  const maxShift = Math.max(1, Math.round(width * shiftPct * 0.28));
+  const src = ctx.getImageData(0, 0, width, height);
+  const sd = src.data;
+  const out = new Uint8ClampedArray(sd.length);
+  for (let i = 3; i < out.length; i += 4) out[i] = 255;
+  for (let y = 0; y < height; y++) {
+    const rowNoise = seededRand(photoSeed, y * 1337 + 7) - 0.5;
+    const rOff = Math.round((0.35 + rowNoise * scatterPct) * maxShift);
+    const gOff = Math.round(rowNoise * scatterPct * maxShift * 0.25);
+    const bOff = Math.round((0.35 - rowNoise * scatterPct) * maxShift);
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const rx = Math.min(width - 1, Math.max(0, x - rOff));
+      const gx = Math.min(width - 1, Math.max(0, x - gOff));
+      const bx = Math.min(width - 1, Math.max(0, x + bOff));
+      out[i] = sd[(y * width + rx) * 4];
+      out[i + 1] = sd[(y * width + gx) * 4 + 1];
+      out[i + 2] = sd[(y * width + bx) * 4 + 2];
+      out[i + 3] = 255;
+    }
+  }
+  blendIntensity(out, sd, intensity);
+  ctx.putImageData(new ImageData(out, width, height), 0, 0);
+}
+function apply({ ctx, width, height, s, params, intensity, photoSeed }) {
+  const densityPct = (params.density ?? 35) / 100;
+  const strengthPct = (params.strength ?? 65) / 100;
+  const src = ctx.getImageData(0, 0, width, height);
+  const sd = src.data;
+  const out = new Uint8ClampedArray(sd);
+  let _rngCC = photoSeed * 1664525 + 1013904223 | 0;
+  const _randCC = () => {
+    _rngCC = _rngCC * 1664525 + 1013904223 | 0;
+    return (_rngCC >>> 0) / 4294967296;
+  };
+  const gbH = PHOTO_HEIGHT;
+  const rowTypes = new Array(gbH);
+  for (let row = 0; row < gbH; row++) {
+    rowTypes[row] = _randCC() < densityPct ? Math.floor(_randCC() * 4) : -1;
+  }
+  for (let y = 0; y < height; y++) {
+    const gbRow = Math.min(gbH - 1, Math.floor(y / Math.max(1, s)));
+    const type = rowTypes[gbRow];
+    if (type < 0) continue;
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const r = sd[i], g = sd[i + 1], b = sd[i + 2];
+      let nr = r, ng = g, nb = b;
+      if (type === 0) {
+        nr = Math.round(r * (1 - strengthPct) + b * strengthPct);
+        nb = Math.round(b * (1 - strengthPct) + r * strengthPct);
+      } else if (type === 1) {
+        nr = Math.round(r * (1 - strengthPct) + (255 - r) * strengthPct);
+        ng = Math.round(g * (1 - strengthPct) + (255 - g) * strengthPct);
+        nb = Math.round(b * (1 - strengthPct) + (255 - b) * strengthPct);
+      } else if (type === 2) {
+        const grey = (r + g + b) / 3;
+        nr = Math.min(255, Math.max(0, Math.round(r + (r - grey) * strengthPct * 2.5)));
+        ng = Math.min(255, Math.max(0, Math.round(g + (g - grey) * strengthPct * 2.5)));
+        nb = Math.min(255, Math.max(0, Math.round(b + (b - grey) * strengthPct * 2.5)));
+      } else {
+        nr = Math.round(r * (1 - strengthPct) + g * strengthPct);
+        ng = Math.round(g * (1 - strengthPct) + b * strengthPct);
+        nb = Math.round(b * (1 - strengthPct) + r * strengthPct);
       }
+      out[i] = nr;
+      out[i + 1] = ng;
+      out[i + 2] = nb;
     }
-    const tby = Math.min(1, Math.max(0, intensity));
-    if (tby < 1) {
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = Math.round(bayerOrig[i] * (1 - tby) + data[i] * tby);
-        data[i + 1] = Math.round(bayerOrig[i + 1] * (1 - tby) + data[i + 1] * tby);
-        data[i + 2] = Math.round(bayerOrig[i + 2] * (1 - tby) + data[i + 2] * tby);
-      }
-    }
-    ctx.putImageData(imageData, 0, 0);
-    return;
-  } else if (filter === "floyd") {
-    const levels = (filterParams.floyd || {}).levels ?? 2;
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = imageData.data;
-    const floydOrig = new Uint8ClampedArray(data);
-    const lums = new Float32Array(width * height);
-    const errors = new Float32Array(width * height);
-    for (let i = 0; i < width * height; i++) {
-      lums[i] = data[i * 4] * 0.299 + data[i * 4 + 1] * 0.587 + data[i * 4 + 2] * 0.114;
-    }
-    const step = 255 / (levels - 1);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const idx = y * width + x;
-        const val = Math.max(0, Math.min(255, lums[idx] + errors[idx]));
-        const quantized = Math.round(val / step) * step;
-        const err = val - quantized;
-        lums[idx] = quantized;
-        if (x + 1 < width) errors[idx + 1] += err * 7 / 16;
-        if (y + 1 < height) {
-          if (x - 1 >= 0) errors[idx + width - 1] += err * 3 / 16;
-          errors[idx + width] += err * 5 / 16;
-          if (x + 1 < width) errors[idx + width + 1] += err * 1 / 16;
-        }
-      }
-    }
-    for (let i = 0; i < width * height; i++) {
-      const v = Math.round(lums[i]);
-      data[i * 4] = v;
-      data[i * 4 + 1] = v;
-      data[i * 4 + 2] = v;
-    }
-    const tfl = Math.min(1, Math.max(0, intensity));
-    if (tfl < 1) {
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = Math.round(floydOrig[i] * (1 - tfl) + data[i] * tfl);
-        data[i + 1] = Math.round(floydOrig[i + 1] * (1 - tfl) + data[i + 1] * tfl);
-        data[i + 2] = Math.round(floydOrig[i + 2] * (1 - tfl) + data[i + 2] * tfl);
-      }
-    }
-    ctx.putImageData(imageData, 0, 0);
-    return;
-  } else if (filter === "interlace") {
-    const amt = ((filterParams.interlace || {}).intensity ?? 60) / 100;
-    const src = ctx.getImageData(0, 0, width, height);
-    const sd = src.data;
-    const out = new Uint8ClampedArray(sd);
-    const fieldOffset = Math.round(amt * s * 2);
-    const darken = 1 - amt * 0.65;
-    for (let y = 0; y < height; y++) {
-      const isOdd = y % 2 === 1;
-      const dx = isOdd ? fieldOffset : 0;
-      const dark = isOdd ? darken : 1;
-      for (let x = 0; x < width; x++) {
-        const srcX = Math.min(width - 1, Math.max(0, x - dx));
-        const di = (y * width + x) * 4;
-        const si = (y * width + srcX) * 4;
-        out[di] = sd[si] * dark;
-        out[di + 1] = sd[si + 1] * dark;
-        out[di + 2] = sd[si + 2] * dark;
-        out[di + 3] = sd[si + 3];
-      }
-    }
-    const ti = Math.min(1, Math.max(0, intensity));
-    if (ti < 1) {
-      for (let i = 0; i < out.length; i += 4) {
-        out[i] = Math.round(sd[i] * (1 - ti) + out[i] * ti);
-        out[i + 1] = Math.round(sd[i + 1] * (1 - ti) + out[i + 1] * ti);
-        out[i + 2] = Math.round(sd[i + 2] * (1 - ti) + out[i + 2] * ti);
-      }
-    }
-    ctx.putImageData(new ImageData(out, width, height), 0, 0);
-    return;
-  } else if (filter === "chswap") {
-    const mode = (filterParams.chswap || {}).mode ?? "rgb";
-    const channelMap = {
-      rgb: [0, 1, 2],
-      rbg: [0, 2, 1],
-      grb: [1, 0, 2],
-      gbr: [1, 2, 0],
-      brg: [2, 0, 1],
-      bgr: [2, 1, 0]
-    };
-    const map = channelMap[mode] || [0, 1, 2];
-    const imageData = ctx.getImageData(0, 0, width, height);
-    const data = imageData.data;
-    const tmp = new Uint8ClampedArray(data);
-    for (let i = 0; i < data.length; i += 4) {
-      data[i] = tmp[i + map[0]];
-      data[i + 1] = tmp[i + map[1]];
-      data[i + 2] = tmp[i + map[2]];
-    }
-    const tcs = Math.min(1, Math.max(0, intensity));
-    if (tcs < 1) {
-      for (let i = 0; i < data.length; i += 4) {
-        data[i] = Math.round(tmp[i] * (1 - tcs) + data[i] * tcs);
-        data[i + 1] = Math.round(tmp[i + 1] * (1 - tcs) + data[i + 1] * tcs);
-        data[i + 2] = Math.round(tmp[i + 2] * (1 - tcs) + data[i + 2] * tcs);
-      }
-    }
-    ctx.putImageData(imageData, 0, 0);
-    return;
-  } else if (filter === "rgbplanes") {
-    const shiftPct = ((filterParams.rgbplanes || {}).shift ?? 50) / 100;
-    const scatterPct = ((filterParams.rgbplanes || {}).scatter ?? 40) / 100;
-    const maxShift = Math.max(1, Math.round(width * shiftPct * 0.28));
-    const src = ctx.getImageData(0, 0, width, height);
-    const sd = src.data;
-    const out = new Uint8ClampedArray(sd.length);
-    for (let i = 3; i < out.length; i += 4) out[i] = 255;
-    for (let y = 0; y < height; y++) {
-      const rowNoise = _seededRand(photoSeed, y * 1337 + 7) - 0.5;
-      const rOff = Math.round((0.35 + rowNoise * scatterPct) * maxShift);
-      const gOff = Math.round(rowNoise * scatterPct * maxShift * 0.25);
-      const bOff = Math.round((0.35 - rowNoise * scatterPct) * maxShift);
-      for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * 4;
-        const rx = Math.min(width - 1, Math.max(0, x - rOff));
-        const gx = Math.min(width - 1, Math.max(0, x - gOff));
-        const bx = Math.min(width - 1, Math.max(0, x + bOff));
-        out[i] = sd[(y * width + rx) * 4];
-        out[i + 1] = sd[(y * width + gx) * 4 + 1];
-        out[i + 2] = sd[(y * width + bx) * 4 + 2];
-        out[i + 3] = 255;
-      }
-    }
-    const trp = Math.min(1, Math.max(0, intensity));
-    if (trp < 1) {
-      for (let i = 0; i < out.length; i += 4) {
-        out[i] = Math.round(sd[i] * (1 - trp) + out[i] * trp);
-        out[i + 1] = Math.round(sd[i + 1] * (1 - trp) + out[i + 1] * trp);
-        out[i + 2] = Math.round(sd[i + 2] * (1 - trp) + out[i + 2] * trp);
-      }
-    }
-    ctx.putImageData(new ImageData(out, width, height), 0, 0);
-    return;
-  } else if (filter === "colcorrupt") {
-    const densityPct = ((filterParams.colcorrupt || {}).density ?? 35) / 100;
-    const strengthPct = ((filterParams.colcorrupt || {}).strength ?? 65) / 100;
-    const src = ctx.getImageData(0, 0, width, height);
-    const sd = src.data;
-    const out = new Uint8ClampedArray(sd);
-    let _rngCC = photoSeed * 1664525 + 1013904223 | 0;
-    const _randCC = () => {
-      _rngCC = _rngCC * 1664525 + 1013904223 | 0;
-      return (_rngCC >>> 0) / 4294967296;
-    };
-    const gbH = PHOTO_HEIGHT;
-    const rowTypes = new Array(gbH);
-    for (let row = 0; row < gbH; row++) {
-      rowTypes[row] = _randCC() < densityPct ? Math.floor(_randCC() * 4) : -1;
-    }
-    for (let y = 0; y < height; y++) {
-      const gbRow = Math.min(gbH - 1, Math.floor(y / Math.max(1, s)));
-      const type = rowTypes[gbRow];
-      if (type < 0) continue;
-      for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * 4;
-        const r = sd[i], g = sd[i + 1], b = sd[i + 2];
-        let nr = r, ng = g, nb = b;
-        if (type === 0) {
-          nr = Math.round(r * (1 - strengthPct) + b * strengthPct);
-          nb = Math.round(b * (1 - strengthPct) + r * strengthPct);
-        } else if (type === 1) {
-          nr = Math.round(r * (1 - strengthPct) + (255 - r) * strengthPct);
-          ng = Math.round(g * (1 - strengthPct) + (255 - g) * strengthPct);
-          nb = Math.round(b * (1 - strengthPct) + (255 - b) * strengthPct);
-        } else if (type === 2) {
-          const grey = (r + g + b) / 3;
-          nr = Math.min(255, Math.max(0, Math.round(r + (r - grey) * strengthPct * 2.5)));
-          ng = Math.min(255, Math.max(0, Math.round(g + (g - grey) * strengthPct * 2.5)));
-          nb = Math.min(255, Math.max(0, Math.round(b + (b - grey) * strengthPct * 2.5)));
-        } else {
-          nr = Math.round(r * (1 - strengthPct) + g * strengthPct);
-          ng = Math.round(g * (1 - strengthPct) + b * strengthPct);
-          nb = Math.round(b * (1 - strengthPct) + r * strengthPct);
-        }
-        out[i] = nr;
-        out[i + 1] = ng;
-        out[i + 2] = nb;
-      }
-    }
-    const tcc = Math.min(1, Math.max(0, intensity));
-    if (tcc < 1) {
-      for (let i = 0; i < out.length; i += 4) {
-        out[i] = Math.round(sd[i] * (1 - tcc) + out[i] * tcc);
-        out[i + 1] = Math.round(sd[i + 1] * (1 - tcc) + out[i + 1] * tcc);
-        out[i + 2] = Math.round(sd[i + 2] * (1 - tcc) + out[i + 2] * tcc);
-      }
-    }
-    ctx.putImageData(new ImageData(out, width, height), 0, 0);
+  }
+  blendIntensity(out, sd, intensity);
+  ctx.putImageData(new ImageData(out, width, height), 0, 0);
+}
+const EFFECTS = {
+  crt: { apply: apply$k, overlay: true },
+  lcd: { apply: apply$j, overlay: true },
+  grid: { apply: apply$i, overlay: true },
+  vignette: { apply: apply$h, overlay: true },
+  halftone: { apply: apply$g, overlay: true },
+  dot: { apply: apply$f, overlay: true },
+  glow: { apply: apply$e, overlay: false },
+  chroma: { apply: apply$d, overlay: false },
+  jitter: { apply: apply$c, overlay: false },
+  noise: { apply: apply$b, overlay: false },
+  ghosting: { apply: apply$a, overlay: false },
+  pixsort: { apply: apply$9, overlay: false },
+  blkglitch: { apply: apply$8, overlay: false },
+  wavewarp: { apply: apply$7, overlay: false },
+  zoomblur: { apply: apply$6, overlay: false },
+  bayer: { apply: apply$5, overlay: false },
+  floyd: { apply: apply$4, overlay: false },
+  interlace: { apply: apply$3, overlay: false },
+  chswap: { apply: apply$2, overlay: false },
+  rgbplanes: { apply: apply$1, overlay: false },
+  colcorrupt: { apply, overlay: false }
+};
+function applyExportFilter(ctx, width, height, scale, filter, intensity = 1, variant = "medium", filterParams, photoSeed = 0) {
+  const effect = EFFECTS[filter];
+  if (!effect || intensity <= 0) return;
+  const allParams = filterParams || state.filterParams;
+  const env = {
+    ctx,
+    width,
+    height,
+    s: Math.max(1, Math.round(scale)),
+    params: allParams[filter] || {},
+    intensity,
+    variant,
+    photoSeed
+  };
+  if (!effect.overlay) {
+    effect.apply(env);
     return;
   }
+  const overlay = Object.assign(document.createElement("canvas"), { width, height });
+  env.ec = overlay.getContext("2d");
+  effect.apply(env);
   ctx.save();
   ctx.globalAlpha = Math.min(1, Math.max(0, intensity));
-  ctx.drawImage(eff, 0, 0);
+  ctx.drawImage(overlay, 0, 0);
   ctx.restore();
 }
 function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVariant, filterParams, activeFilters, forExport = false, photoSeed = 0) {
@@ -2899,17 +3178,16 @@ function applyActiveEffects(ctx, width, height, scale, filterIntensity, filterVa
   const af = activeFilters || state.activeFilters;
   if (af.size === 0) return;
   const baseOrder = state.filterOrder || [];
-  const knownSet = new Set(baseOrder);
-  const extraFilters = [...af].filter((id) => !knownSet.has(id));
-  const filterOrder = [...baseOrder, ...extraFilters];
-  for (const filterName of filterOrder) {
-    if (af.has(filterName)) {
+  const known = new Set(baseOrder);
+  const order = [...baseOrder, ...[...af].filter((id) => !known.has(id))];
+  for (const id of order) {
+    if (af.has(id)) {
       applyExportFilter(
         ctx,
         width,
         height,
         scale,
-        filterName,
+        id,
         filterIntensity,
         filterVariant,
         filterParams,
@@ -3628,6 +3906,7 @@ function duplicateGifFrame(orderIdx) {
   const frame = state.gifFrameOrder[orderIdx];
   if (!frame) return;
   state.gifFrameOrder.splice(orderIdx + 1, 0, { ...frame });
+  updateGifCount();
   updateGifFrameNumbers();
   renderGifFrameStrip();
   updateGifPreview();
@@ -3677,34 +3956,32 @@ function updateSidebarPreview() {
 function setupPreviewPanel() {
   const previewPinBtn = document.getElementById("preview-pin-btn");
   const previewGroup = document.getElementById("preview-group");
-  const PREVIEW_PIN_KEY = "mugdump:previewPinned";
   function applyPreviewPin(pinned) {
     if (!previewGroup) return;
     previewGroup.classList.toggle("preview-pinned", pinned);
     if (previewPinBtn) previewPinBtn.classList.toggle("active", pinned);
   }
   if (previewPinBtn && previewGroup) {
-    const storedPin = localStorage.getItem(PREVIEW_PIN_KEY);
+    const storedPin = readString(STORAGE_KEYS.previewPinned);
     const savedPin = storedPin === null ? true : storedPin === "true";
     applyPreviewPin(savedPin);
     previewPinBtn.addEventListener("click", () => {
       const nowPinned = !previewGroup.classList.contains("preview-pinned");
       applyPreviewPin(nowPinned);
-      localStorage.setItem(PREVIEW_PIN_KEY, String(nowPinned));
+      writeString(STORAGE_KEYS.previewPinned, nowPinned);
     });
   }
-  const PREVIEW_SCALE_KEY = "mugdump:previewScale";
   const previewWrapEl = document.getElementById("sidebar-preview-wrap");
   const sizeDecBtn = document.getElementById("preview-size-dec");
   const sizeIncBtn = document.getElementById("preview-size-inc");
   const sizeLabelEl = document.getElementById("preview-size-label");
-  let previewScale = parseInt(localStorage.getItem(PREVIEW_SCALE_KEY) || "2", 10);
+  let previewScale = parseInt(readString(STORAGE_KEYS.previewScale, "2"), 10);
   if (!(previewScale >= 1 && previewScale <= 6)) previewScale = 2;
   function applyPreviewScale(n) {
     previewScale = Math.min(6, Math.max(1, n));
     if (previewWrapEl) previewWrapEl.style.maxWidth = previewScale * 128 + "px";
     if (sizeLabelEl) sizeLabelEl.textContent = previewScale + "×";
-    localStorage.setItem(PREVIEW_SCALE_KEY, String(previewScale));
+    writeString(STORAGE_KEYS.previewScale, previewScale);
   }
   applyPreviewScale(previewScale);
   sizeDecBtn?.addEventListener("click", () => applyPreviewScale(previewScale - 1));
@@ -3820,17 +4097,11 @@ function attachColorPickerToInput(input, swatchClass = "color-swatch-btn") {
 function syncColorSwatchBtn(input, hex) {
   if (input._cpBtn) input._cpBtn.style.background = hex;
 }
-const CUSTOM_PALETTES_KEY = "gbcam_custom_palettes";
 function loadCustomPalettes() {
-  try {
-    const raw = localStorage.getItem(CUSTOM_PALETTES_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch (_) {
-    return [];
-  }
+  return readJson(STORAGE_KEYS.customPalettes, []);
 }
 function saveCustomPalettesToStorage(palettes) {
-  localStorage.setItem(CUSTOM_PALETTES_KEY, JSON.stringify(palettes));
+  writeJson(STORAGE_KEYS.customPalettes, palettes);
 }
 function refreshCustomPalettes() {
   for (const key of Object.keys(PALETTES)) {
@@ -3840,20 +4111,18 @@ function refreshCustomPalettes() {
     PALETTES[pal.id] = { ...pal, custom: true };
   }
 }
-const RECENT_PALETTES_KEY = "gbcam_recent_palettes";
 const MAX_RECENT_PALETTES = 6;
 function loadRecentPalettes() {
-  try {
-    return JSON.parse(localStorage.getItem(RECENT_PALETTES_KEY) || "[]");
-  } catch (_) {
-    return [];
-  }
+  return readJson(STORAGE_KEYS.recentPalettes, []);
+}
+function saveRecentPalettes(ids) {
+  writeJson(STORAGE_KEYS.recentPalettes, ids);
 }
 function addRecentPalette(id) {
   let recents = loadRecentPalettes().filter((r) => r !== id);
   recents.unshift(id);
   recents = recents.slice(0, MAX_RECENT_PALETTES);
-  localStorage.setItem(RECENT_PALETTES_KEY, JSON.stringify(recents));
+  saveRecentPalettes(recents);
 }
 const PAL_GROUP_ORDER = [
   "hardware",
@@ -3967,17 +4236,15 @@ function setupFavCarouselResponsive() {
   }
   requestAnimationFrame(update);
 }
-const FAV_PALETTES_KEY = "gbcam_fav_palettes";
 const MAX_FAV_PALETTES = 64;
 const FAV_PAGE_SIZE = 16;
 let favOffset = 0;
 let _favVisibleCount = 16;
 function loadFavPalettes() {
-  try {
-    return JSON.parse(localStorage.getItem(FAV_PALETTES_KEY) || "[]");
-  } catch (_) {
-    return [];
-  }
+  return readJson(STORAGE_KEYS.favPalettes, []);
+}
+function saveFavPalettes(ids) {
+  writeJson(STORAGE_KEYS.favPalettes, ids);
 }
 function isFavPalette(id) {
   return loadFavPalettes().includes(id);
@@ -4002,7 +4269,7 @@ function toggleFavPalette(id) {
     }
     favs.push(id);
   }
-  localStorage.setItem(FAV_PALETTES_KEY, JSON.stringify(favs));
+  saveFavPalettes(favs);
   renderFavPalettes();
   document.querySelectorAll(`.pal-item-star[data-palette="${id}"]`).forEach((btn) => {
     btn.classList.toggle("starred", isFavPalette(id));
@@ -4517,12 +4784,12 @@ function openPaletteGrid() {
   }
   const sizeSlider = document.getElementById("palette-grid-size");
   if (sizeSlider) {
-    const savedSize = localStorage.getItem("gbcam_pgrid_size");
+    const savedSize = readString(STORAGE_KEYS.paletteGridSize);
     if (savedSize) sizeSlider.value = savedSize;
     updatePaletteGridSize(parseInt(sizeSlider.value));
     sizeSlider.oninput = () => {
       updatePaletteGridSize(parseInt(sizeSlider.value));
-      localStorage.setItem("gbcam_pgrid_size", sizeSlider.value);
+      writeString(STORAGE_KEYS.paletteGridSize, sizeSlider.value);
     };
   }
   buildPaletteGrid();
@@ -4535,22 +4802,14 @@ function closePaletteGrid() {
   const modal = document.getElementById("palette-grid-modal");
   if (modal) modal.classList.add("hidden");
 }
-const PGRID_COLLAPSE_KEY = "mugdump:pgrid:collapsed";
 function getCollapsedPgridGroups() {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(PGRID_COLLAPSE_KEY) || "[]"));
-  } catch (_) {
-    return /* @__PURE__ */ new Set();
-  }
+  return new Set(readJson(STORAGE_KEYS.paletteGridCollapsed, []));
 }
 function setPgridGroupCollapsed(group, collapsed) {
   const set = getCollapsedPgridGroups();
   if (collapsed) set.add(group);
   else set.delete(group);
-  try {
-    localStorage.setItem(PGRID_COLLAPSE_KEY, JSON.stringify([...set]));
-  } catch (_) {
-  }
+  writeJson(STORAGE_KEYS.paletteGridCollapsed, [...set]);
 }
 async function buildPaletteGrid() {
   const list = document.getElementById("palette-grid-list");
@@ -5188,51 +5447,6 @@ function soloStep(dir) {
   syncControlsToEffectiveSettings(idx);
   renderSoloView(idx);
 }
-const FX_COLLAPSE_KEY = "mugdump:fxgroups";
-function getCollapsedFxGroups() {
-  const stored = localStorage.getItem(FX_COLLAPSE_KEY);
-  if (stored === null) return /* @__PURE__ */ new Set(["retro", "glitch"]);
-  try {
-    return new Set(JSON.parse(stored));
-  } catch (_) {
-    return /* @__PURE__ */ new Set(["retro", "glitch"]);
-  }
-}
-function setFxGroupCollapsed(g, collapsed) {
-  const set = getCollapsedFxGroups();
-  if (collapsed) set.add(g);
-  else set.delete(g);
-  try {
-    localStorage.setItem(FX_COLLAPSE_KEY, JSON.stringify([...set]));
-  } catch (_) {
-  }
-}
-function makeFxGroupHeader(g, collapsed) {
-  const h = document.createElement("div");
-  h.className = "fi-group-header" + (collapsed ? " collapsed" : "");
-  h.dataset.group = g;
-  const chevron = document.createElement("span");
-  chevron.className = "fi-group-chevron";
-  chevron.textContent = "▾";
-  const label = document.createElement("span");
-  label.className = "fi-group-label";
-  label.textContent = FX_GROUP_LABELS[g] || g;
-  const dot = document.createElement("span");
-  dot.className = "fi-group-dot";
-  dot.title = "An effect in this group is active";
-  h.appendChild(chevron);
-  h.appendChild(label);
-  h.appendChild(dot);
-  h.addEventListener("click", () => {
-    const nowCollapsed = !h.classList.contains("collapsed");
-    h.classList.toggle("collapsed", nowCollapsed);
-    setFxGroupCollapsed(g, nowCollapsed);
-    document.querySelectorAll(`#filter-accordion .fi-item[data-group="${g}"]`).forEach((it2) => {
-      it2.style.display = nowCollapsed ? "none" : "";
-    });
-  });
-  return h;
-}
 function setSectionEnabled(section, on) {
   state.sectionEnabled[section] = on;
   const cb = document.querySelector(`.section-check[data-section="${section}"]`);
@@ -5268,7 +5482,6 @@ function updateFilterOrder(repaint = false) {
   const items = document.querySelectorAll(".fi-item");
   const newOrder = Array.from(items).map((item) => item.dataset.filter);
   state.filterOrder = newOrder;
-  localStorage.setItem("filterOrder", JSON.stringify(newOrder));
   if (repaint) {
     repaintGrid();
     if (state.viewMode === "solo" && state.selectedIndex !== null)
@@ -5298,7 +5511,7 @@ function toggleFilter(filterName) {
     }
     if (adding) {
       state.focusedFilter = filterName;
-      _autoEnableEffectsSection();
+      autoEnableEffectsSection();
     } else if (state.focusedFilter === filterName) {
       const remaining = new Set(state.photoSettings[targets[0]]?.activeFilters || []);
       state.focusedFilter = [...remaining].pop() || null;
@@ -5312,14 +5525,14 @@ function toggleFilter(filterName) {
     } else {
       state.activeFilters.add(filterName);
       state.focusedFilter = filterName;
-      _autoEnableEffectsSection();
+      autoEnableEffectsSection();
     }
   }
   updateFilterUI();
   repaintGrid();
   updateSidebarPreview();
 }
-function _autoEnableEffectsSection() {
+function autoEnableEffectsSection() {
   if (!state.sectionEnabled.effects) {
     state.sectionEnabled.effects = true;
     const cb = document.querySelector('.section-check[data-section="effects"]');
@@ -5340,261 +5553,8 @@ function enableFilter(filterName) {
     state.activeFilters.add(filterName);
   }
   state.focusedFilter = filterName;
-  _autoEnableEffectsSection();
+  autoEnableEffectsSection();
   updateFilterUI();
-}
-function syncFilterAccordion(eff) {
-  const af = eff ? eff.activeFilters : state.activeFilters;
-  const fp = eff ? eff.filterParams : state.filterParams;
-  const fv = eff ? eff.filterVariant : state.filterVariant;
-  document.querySelectorAll(".fi-item").forEach((item) => {
-    const filterId = item.dataset.filter;
-    const active = af.has(filterId);
-    const cb = item.querySelector(".fi-check");
-    if (cb) cb.checked = active;
-    item.classList.toggle("fi-active", active);
-    if (active) item.classList.add("fi-open");
-    const fp_f = fp && fp[filterId] || {};
-    item.querySelectorAll("[data-fi-key]").forEach((el) => {
-      const key = el.dataset.fiKey;
-      const stateKey = el.dataset.fiStatekey;
-      const curVal = stateKey ? fv : fp_f[key] ?? el._fiDef;
-      if (el.tagName === "INPUT" && el.type === "range") {
-        el.value = curVal;
-        const valEl = el.previousElementSibling?.querySelector(".fi-val") || el.parentElement?.querySelector(".fi-val");
-        if (valEl && el._fiFmt) valEl.textContent = el._fiFmt(Number(curVal));
-      } else if (el.classList.contains("seg-control")) {
-        el.querySelectorAll(".seg-btn").forEach((btn) => {
-          btn.classList.toggle("active", btn.dataset.val === String(curVal));
-        });
-      }
-    });
-  });
-  const _fxActiveGroups = /* @__PURE__ */ new Set();
-  document.querySelectorAll("#filter-accordion .fi-item.fi-active").forEach((it2) => {
-    if (it2.dataset.group) _fxActiveGroups.add(it2.dataset.group);
-  });
-  document.querySelectorAll("#filter-accordion .fi-group-header").forEach((h) => {
-    h.classList.toggle("has-active", _fxActiveGroups.has(h.dataset.group));
-  });
-}
-function setupFilterAccordion() {
-  const container = document.getElementById("filter-accordion");
-  if (!container) return;
-  container.innerHTML = "";
-  const collapsedFx = getCollapsedFxGroups();
-  const _fxGroupItems = {};
-  for (const fd of FILTER_DEFS) {
-    const item = document.createElement("div");
-    item.className = "fi-item";
-    item.dataset.filter = fd.id;
-    const header = document.createElement("div");
-    header.className = "fi-header";
-    const chevron = document.createElement("span");
-    chevron.className = "fi-chevron section-chevron";
-    chevron.setAttribute("aria-hidden", "true");
-    chevron.textContent = "▾";
-    const dragHandle = document.createElement("span");
-    dragHandle.className = "fi-drag-handle";
-    dragHandle.setAttribute("aria-hidden", "true");
-    dragHandle.textContent = "⋮⋮";
-    dragHandle.title = "Drag to reorder";
-    const lbl = document.createElement("span");
-    lbl.className = "fi-label";
-    lbl.textContent = fd.label;
-    const checkWrap = document.createElement("label");
-    checkWrap.className = "section-check-wrap fi-check-wrap";
-    checkWrap.title = `Enable ${fd.label}`;
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.className = "fi-check";
-    cb.dataset.filter = fd.id;
-    checkWrap.appendChild(cb);
-    const resetBtn = document.createElement("button");
-    resetBtn.type = "button";
-    resetBtn.className = "btn btn-ghost btn-xs btn-icon fi-reset";
-    resetBtn.title = `Reset ${fd.label} to defaults`;
-    resetBtn.textContent = "↺";
-    resetBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      pushUndo();
-      const defaults = buildDefaultFilterParams()[fd.id] || {};
-      const fp = getWritableFilterParams(fd.id);
-      Object.assign(fp, defaults);
-      item.querySelectorAll('input[type="range"][data-fi-key]').forEach((slider) => {
-        const key = slider.dataset.fiKey;
-        if (key in defaults) {
-          slider.value = defaults[key];
-          const valEl = slider.closest(".range-wrap")?.querySelector(".fi-val");
-          if (valEl && slider._fiFmt) valEl.textContent = slider._fiFmt(defaults[key]);
-        }
-      });
-      item.querySelectorAll(".seg-control[data-fi-key]").forEach((seg) => {
-        const key = seg.dataset.fiKey;
-        if (key in defaults) {
-          seg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b.dataset.val === String(defaults[key])));
-        }
-      });
-      repaintInteractive();
-    });
-    header.appendChild(dragHandle);
-    header.appendChild(chevron);
-    header.appendChild(lbl);
-    header.appendChild(resetBtn);
-    header.appendChild(checkWrap);
-    item.draggable = false;
-    header.addEventListener("mousedown", () => {
-      item.draggable = true;
-    });
-    item.addEventListener("dragend", () => {
-      item.draggable = false;
-      item.classList.remove("fi-dragging");
-      document.querySelectorAll(".fi-item").forEach((el) => el.classList.remove("fi-drag-over"));
-      updateFilterOrder(true);
-    });
-    document.addEventListener(
-      "mouseup",
-      () => {
-        item.draggable = false;
-      },
-      { passive: true }
-    );
-    item.addEventListener("dragstart", (e) => {
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/html", item.innerHTML);
-      item.classList.add("fi-dragging");
-    });
-    item.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      const dragging = document.querySelector(".fi-item.fi-dragging");
-      if (dragging && dragging !== item) {
-        item.classList.add("fi-drag-over");
-        const rect = item.getBoundingClientRect();
-        const midpoint = rect.top + rect.height / 2;
-        if (e.clientY < midpoint) {
-          item.parentNode.insertBefore(dragging, item);
-        } else {
-          item.parentNode.insertBefore(dragging, item.nextSibling);
-        }
-        updateFilterOrder();
-      }
-    });
-    item.addEventListener("drop", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-    item.addEventListener("dragleave", () => {
-      item.classList.remove("fi-drag-over");
-    });
-    item.appendChild(header);
-    const outer = document.createElement("div");
-    outer.className = "fi-body-outer";
-    const inner = document.createElement("div");
-    inner.className = "fi-body-inner";
-    const content = document.createElement("div");
-    content.className = "fi-body-content";
-    inner.appendChild(content);
-    for (const p of fd.params) {
-      if (p.type === "range") {
-        const wrap = document.createElement("div");
-        wrap.className = "range-wrap fp-row";
-        const hdr2 = document.createElement("div");
-        hdr2.className = "range-header";
-        const pLbl = document.createElement("span");
-        pLbl.className = "ctrl-label";
-        pLbl.textContent = p.label;
-        const pVal = document.createElement("span");
-        pVal.className = "range-val fi-val";
-        pVal.textContent = p.fmt(p.def);
-        hdr2.appendChild(pLbl);
-        hdr2.appendChild(pVal);
-        const slider = document.createElement("input");
-        slider.type = "range";
-        slider.min = p.min;
-        slider.max = p.max;
-        slider.step = p.step;
-        slider.value = p.def;
-        slider.dataset.fiKey = p.key;
-        if (p.stateKey) slider.dataset.fiStatekey = p.stateKey;
-        slider._fiDef = p.def;
-        slider._fiFmt = p.fmt;
-        slider.addEventListener("pointerdown", () => {
-          pushUndo();
-          if (!cb.checked) enableFilter(fd.id);
-        });
-        slider.addEventListener("input", () => {
-          const v = parseFloat(slider.value);
-          pVal.textContent = p.fmt(v);
-          if (p.stateKey) {
-            setScopedSetting(p.stateKey, slider.value);
-          } else {
-            const fp = getWritableFilterParams(fd.id);
-            fp[p.key] = v;
-          }
-          repaintInteractive();
-        });
-        wrap.appendChild(hdr2);
-        wrap.appendChild(slider);
-        content.appendChild(wrap);
-      } else if (p.type === "seg") {
-        const wrap = document.createElement("div");
-        wrap.className = "fp-row";
-        const pLbl = document.createElement("div");
-        pLbl.className = "ctrl-label";
-        pLbl.style.marginBottom = "4px";
-        pLbl.textContent = p.label;
-        const seg = document.createElement("div");
-        seg.className = "seg-control";
-        seg.dataset.fiKey = p.key;
-        if (p.stateKey) seg.dataset.fiStatekey = p.stateKey;
-        seg._fiDef = p.def;
-        for (const [optVal, optLabel] of p.opts) {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "seg-btn" + (optVal === p.def ? " active" : "");
-          btn.textContent = optLabel;
-          btn.dataset.val = optVal;
-          btn.addEventListener("click", () => {
-            pushUndo();
-            if (!cb.checked) enableFilter(fd.id);
-            seg.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
-            if (p.stateKey) {
-              setScopedSetting(p.stateKey, optVal);
-            } else {
-              const fp = getWritableFilterParams(fd.id);
-              fp[p.key] = optVal;
-            }
-            repaintInteractive();
-          });
-          seg.appendChild(btn);
-        }
-        wrap.appendChild(pLbl);
-        wrap.appendChild(seg);
-        content.appendChild(wrap);
-      }
-    }
-    outer.appendChild(inner);
-    item.appendChild(outer);
-    cb.addEventListener("change", () => {
-      toggleFilter(fd.id);
-      if (cb.checked) item.classList.add("fi-open");
-    });
-    header.addEventListener("click", (e) => {
-      if (e.target.closest(".fi-check-wrap")) return;
-      item.classList.toggle("fi-open");
-    });
-    const _g = FX_FILTER_GROUP[fd.id] || "glitch";
-    item.dataset.group = _g;
-    if (collapsedFx.has(_g)) item.style.display = "none";
-    (_fxGroupItems[_g] = _fxGroupItems[_g] || []).push(item);
-  }
-  for (const g of FX_GROUP_ORDER) {
-    const items = _fxGroupItems[g];
-    if (!items || !items.length) continue;
-    container.appendChild(makeFxGroupHeader(g, collapsedFx.has(g)));
-    for (const it2 of items) container.appendChild(it2);
-  }
 }
 const MAX_UNDO = 30;
 const undoStack = [];
@@ -5844,15 +5804,6 @@ function selectPhoto(index, event) {
 function setThumbnailSize(px) {
   dom.photoGrid.style.gridTemplateColumns = `repeat(auto-fill, minmax(min(${px}px, 48%), 1fr))`;
 }
-function toggleHideEmpty() {
-  state.hideEmpty = !state.hideEmpty;
-  dom.photoGrid.classList.toggle("hide-empty", state.hideEmpty);
-  const btn = document.getElementById("btn-hide-empty");
-  if (btn) {
-    btn.classList.toggle("active", state.hideEmpty);
-    btn.textContent = state.hideEmpty ? "Show empty" : "Hide empty";
-  }
-}
 function _repaintAfterTransform(index) {
   repaintGridSlot(index);
   if (state.viewMode === "solo") renderSoloView(index);
@@ -5929,12 +5880,11 @@ function setupDragDrop() {
     await loadSavFile({ buffer, name: file.name, path: api.getPathForFile(file) });
   });
 }
-const LAST_SAV_PATH_KEY = "gbcam_last_sav_path";
 function saveLastSavPath(filePath) {
-  if (filePath) localStorage.setItem(LAST_SAV_PATH_KEY, filePath);
+  if (filePath) writeString(STORAGE_KEYS.lastSavPath, filePath);
 }
 async function reloadSav() {
-  const p = state.filePath || localStorage.getItem(LAST_SAV_PATH_KEY);
+  const p = state.filePath || readString(STORAGE_KEYS.lastSavPath);
   if (!p) {
     showToast("No file to reload");
     return;
@@ -6271,18 +6221,10 @@ function setupBorderPicker() {
   });
 }
 function setupCollapsibleSections() {
-  const STORAGE_KEY = "mugdump:section-states";
-  let sectionStates = {};
-  try {
-    sectionStates = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-  } catch (_) {
-  }
+  const sectionStates = readJson(STORAGE_KEYS.sectionStates, {});
   function saveState(sectionId, isCollapsed) {
     sectionStates[sectionId] = isCollapsed;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sectionStates));
-    } catch (_) {
-    }
+    writeJson(STORAGE_KEYS.sectionStates, sectionStates);
   }
   document.querySelectorAll("#export-controls .ctrl-group.collapsible").forEach((group) => {
     const clickTarget = group.querySelector(":scope > .tone-header") || group.querySelector(":scope > .ctrl-header-row") || group.querySelector(":scope > .ctrl-label");
@@ -6636,7 +6578,6 @@ function setupSidebarCollapse() {
   const handle = document.getElementById("panel-resize-handle");
   const app = document.getElementById("app");
   if (!btn || !panel || !app) return;
-  const STORED_KEY = "gbcam_sidebar_collapsed";
   const isDesktop = () => window.innerWidth > 1024;
   function doCollapse(save = true) {
     panel.style.width = "";
@@ -6645,7 +6586,7 @@ function setupSidebarCollapse() {
     btn.textContent = "›";
     btn.title = "Expand sidebar";
     if (handle) handle.style.cursor = "default";
-    if (save) localStorage.setItem(STORED_KEY, "1");
+    if (save) writeString(STORAGE_KEYS.sidebarCollapsed, "1");
     setTimeout(() => window.dispatchEvent(new Event("resize")), 200);
   }
   function doExpand(save = true) {
@@ -6655,10 +6596,10 @@ function setupSidebarCollapse() {
     btn.textContent = "‹";
     btn.title = "Collapse sidebar";
     if (handle) handle.style.cursor = "";
-    if (save) localStorage.setItem(STORED_KEY, "0");
+    if (save) writeString(STORAGE_KEYS.sidebarCollapsed, "0");
     setTimeout(() => window.dispatchEvent(new Event("resize")), 200);
   }
-  if (isDesktop() && localStorage.getItem(STORED_KEY) === "1") doCollapse(false);
+  if (isDesktop() && readString(STORAGE_KEYS.sidebarCollapsed) === "1") doCollapse(false);
   let _wasDesktop = isDesktop();
   window.addEventListener("resize", () => {
     const nowDesktop = isDesktop();
@@ -6667,7 +6608,7 @@ function setupSidebarCollapse() {
     if (!nowDesktop) {
       app.classList.remove("sidebar-collapsed");
     } else {
-      if (localStorage.getItem(STORED_KEY) === "1") doCollapse(false);
+      if (readString(STORAGE_KEYS.sidebarCollapsed) === "1") doCollapse(false);
     }
   });
   btn.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -6877,13 +6818,8 @@ async function confirmPocketOpen() {
   const result = await api.readFile(selectedPocketSave);
   await loadSavFile(result);
 }
-const PRESET_KEY = "mugdump:presets:v1";
 function getPresets() {
-  try {
-    return JSON.parse(localStorage.getItem(PRESET_KEY) || "{}");
-  } catch {
-    return {};
-  }
+  return readJson(STORAGE_KEYS.presets, {});
 }
 function savePreset(name) {
   if (!name) return;
@@ -6905,7 +6841,7 @@ function savePreset(name) {
   };
   const presets = getPresets();
   presets[name] = src;
-  localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+  writeJson(STORAGE_KEYS.presets, presets);
   renderPresetList();
   showToast(`Preset "${name}" saved`);
 }
@@ -6947,7 +6883,7 @@ function loadPreset(name) {
 function deletePreset(name) {
   const presets = getPresets();
   delete presets[name];
-  localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+  writeJson(STORAGE_KEYS.presets, presets);
   renderPresetList();
 }
 function renderPresetList() {
@@ -7013,7 +6949,7 @@ function setupPresetControls() {
           throw new Error("Invalid format");
         const existing = getPresets();
         const merged = { ...existing, ...imported };
-        localStorage.setItem(PRESET_KEY, JSON.stringify(merged));
+        writeJson(STORAGE_KEYS.presets, merged);
         renderPresetList();
         showToast(`Imported ${Object.keys(imported).length} preset(s)`);
       } catch {
@@ -7026,7 +6962,6 @@ function setupPresetControls() {
   renderPresetList();
 }
 function setupTheme() {
-  const THEME_KEY = "mugdump:theme";
   const themeToggleBtn = document.getElementById("theme-toggle");
   function applyTheme(theme) {
     const light = theme === "light";
@@ -7036,63 +6971,170 @@ function setupTheme() {
       themeToggleBtn.title = light ? "Switch to dark theme" : "Switch to light theme";
     }
   }
-  applyTheme(localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark");
+  applyTheme(readString(STORAGE_KEYS.theme) === "light" ? "light" : "dark");
   themeToggleBtn?.addEventListener("click", () => {
     const nowLight = !document.documentElement.classList.contains("theme-light");
     applyTheme(nowLight ? "light" : "dark");
-    localStorage.setItem(THEME_KEY, nowLight ? "light" : "dark");
+    writeString(STORAGE_KEYS.theme, nowLight ? "light" : "dark");
   });
 }
-function setExportFilter(filter) {
-  setScopedSetting("exportFilter", filter);
-  repaintGrid();
-}
-function buildProjectJson() {
-  const bytes = new Uint8Array(state.sav.buffer);
+const PROJECT_VERSION = 1;
+const PROJECT_APP = "MugDump";
+const PROJECT_SETTING_KEYS = [
+  "exportScale",
+  "exportFilter",
+  "filterIntensity",
+  "filterVariant",
+  "filterParams",
+  "brightness",
+  "contrast",
+  "toneIntensity",
+  "shadowColor",
+  "highlightColor",
+  "toneBalance",
+  "gifDelay",
+  "gifLoop",
+  "photoSettings",
+  "photoTransforms",
+  "filterOrder"
+];
+function bytesToBase64(bytes) {
   let binary = "";
   for (let i = 0; i < bytes.length; i += 8192) {
     binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
   }
-  const sav64 = btoa(binary);
+  return btoa(binary);
+}
+function base64ToBytes(b64) {
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+function serializeProject({
+  sav,
+  filename,
+  paletteId,
+  settings,
+  customPalettes = [],
+  recentPalettes = [],
+  favPalettes = []
+}) {
+  const picked = {};
+  for (const key of PROJECT_SETTING_KEYS) picked[key] = settings[key];
   return JSON.stringify(
     {
-      version: 1,
-      app: "MugDump",
-      filename: state.filename || "GBCAMERA.sav",
-      sav: sav64,
-      settings: {
-        paletteId: state.palette.id,
-        exportScale: state.exportScale,
-        exportFilter: state.exportFilter,
-        filterIntensity: state.filterIntensity,
-        filterVariant: state.filterVariant,
-        filterParams: state.filterParams,
-        brightness: state.brightness,
-        contrast: state.contrast,
-        toneIntensity: state.toneIntensity,
-        shadowColor: state.shadowColor,
-        highlightColor: state.highlightColor,
-        toneBalance: state.toneBalance,
-        gifDelay: state.gifDelay,
-        gifLoop: state.gifLoop,
-        photoSettings: state.photoSettings,
-        photoTransforms: state.photoTransforms,
-        filterOrder: state.filterOrder,
-        customPalettes: loadCustomPalettes(),
-        recentPalettes: loadRecentPalettes(),
-        favPalettes: loadFavPalettes()
-      }
+      version: PROJECT_VERSION,
+      app: PROJECT_APP,
+      filename: filename || "GBCAMERA.sav",
+      sav: bytesToBase64(sav),
+      settings: { paletteId, ...picked, customPalettes, recentPalettes, favPalettes }
     },
     null,
     2
   );
 }
+const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+function parseProject(json) {
+  let project;
+  try {
+    project = JSON.parse(json);
+  } catch {
+    throw new Error("Invalid project file");
+  }
+  if (!isObject(project) || project.version !== PROJECT_VERSION || typeof project.sav !== "string") {
+    throw new Error("Unrecognised project format");
+  }
+  let bytes;
+  try {
+    bytes = base64ToBytes(project.sav);
+  } catch {
+    throw new Error("Invalid project file");
+  }
+  if (bytes.length !== SRAM_SIZE) throw new Error("Unrecognised project format");
+  const raw = isObject(project.settings) ? project.settings : {};
+  const settings = { ...raw };
+  for (const key of ["photoSettings", "photoTransforms"]) {
+    if (!isObject(raw[key])) {
+      delete settings[key];
+      continue;
+    }
+    settings[key] = {};
+    for (const [k, v] of Object.entries(raw[key])) {
+      const idx = Number.parseInt(k, 10);
+      if (Number.isInteger(idx) && isObject(v)) settings[key][idx] = v;
+    }
+  }
+  if (!Array.isArray(raw.filterOrder) || !raw.filterOrder.every((id) => typeof id === "string")) {
+    delete settings.filterOrder;
+  }
+  for (const key of ["customPalettes", "recentPalettes", "favPalettes"]) {
+    if (!Array.isArray(raw[key])) delete settings[key];
+  }
+  return {
+    buffer: bytes.buffer,
+    filename: typeof project.filename === "string" ? project.filename : null,
+    settings
+  };
+}
+function buildProjectJson() {
+  return serializeProject({
+    sav: state.sav,
+    filename: state.filename,
+    paletteId: state.palette.id,
+    settings: state,
+    customPalettes: loadCustomPalettes(),
+    recentPalettes: loadRecentPalettes(),
+    favPalettes: loadFavPalettes()
+  });
+}
 async function saveProject() {
   if (!state.sav) return;
   const baseName = (state.filename || "gbcamera").replace(/\.sav$/i, "");
-  const defaultName = `${baseName}.gbcp`;
-  const result = await api.saveProject(buildProjectJson(), defaultName);
+  const result = await api.saveProject(buildProjectJson(), `${baseName}.gbcp`);
   if (result) showToast(`Project saved: ${result}`);
+}
+function applyProjectSettings(s) {
+  if (s.paletteId && PALETTES[s.paletteId]) setPalette(s.paletteId);
+  if (s.exportScale !== void 0) setExportScale(s.exportScale);
+  if (s.exportFilter) {
+    setScopedSetting("exportFilter", s.exportFilter);
+    repaintGrid();
+  }
+  if (s.filterIntensity !== void 0) state.filterIntensity = s.filterIntensity;
+  if (s.filterVariant) state.filterVariant = s.filterVariant;
+  if (s.gifDelay) {
+    state.gifDelay = s.gifDelay;
+    if (dom.gifDelay) dom.gifDelay.value = s.gifDelay;
+    if (dom.gifDelayVal) dom.gifDelayVal.textContent = `${s.gifDelay}ms`;
+  }
+  if (s.gifLoop) setGifLoop(s.gifLoop);
+  if (s.photoSettings) state.photoSettings = s.photoSettings;
+  if (s.filterOrder?.length) {
+    state.filterOrder = s.filterOrder;
+    const accordion = document.getElementById("filter-accordion");
+    for (const filterId of s.filterOrder) {
+      const item = accordion?.querySelector(`.fi-item[data-filter="${filterId}"]`);
+      if (item) accordion.appendChild(item);
+    }
+  }
+  if (s.customPalettes?.length) {
+    const existing = loadCustomPalettes();
+    const existingIds = new Set(existing.map((p) => p.id));
+    const incoming = s.customPalettes.filter((p) => !existingIds.has(p.id));
+    if (incoming.length > 0) {
+      saveCustomPalettesToStorage([...existing, ...incoming]);
+      refreshCustomPalettes();
+      rebuildPalettePickerList();
+    }
+  }
+  if (s.recentPalettes) saveRecentPalettes(s.recentPalettes);
+  if (s.favPalettes) {
+    saveFavPalettes(s.favPalettes);
+    renderFavPalettes();
+  }
+  updateFilterUI();
+  repaintGrid();
 }
 async function openProject() {
   const result = await api.openProject();
@@ -7103,75 +7145,13 @@ async function openProject() {
   }
   let project;
   try {
-    project = JSON.parse(result.json);
-  } catch (_) {
-    showToast("Invalid project file");
+    project = parseProject(result.json);
+  } catch (e) {
+    showToast(e.message);
     return;
   }
-  if (project.version !== 1 || !project.sav) {
-    showToast("Unrecognised project format");
-    return;
-  }
-  const binary = atob(project.sav);
-  const buffer = new ArrayBuffer(binary.length);
-  const u8 = new Uint8Array(buffer);
-  for (let i = 0; i < binary.length; i++) u8[i] = binary.charCodeAt(i);
-  await loadSavFile({ buffer, name: project.filename || result.name, path: null });
-  const s = project.settings || {};
-  if (s.paletteId && PALETTES[s.paletteId]) setPalette(s.paletteId);
-  if (s.exportScale !== void 0) setExportScale(s.exportScale);
-  if (s.exportFilter) setExportFilter(s.exportFilter);
-  if (s.filterIntensity !== void 0) {
-    state.filterIntensity = s.filterIntensity;
-    const sl = document.getElementById("filter-intensity");
-    const vl = document.getElementById("filter-intensity-val");
-    if (sl) sl.value = Math.round(s.filterIntensity * 100);
-    if (vl) vl.textContent = `${Math.round(s.filterIntensity * 100)}%`;
-  }
-  if (s.filterVariant) {
-    state.filterVariant = s.filterVariant;
-    document.querySelectorAll(".crt-variant-btn").forEach((b) => b.classList.toggle("active", b.dataset.variant === s.filterVariant));
-  }
-  if (s.gifDelay) {
-    state.gifDelay = s.gifDelay;
-    if (dom.gifDelay) dom.gifDelay.value = s.gifDelay;
-    if (dom.gifDelayVal) dom.gifDelayVal.textContent = `${s.gifDelay}ms`;
-  }
-  if (s.gifLoop) setGifLoop(s.gifLoop);
-  if (s.photoSettings && typeof s.photoSettings === "object") {
-    state.photoSettings = {};
-    for (const [k, v] of Object.entries(s.photoSettings)) {
-      state.photoSettings[parseInt(k)] = v;
-    }
-  }
-  if (Array.isArray(s.filterOrder) && s.filterOrder.length > 0) {
-    state.filterOrder = s.filterOrder;
-    localStorage.setItem("filterOrder", JSON.stringify(s.filterOrder));
-    const accordion = document.getElementById("filter-accordion");
-    if (accordion) {
-      s.filterOrder.forEach((filterId) => {
-        const item = accordion.querySelector(`.fi-item[data-filter="${filterId}"]`);
-        if (item) accordion.appendChild(item);
-      });
-    }
-  }
-  if (Array.isArray(s.customPalettes) && s.customPalettes.length > 0) {
-    const existing = loadCustomPalettes();
-    const existingIds = new Set(existing.map((p) => p.id));
-    const incoming = s.customPalettes.filter((p) => !existingIds.has(p.id));
-    if (incoming.length > 0) {
-      saveCustomPalettesToStorage([...existing, ...incoming]);
-      refreshCustomPalettes();
-      rebuildPalettePickerList();
-    }
-  }
-  if (Array.isArray(s.recentPalettes)) {
-    localStorage.setItem(RECENT_PALETTES_KEY, JSON.stringify(s.recentPalettes));
-  }
-  if (Array.isArray(s.favPalettes)) {
-    localStorage.setItem(FAV_PALETTES_KEY, JSON.stringify(s.favPalettes));
-    renderFavPalettes();
-  }
+  await loadSavFile({ buffer: project.buffer, name: project.filename || result.name, path: null });
+  applyProjectSettings(project.settings);
   showToast(`Project loaded: ${result.name}`);
 }
 function wireButtons() {
@@ -7313,7 +7293,6 @@ function wireButtons() {
   document.getElementById("tb-save-project")?.addEventListener("click", saveProject);
   document.getElementById("tb-open-project")?.addEventListener("click", openProject);
   document.getElementById("tb-reload-sav")?.addEventListener("click", reloadSav);
-  document.getElementById("btn-hide-empty")?.addEventListener("click", toggleHideEmpty);
   dom.presClose?.addEventListener("click", closePresentation);
   dom.presPrev?.addEventListener("click", () => presentationStep(-1));
   dom.presNext?.addEventListener("click", () => presentationStep(1));

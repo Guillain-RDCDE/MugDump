@@ -4,7 +4,7 @@ import { state } from '../app/state.js';
 import { pushUndo } from '../app/undo.js';
 import { THUMB_SCALE, renderPhotoComplete } from '../render/photo.js';
 import { dom } from './dom.js';
-import { updateFilterUI } from './effects-panel.js';
+import { updateFilterUI } from './effects-actions.js';
 import { showToast } from './feedback.js';
 import { toggleGifSelection, updateGifFrameNumbers, updateGifPreview } from './gif-builder.js';
 import { updateSidebarPreview } from './sidebar-preview.js';
@@ -277,18 +277,6 @@ export function setThumbnailSize(px) {
   // width, guaranteeing at least 2 columns always fit — eliminates the deadzone
   // where the slider top-end does nothing because only 1 column is placed.
   dom.photoGrid.style.gridTemplateColumns = `repeat(auto-fill, minmax(min(${px}px, 48%), 1fr))`;
-}
-
-// ── Hide empty slots ─────────────────────────────────────────────────────────
-
-export function toggleHideEmpty() {
-  state.hideEmpty = !state.hideEmpty;
-  dom.photoGrid.classList.toggle('hide-empty', state.hideEmpty);
-  const btn = document.getElementById('btn-hide-empty');
-  if (btn) {
-    btn.classList.toggle('active', state.hideEmpty);
-    btn.textContent = state.hideEmpty ? 'Show empty' : 'Hide empty';
-  }
 }
 
 // Repaint all views after a transform action

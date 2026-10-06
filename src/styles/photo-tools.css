@@ -1,0 +1,156 @@
+/* Transform buttons, grid header layout, presentation overlay. */
+
+/* ── Photo transform buttons ──────────────────────────────────────────────── */
+
+#photo-transforms {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.transform-btn {
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-dim);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.1s;
+  line-height: 1;
+}
+.transform-btn:hover {
+  border-color: var(--border);
+  color: var(--text);
+  background: var(--surface-2);
+}
+.transform-btn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.transform-sep {
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: var(--border-dim);
+  margin: 0 3px;
+}
+
+/* ── Grid header button layout ─────────────────────────────────────────────── */
+
+#grid-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-dim);
+  flex-shrink: 0;
+  /* overflow must stay visible so the Actions dropdown can escape the bar */
+}
+#grid-header > * {
+  flex-shrink: 0;
+}
+#grid-header .ctrl-label {
+  font-size: 11px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+#grid-header #thumb-size-slider {
+  flex: 1;
+  max-width: 100px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ── Fullscreen presentation overlay ─────────────────────────────────────── */
+
+#presentation-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.96);
+  z-index: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+#presentation-overlay.hidden {
+  display: none;
+}
+
+#pres-canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  max-width: calc(100vw - 160px);
+  max-height: calc(100vh - 120px);
+  border-radius: 4px;
+  box-shadow: 0 20px 80px rgba(0, 0, 0, 0.8);
+}
+
+#pres-label {
+  font-size: 13px;
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  letter-spacing: 0.3px;
+}
+
+#pres-close {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  color: var(--text-2);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    border-color 0.12s,
+    color 0.12s;
+}
+#pres-close:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.pres-nav {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius);
+  width: 44px;
+  height: 64px;
+  color: var(--text-2);
+  font-size: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.pres-nav:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text);
+}
+#pres-prev {
+  left: 16px;
+}
+#pres-next {
+  right: 16px;
+}

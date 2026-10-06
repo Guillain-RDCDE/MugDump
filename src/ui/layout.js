@@ -1,3 +1,4 @@
+import { STORAGE_KEYS, readString, writeString } from '../app/storage.js';
 // ── Panel resize (drag handle between grid and detail panel) ─────────────────
 
 // ── Sidebar overlay toggle (tablet ≤1024px) ──────────────────────────────────
@@ -38,8 +39,6 @@ export function setupSidebarCollapse() {
   const app = document.getElementById('app');
   if (!btn || !panel || !app) return;
 
-  const STORED_KEY = 'gbcam_sidebar_collapsed';
-
   const isDesktop = () => window.innerWidth > 1024;
 
   function doCollapse(save = true) {
@@ -50,7 +49,7 @@ export function setupSidebarCollapse() {
     btn.textContent = '›';
     btn.title = 'Expand sidebar';
     if (handle) handle.style.cursor = 'default';
-    if (save) localStorage.setItem(STORED_KEY, '1');
+    if (save) writeString(STORAGE_KEYS.sidebarCollapsed, '1');
     setTimeout(() => window.dispatchEvent(new Event('resize')), 200);
   }
   function doExpand(save = true) {
@@ -61,12 +60,12 @@ export function setupSidebarCollapse() {
     btn.textContent = '‹';
     btn.title = 'Collapse sidebar';
     if (handle) handle.style.cursor = '';
-    if (save) localStorage.setItem(STORED_KEY, '0');
+    if (save) writeString(STORAGE_KEYS.sidebarCollapsed, '0');
     setTimeout(() => window.dispatchEvent(new Event('resize')), 200);
   }
 
   // Restore persisted state (only at desktop — tablet overlay ignores this)
-  if (isDesktop() && localStorage.getItem(STORED_KEY) === '1') doCollapse(false);
+  if (isDesktop() && readString(STORAGE_KEYS.sidebarCollapsed) === '1') doCollapse(false);
 
   // When crossing the 1024px breakpoint, sync the collapsed class appropriately
   let _wasDesktop = isDesktop();
@@ -79,7 +78,7 @@ export function setupSidebarCollapse() {
       app.classList.remove('sidebar-collapsed');
     } else {
       // Going desktop: restore from storage
-      if (localStorage.getItem(STORED_KEY) === '1') doCollapse(false);
+      if (readString(STORAGE_KEYS.sidebarCollapsed) === '1') doCollapse(false);
     }
   });
 

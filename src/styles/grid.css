@@ -1,0 +1,303 @@
+/* Photo grid and solo view. */
+
+/* ── Photo grid / solo view panel ─────────────────────────────────────────── */
+
+#grid-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden; /* constrains height so #photo-grid can scroll */
+}
+
+/* Grid mode: photo-grid scrolls; solo-view hidden */
+#photo-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-content: start; /* don't stretch rows — let aspect-ratio determine height */
+  gap: 8px;
+}
+
+#photo-grid::-webkit-scrollbar {
+  width: 6px;
+}
+#photo-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+#photo-grid::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 3px;
+}
+
+/* Solo mode: hide grid, show solo-view */
+#solo-view {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+#grid-panel.solo-mode #photo-grid {
+  display: none;
+}
+#grid-panel.solo-mode #solo-view {
+  display: flex;
+}
+#grid-panel.solo-mode .grid-only {
+  display: none !important;
+}
+
+/* Solo canvas area */
+#solo-canvas-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  padding: 16px 56px; /* side room for nav arrows */
+  position: relative;
+}
+
+#solo-canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  border-radius: 4px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* Solo nav arrows */
+.solo-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius);
+  width: 36px;
+  height: 56px;
+  color: var(--text-2);
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.12s,
+    color 0.12s;
+  z-index: 2;
+  flex-shrink: 0;
+}
+.solo-nav:hover {
+  background: rgba(255, 255, 255, 0.13);
+  color: var(--text);
+}
+#solo-prev {
+  left: 8px;
+}
+#solo-next {
+  right: 8px;
+}
+
+/* Solo footer — info + transforms */
+#solo-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-dim);
+  flex-shrink: 0;
+  background: var(--surface);
+}
+
+#solo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+#solo-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+#solo-meta {
+  font-size: 10px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#solo-transforms {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Bigger, bolder transform buttons in solo footer */
+#solo-transforms .transform-btn {
+  padding: 6px 0;
+  font-size: 18px;
+  min-width: 40px;
+  width: 40px;
+  text-align: center;
+  border-color: var(--border);
+  color: var(--text-2);
+  background: var(--surface-2);
+}
+
+/* View mode seg-control in grid header */
+.view-seg {
+  display: flex;
+  gap: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.view-seg .seg-btn {
+  padding: 3px 0;
+  font-size: 11px;
+  font-weight: 600; /* fixed weight — prevents layout shift on active state */
+  width: 68px;
+  text-align: center;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition:
+    background 0.1s,
+    color 0.1s;
+}
+.view-seg .seg-btn.active {
+  background: var(--accent);
+  color: #0f0f11;
+}
+.view-seg .seg-btn:not(.active):hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.photo-slot {
+  position: relative;
+  padding-top: 87.5%; /* 7/8 — drives height from column width (128×112 = 8:7) */
+  border: 2px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  overflow: hidden;
+  background: var(--surface);
+  transition:
+    border-color 0.1s ease,
+    transform 0.1s ease;
+}
+
+.photo-slot:hover {
+  border-color: var(--border);
+  transform: scale(1.04);
+}
+
+.photo-slot.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.photo-slot.multi-selected {
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+
+.photo-slot.selected-for-gif {
+  border-color: var(--yellow);
+  box-shadow: 0 0 0 1px var(--yellow);
+}
+
+.photo-slot.empty {
+  border-style: dashed;
+  cursor: default;
+}
+
+.photo-slot canvas {
+  position: absolute; /* removed from flow — slot height is driven by aspect-ratio alone */
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  /* Bilinear scaling: avoids pixel-shift artifacts when CSS hover scale is applied.
+     Thumbnails are small enough that smooth interpolation looks better than
+     nearest-neighbour aliasing at the fractional CSS scale. */
+  image-rendering: auto;
+  display: block;
+}
+
+/* Slot number badge */
+.photo-slot .slot-num {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  color: rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+  line-height: 1;
+}
+
+.photo-slot.selected .slot-num,
+.photo-slot:hover .slot-num {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Empty slot placeholder */
+.empty-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+/* GIF selection — whole slot is the target; show a check badge when selected */
+.gif-check {
+  display: none;
+} /* kept in DOM but hidden; slot click handles it */
+
+/* In GIF mode: show a clickable cursor on non-empty slots */
+.gif-mode .photo-slot:not(.empty) {
+  cursor: pointer;
+}
+
+/* Selected-for-gif state: yellow border + subtle overlay with checkmark */
+.photo-slot.selected-for-gif {
+  border-color: var(--yellow) !important;
+  box-shadow: 0 0 0 1px var(--yellow);
+}
+
+.photo-slot.selected-for-gif::after {
+  /* content set via attr(data-gif-frame) in the override rule below */
+  position: absolute;
+  bottom: 4px;
+  right: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--yellow);
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+  font-family: var(--font-mono);
+}

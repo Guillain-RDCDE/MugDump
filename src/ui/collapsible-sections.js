@@ -1,17 +1,13 @@
+import { STORAGE_KEYS, readJson, writeJson } from '../app/storage.js';
 // ── Collapsible sidebar sections ──────────────────────────────────────────────
 
 export function setupCollapsibleSections() {
-  const STORAGE_KEY = 'mugdump:section-states'; // object map of sectionId → isCollapsed
-  let sectionStates = {};
-  try {
-    sectionStates = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-  } catch (_) {}
+  // object map of sectionId → isCollapsed
+  const sectionStates = readJson(STORAGE_KEYS.sectionStates, {});
 
   function saveState(sectionId, isCollapsed) {
     sectionStates[sectionId] = isCollapsed;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sectionStates));
-    } catch (_) {}
+    writeJson(STORAGE_KEYS.sectionStates, sectionStates);
   }
 
   document.querySelectorAll('#export-controls .ctrl-group.collapsible').forEach((group) => {

@@ -1,6 +1,6 @@
 import { paletteToRGB } from '../core/color.js';
 import { BORDER_FRAMES } from '../data/border-frames.js';
-import { applyActiveEffects } from './effects.js';
+import { applyActiveEffects } from './effects/index.js';
 import { applyToneAdjustments } from './tone.js';
 import { renderPhotoWithTransform } from './transform.js';
 

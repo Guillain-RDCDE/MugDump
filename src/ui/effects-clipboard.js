@@ -1,7 +1,7 @@
 import { getEffectiveSettings } from '../app/settings.js';
 import { state } from '../app/state.js';
 import { pushUndo } from '../app/undo.js';
-import { updateFilterUI } from './effects-panel.js';
+import { updateFilterUI } from './effects-actions.js';
 import { showToast } from './feedback.js';
 import { repaintGrid } from './grid.js';
 import { syncControlsToEffectiveSettings } from './tone-controls.js';

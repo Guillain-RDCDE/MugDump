@@ -1,6 +1,6 @@
+import { STORAGE_KEYS, readString, writeString } from '../app/storage.js';
 /** Light / dark theme toggle, remembered in localStorage. */
 export function setupTheme() {
-  const THEME_KEY = 'mugdump:theme';
   const themeToggleBtn = document.getElementById('theme-toggle');
   function applyTheme(theme) {
     const light = theme === 'light';
@@ -10,10 +10,10 @@ export function setupTheme() {
       themeToggleBtn.title = light ? 'Switch to dark theme' : 'Switch to light theme';
     }
   }
-  applyTheme(localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark');
+  applyTheme(readString(STORAGE_KEYS.theme) === 'light' ? 'light' : 'dark');
   themeToggleBtn?.addEventListener('click', () => {
     const nowLight = !document.documentElement.classList.contains('theme-light');
     applyTheme(nowLight ? 'light' : 'dark');
-    localStorage.setItem(THEME_KEY, nowLight ? 'light' : 'dark');
+    writeString(STORAGE_KEYS.theme, nowLight ? 'light' : 'dark');
   });
 }

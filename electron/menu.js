@@ -1,24 +1,35 @@
 import { app, BrowserWindow, Menu } from 'electron';
 
+/** @typedef {import('electron').MenuItemConstructorOptions} MenuItem */
+
 /** Send a menu event to the focused window's renderer (see preload.cjs). */
 function sendToFocused(channel) {
   BrowserWindow.getFocusedWindow()?.webContents.send(channel);
 }
 
+/** @type {MenuItem} */
+const SEPARATOR = { type: 'separator' };
+
+/** @param {MenuItem['role']} role */
+const roleItem = (role) => /** @type {MenuItem} */ ({ role });
+
+const isMac = process.platform === 'darwin';
+
 export function installMenu() {
+  /** @type {MenuItem[]} */
   const template = [
-    ...(process.platform === 'darwin'
+    ...(isMac
       ? [
           {
             label: app.name,
             submenu: [
-              { role: 'about' },
-              { type: 'separator' },
-              { role: 'hide' },
-              { role: 'hideOthers' },
-              { role: 'unhide' },
-              { type: 'separator' },
-              { role: 'quit' },
+              roleItem('about'),
+              SEPARATOR,
+              roleItem('hide'),
+              roleItem('hideOthers'),
+              roleItem('unhide'),
+              SEPARATOR,
+              roleItem('quit'),
             ],
           },
         ]
@@ -36,36 +47,36 @@ export function installMenu() {
           accelerator: 'CmdOrCtrl+Shift+O',
           click: () => sendToFocused('menu-open-pocket'),
         },
-        { type: 'separator' },
+        SEPARATOR,
         {
           label: 'Export All Photos…',
           accelerator: 'CmdOrCtrl+Shift+E',
           click: () => sendToFocused('menu-export-all'),
         },
-        ...(process.platform === 'darwin' ? [] : [{ type: 'separator' }, { role: 'quit' }]),
+        ...(isMac ? [] : [SEPARATOR, roleItem('quit')]),
       ],
     },
     {
       label: 'Edit',
       submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
-        { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { type: 'separator' },
-        { role: 'selectAll' },
+        roleItem('undo'),
+        roleItem('redo'),
+        SEPARATOR,
+        roleItem('cut'),
+        roleItem('copy'),
+        roleItem('paste'),
+        SEPARATOR,
+        roleItem('selectAll'),
       ],
     },
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
+        roleItem('reload'),
+        roleItem('forceReload'),
+        roleItem('toggleDevTools'),
+        SEPARATOR,
+        roleItem('togglefullscreen'),
       ],
     },
   ];

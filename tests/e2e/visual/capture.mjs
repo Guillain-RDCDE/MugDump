@@ -172,6 +172,38 @@ await page.click('#pocket-cancel');
 await page.keyboard.press('Control+z');
 await shot('17-undo');
 
+// ── Effects sweep: export every effect on its own (border on, tone as set above) ──
+await page.click('.scale-btn[data-scale="8"]');
+for (const g of ['crisp', 'retro', 'glitch']) {
+  const header = page.locator(`.fi-group-header[data-group="${g}"]`);
+  if ((await header.getAttribute('class')).includes('collapsed')) await header.click();
+}
+const filterIds = await page.$$eval('.fi-item', (items) => items.map((i) => i.dataset.filter));
+const setOnly = async (ids) => {
+  const checked = await page.$$eval('.fi-check', (cbs) =>
+    /** @type {HTMLInputElement[]} */ (cbs).filter((c) => c.checked).map((c) => c.dataset.filter),
+  );
+  for (const id of filterIds) {
+    const want = ids.includes(id);
+    if (checked.includes(id) !== want)
+      await page.click(`.fi-item[data-filter="${id}"] .fi-check-wrap`);
+  }
+};
+for (const id of filterIds) {
+  await setOnly([id]);
+  await download(`fx-${id}.png`, () => page.click('#btn-export-single'));
+}
+await setOnly(['crt', 'grid', 'noise']);
+await download('fx-stack.png', () => page.click('#btn-export-single'));
+await page.click('#filter-scope-check'); // filters on the photo only, border untouched
+await download('fx-scope-photo.png', () => page.click('#btn-export-single'));
+await page.click('#filter-scope-check');
+await setOnly([]);
+await setRange('#tone-contrast', '60');
+await setRange('#tone-balance', '-70');
+await download('tone-contrast-balance.png', () => page.click('#btn-export-single'));
+await page.click('.scale-btn[data-scale="20"]');
+
 await page.setViewportSize({ width: 1000, height: 700 });
 await shot('18-tablet');
 await page.setViewportSize({ width: 760, height: 900 });

@@ -19,12 +19,26 @@ the MugDump line.
   of real photos), Playwright smoke tests for web and desktop, and a GitHub Actions
   workflow that also checks `docs/` is up to date. The version is read from
   `package.json` at build time instead of being hand-copied.
+- **Smaller modules.** Each visual effect is its own file under `src/render/effects/`
+  (shared helpers for intensity blending and seeded noise), the stylesheet is split into
+  19 partials imported in cascade order, effect actions are separated from the accordion
+  DOM, every `localStorage` key lives in `src/app/storage.js`, and the `.gbcp` format is a
+  pure, unit-tested module (`src/features/project-format.js`).
+- **Type-checked contract.** `types/platform-api.d.ts` declares the platform API; `tsc`
+  checks the core, platform, Electron and test code from their JSDoc (`npm run typecheck`).
+- **End-to-end coverage.** Playwright scenarios drive exports, the GIF builder, presets,
+  custom palettes, projects, dated albums and persistence in the browser, and the IPC
+  bridge, savestate reading, SD-card safety checks and the network allow-list in Electron.
+  A visual-regression tool (`tests/e2e/visual/`) compares screenshots and every effect's
+  export between two builds.
 - Fixed: the **Once** loop mode exported a GIF that still looped forever.
+- Fixed: duplicating a GIF frame did not update the frame counter.
+- Fixed: opening a project did not repaint per-photo settings until the next interaction.
 - Fixed: exporting a single photo at a **custom size** crashed on an undefined width.
 - Fixed: the second **Cancel** button of the Analogue Pocket dialog did nothing (its
   inline handler was blocked by the page's content-security policy).
-- Removed the unreachable lightbox (replaced long ago by the solo view) and other dead
-  code; Linux desktop builds now look for the Pocket SD card under `/media` and `/mnt`.
+- Removed the unreachable lightbox (replaced long ago by the solo view), the orphaned
+  hide-empty toggle and other dead code; Linux desktop builds now look for the Pocket SD card under `/media` and `/mnt`.
 
 ## 0.10 — 2026-07-04
 - **Search savestates by date** — the *Develop savestates into dated albums* flow now

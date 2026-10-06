@@ -1,0 +1,276 @@
+/* GIF frame strip, per-frame palette popover. */
+
+/* ── GIF frame strip ──────────────────────────────────────────────────────── */
+
+#gif-frame-strip {
+  display: none;
+  flex-direction: column;
+  background: var(--surface);
+  border-top: 1px solid var(--border-dim);
+  flex-shrink: 0;
+}
+#gif-frame-strip.visible {
+  display: flex;
+}
+
+#gif-frame-list {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  overflow-x: auto;
+  min-height: 80px;
+  align-items: flex-start;
+}
+
+#gif-frame-empty {
+  font-size: 11px;
+  color: var(--text-3);
+  padding: 0 16px 10px;
+  text-align: center;
+}
+
+/* Individual frame chip */
+.gif-chip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-2);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  cursor: grab;
+  flex-shrink: 0;
+  width: 76px;
+  transition:
+    border-color 0.1s,
+    opacity 0.1s;
+  -webkit-app-region: no-drag;
+}
+.gif-chip:hover {
+  border-color: var(--border);
+}
+.gif-chip.dragging {
+  opacity: 0.3;
+  cursor: grabbing;
+}
+.gif-chip.drag-over {
+  border-color: var(--accent);
+}
+
+.gif-chip-canvas {
+  width: 68px;
+  height: 60px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-radius: 2px;
+  display: block;
+  flex-shrink: 0;
+}
+
+/* Frame number badge — top-left corner */
+.gif-chip-num {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  background: var(--accent);
+  color: #0f0f11;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  line-height: 1;
+  min-width: 17px;
+  height: 17px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
+/* Per-frame palette swatch button */
+.gif-chip-pal {
+  width: 100%;
+  padding: 0;
+  border: 1px solid var(--border-dim);
+  border-radius: 3px;
+  background: var(--surface-3);
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.1s;
+  flex-shrink: 0;
+}
+.gif-chip-pal:hover {
+  border-color: var(--text-3);
+}
+.gif-chip-pal.overridden {
+  border-color: var(--accent);
+}
+
+/* 4-colour swatch strip inside the frame palette button */
+.gif-chip-swatch {
+  display: flex;
+  width: 100%;
+  height: 7px;
+  border-radius: 0;
+  overflow: hidden;
+}
+.gif-chip-swatch span {
+  flex: 1;
+  display: block;
+}
+
+/* Remove button — top-right corner */
+.gif-chip-remove {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 17px;
+  height: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-3);
+  cursor: pointer;
+  transition:
+    background 0.1s,
+    color 0.1s,
+    border-color 0.1s;
+  padding: 0;
+}
+.gif-chip-remove:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+/* ── Frame palette popover ──────────────────────────────────────────────────── */
+
+.frame-pal-popover {
+  position: fixed;
+  z-index: 400;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65);
+  min-width: 200px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.frame-pal-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.08s;
+}
+.frame-pal-opt:hover {
+  background: var(--surface-2);
+}
+.frame-pal-opt.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.frame-pal-sep {
+  height: 1px;
+  background: var(--border-dim);
+  margin: 4px 0;
+}
+
+.frame-pal-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.frame-pal-swatch {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.frame-pal-swatch span {
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  display: block;
+}
+
+/* ── GIF chip duplicate button ───────────────────────────────────────────────── */
+
+.gif-chip-dup {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  min-width: 17px;
+  height: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-2);
+  cursor: pointer;
+  transition:
+    background 0.1s,
+    color 0.1s,
+    border-color 0.1s;
+  padding: 0 4px;
+  opacity: 0;
+  transition:
+    opacity 0.12s,
+    background 0.1s,
+    color 0.1s;
+}
+.gif-chip:hover .gif-chip-dup {
+  opacity: 1;
+}
+.gif-chip-dup:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Drop overlay ─────────────────────────────────────────────────────────── */
+
+#drop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 159, 10, 0.08);
+  border: 3px dashed var(--accent);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+#drop-overlay.hidden {
+  display: none;
+}
+
+.drop-msg {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: -0.3px;
+}

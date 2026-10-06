@@ -18,7 +18,6 @@ export const state = {
   filterVariant: 'medium', // crt only: 'fine'|'medium'|'thick'|'wide'
   filterParams: buildDefaultFilterParams(), // per-filter granular parameters (see FILTER_DEFS)
   photoTransforms: {}, // { photoIndex: { rotate: 0, flipH: false, flipV: false } }
-  hideEmpty: false, // whether to collapse empty grid slots
   presentationMode: false, // fullscreen presentation overlay active
   gifMode: false, // are we in GIF selection mode?
   gifSelection: new Set(), // photo indices in the sequence (for O(1) grid highlight)

@@ -22,22 +22,22 @@
     "preview": "vite preview",
     "start": "npm run build && electron .",
     "lint": "eslint .",
+    "typecheck": "tsc -p tsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "node --test 'tests/unit/**/*.test.mjs'",
     "test:e2e": "node tests/e2e/web-smoke.mjs",
     "test:e2e:electron": "node tests/e2e/electron-smoke.mjs",
-    "check": "npm run lint && npm run format:check && npm test",
+    "check": "npm run lint && npm run format:check && npm run typecheck && npm test",
     "dist:mac": "npm run build && electron-builder --mac",
     "dist:win": "npm run build && electron-builder --win",
     "dist:linux": "npm run build && electron-builder --linux"
   },
-  "dependencies": {
-    "gifenc": "^1.0.3",
-    "jszip": "^3.10.1"
-  },
   "devDependencies": {
+    "gifenc": "^1.0.3",
+    "jszip": "^3.10.1",
     "@eslint/js": "^9.0.0",
+    "@types/node": "^26.6.4",
     "electron": "^30.0.0",
     "electron-builder": "^24.13.3",
     "eslint": "^9.0.0",
@@ -46,6 +46,7 @@
     "playwright": "^1.63.0",
     "pngjs": "^7.0.0",
     "prettier": "^3.0.0",
+    "typescript": "^7.0.2",
     "vite": "^7.0.0"
   },
   "build": {

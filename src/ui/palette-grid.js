@@ -1,3 +1,4 @@
+import { STORAGE_KEYS, readJson, readString, writeJson, writeString } from '../app/storage.js';
 import { PALETTES } from '../data/palettes/index.js';
 import { PHOTO_HEIGHT, PHOTO_WIDTH, renderToCanvas } from '../core/gbcam.js';
 import { state } from '../app/state.js';
@@ -23,12 +24,12 @@ export function openPaletteGrid() {
   // Wire up tile size slider, restoring last saved size
   const sizeSlider = document.getElementById('palette-grid-size');
   if (sizeSlider) {
-    const savedSize = localStorage.getItem('gbcam_pgrid_size');
+    const savedSize = readString(STORAGE_KEYS.paletteGridSize);
     if (savedSize) sizeSlider.value = savedSize;
     updatePaletteGridSize(parseInt(sizeSlider.value));
     sizeSlider.oninput = () => {
       updatePaletteGridSize(parseInt(sizeSlider.value));
-      localStorage.setItem('gbcam_pgrid_size', sizeSlider.value);
+      writeString(STORAGE_KEYS.paletteGridSize, sizeSlider.value);
     };
   }
 
@@ -46,23 +47,15 @@ export function closePaletteGrid() {
 }
 
 // Collapsed categories in the All Palettes grid — remembered across sessions.
-const PGRID_COLLAPSE_KEY = 'mugdump:pgrid:collapsed';
-
 function getCollapsedPgridGroups() {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(PGRID_COLLAPSE_KEY) || '[]'));
-  } catch (_) {
-    return new Set();
-  }
+  return new Set(readJson(STORAGE_KEYS.paletteGridCollapsed, []));
 }
 
 function setPgridGroupCollapsed(group, collapsed) {
   const set = getCollapsedPgridGroups();
   if (collapsed) set.add(group);
   else set.delete(group);
-  try {
-    localStorage.setItem(PGRID_COLLAPSE_KEY, JSON.stringify([...set]));
-  } catch (_) {}
+  writeJson(STORAGE_KEYS.paletteGridCollapsed, [...set]);
 }
 
 async function buildPaletteGrid() {

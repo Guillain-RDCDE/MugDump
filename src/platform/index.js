@@ -16,6 +16,8 @@
  *   exportSav(buffer, name) · saveProject(json, name) · openProject()
  *   fetchJson(url)                → parsed JSON (Lospec import)
  *   onMenuOpenSav(cb) · onMenuOpenPocket(cb) · onMenuExportAll(cb)
+ *
+ * Full signatures: types/platform-api.d.ts.
  */
 import { createWebApi } from './web-api.js';
 

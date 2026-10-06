@@ -1,0 +1,418 @@
+/* Palette picker dropdown, favourites strip, current-palette pin. */
+
+/* ── Palette picker (compact button + popover dropdown) ───────────────────── */
+
+#palette-picker-wrap {
+  position: relative;
+}
+
+.palette-picker-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  width: 200px; /* fixed — prevents other bar elements from shifting */
+  flex-shrink: 0;
+  transition: border-color 0.12s;
+}
+
+#palette-picker-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-picker-btn:hover {
+  border-color: var(--text-3);
+}
+.palette-picker-btn.open {
+  border-color: var(--accent);
+}
+
+.palette-picker-chevron {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+.palette-picker-btn.open .palette-picker-chevron {
+  transform: rotate(180deg);
+}
+
+.palette-picker-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 200;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 380px;
+}
+.palette-picker-dropdown.hidden {
+  display: none;
+}
+
+.palette-picker-search-wrap {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-dim);
+  flex-shrink: 0;
+}
+
+.palette-picker-search-wrap input {
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+.palette-picker-search-wrap input:focus {
+  border-color: var(--accent);
+}
+
+.palette-picker-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+
+.pal-section-header {
+  padding: 6px 12px 3px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+
+.pal-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.08s;
+}
+.pal-item:hover {
+  background: var(--surface-2);
+}
+.pal-item.active {
+  background: var(--accent-dim);
+}
+.pal-item.active .pal-item-name {
+  color: var(--accent);
+}
+
+.pal-item-name {
+  font-size: 12px;
+  color: var(--text);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pal-item-credit {
+  font-size: 10px;
+  color: var(--text-3);
+  flex-shrink: 0;
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.pal-item-credit:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.pal-item:hover .pal-item-credit {
+  opacity: 1;
+}
+
+.pal-item-edit {
+  opacity: 0;
+  font-size: 10px;
+  color: var(--text-3);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.1s;
+}
+.pal-item:hover .pal-item-edit {
+  opacity: 1;
+  border-color: var(--border);
+}
+.pal-item-edit:hover {
+  color: var(--text);
+  background: var(--surface-3);
+  border-color: var(--border);
+}
+
+.palette-picker-footer {
+  padding: 8px;
+  border-top: 1px solid var(--border-dim);
+  flex-shrink: 0;
+}
+
+/* ── Modal inputs: ensure paste/copy works even with body user-select:none ── */
+
+.modal input[type='text'],
+.modal input[type='number'],
+.modal input[type='color'] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* ── Thumbnail size slider ─────────────────────────────────────────────────── */
+
+#thumb-size-slider {
+  width: 90px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ── GIF frame number (replaces static ✓ with numbered badge via data attr) ── */
+
+.photo-slot.selected-for-gif::after {
+  content: attr(data-gif-frame);
+}
+
+/* ── Favourite palettes strip ──────────────────────────────────────────────── */
+
+#fav-palettes {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 1; /* take all remaining palette-bar space */
+  min-width: 0; /* allow shrinking below content size */
+  overflow: hidden; /* clip chips that exceed available width */
+}
+
+/* Favourite palette buttons — colour-only chips, no text */
+.fav-pal-btn {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--border);
+  background: var(--surface-2);
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.fav-pal-btn:hover {
+  border-color: var(--accent);
+}
+.fav-pal-btn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* Swatch block inside fav button — chunky tall bars */
+.fav-pal-swatch {
+  display: flex;
+  gap: 0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.fav-pal-swatch span {
+  width: 11px;
+  height: 20px;
+  display: block;
+}
+
+/* Name hidden — shown as title tooltip only */
+.fav-pal-label {
+  display: none;
+}
+
+/* Wheel navigation arrows flanking the fav strip */
+.fav-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 26px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius-sm);
+  color: var(--text-3);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color 0.12s,
+    border-color 0.12s;
+}
+.fav-nav-btn:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+/* (fav-pal-star remove overlay removed — fav buttons activate palette only; unfav via dropdown pin) */
+
+/* Star button in picker dropdown */
+.pal-item-star {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 4px;
+  color: var(--text-3);
+  opacity: 0;
+  transition:
+    color 0.12s,
+    opacity 0.12s;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.pal-item:hover .pal-item-star {
+  opacity: 1;
+}
+.pal-item-star.starred {
+  color: var(--accent);
+  opacity: 1;
+}
+.pal-item-star:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* Star button overlaid on palette grid cells */
+.pgrid-star {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.12s,
+    color 0.12s;
+  z-index: 2;
+}
+.pgrid-cell:hover .pgrid-star {
+  opacity: 1;
+}
+.pgrid-star.starred {
+  color: var(--accent);
+  opacity: 1;
+}
+.pgrid-star:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* Browse palette grid button */
+#btn-palette-grid {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px 3px 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+#btn-palette-grid .pgrid-icon {
+  flex-shrink: 0;
+  display: block;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* ── Current palette pin (top of picker dropdown) ─────────────────────────── */
+
+#pal-current-pin {
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.pal-pin-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-3);
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.pal-pin-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3, var(--surface-2));
+  border: 1px solid var(--accent);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.pal-pin-item:hover {
+  background: var(--accent-dim);
+}
+
+.pal-pin-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.pal-pin-star {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-3);
+  padding: 0 2px;
+  flex-shrink: 0;
+  line-height: 1;
+  transition:
+    color 0.12s,
+    transform 0.1s;
+}
+.pal-pin-star.starred {
+  color: var(--accent);
+}
+.pal-pin-star:hover {
+  color: var(--accent);
+  transform: scale(1.2);
+}

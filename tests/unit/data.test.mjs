@@ -49,7 +49,10 @@ test('filter definitions are consistent with their groups, defaults and ordering
       if (p.stateKey) continue;
       assert.ok(p.key in defaults[fd.id], `${fd.id}.${p.key} has no default`);
       if (p.type === 'range')
-        assert.ok(p.def >= p.min && p.def <= p.max, `${fd.id}.${p.key} default out of range`);
+        assert.ok(
+          Number(p.def) >= p.min && Number(p.def) <= p.max,
+          `${fd.id}.${p.key} default out of range`,
+        );
       if (p.type === 'seg')
         assert.ok(
           p.opts.some(([v]) => v === p.def),

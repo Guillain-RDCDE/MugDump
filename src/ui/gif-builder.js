@@ -3,7 +3,7 @@ import { PALETTES } from '../data/palettes/index.js';
 import { PHOTO_HEIGHT, PHOTO_WIDTH, renderToCanvas } from '../core/gbcam.js';
 import { getEffectiveSettings } from '../app/settings.js';
 import { state } from '../app/state.js';
-import { applyActiveEffects } from '../render/effects.js';
+import { applyActiveEffects } from '../render/effects/index.js';
 import { applyToneAdjustments } from '../render/tone.js';
 import { dom } from './dom.js';
 import { showToast } from './feedback.js';
@@ -405,6 +405,7 @@ function duplicateGifFrame(orderIdx) {
   if (!frame) return;
   // Insert a copy immediately after
   state.gifFrameOrder.splice(orderIdx + 1, 0, { ...frame });
+  updateGifCount();
   updateGifFrameNumbers();
   renderGifFrameStrip();
   updateGifPreview();

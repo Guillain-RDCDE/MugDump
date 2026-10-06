@@ -1,20 +1,14 @@
+import { STORAGE_KEYS, readJson, writeJson } from './storage.js';
 import { PALETTES } from '../data/palettes/index.js';
 
 // ── Custom palettes — localStorage persistence ────────────────────────────
 
-const CUSTOM_PALETTES_KEY = 'gbcam_custom_palettes';
-
 export function loadCustomPalettes() {
-  try {
-    const raw = localStorage.getItem(CUSTOM_PALETTES_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch (_) {
-    return [];
-  }
+  return readJson(STORAGE_KEYS.customPalettes, []);
 }
 
 export function saveCustomPalettesToStorage(palettes) {
-  localStorage.setItem(CUSTOM_PALETTES_KEY, JSON.stringify(palettes));
+  writeJson(STORAGE_KEYS.customPalettes, palettes);
 }
 
 // Merge custom palettes into the live PALETTES object and rebuild the bar
@@ -31,21 +25,19 @@ export function refreshCustomPalettes() {
 
 // ── Recent palettes (kept for project file backwards-compat) ──────────────
 
-export const RECENT_PALETTES_KEY = 'gbcam_recent_palettes';
-
 const MAX_RECENT_PALETTES = 6;
 
 export function loadRecentPalettes() {
-  try {
-    return JSON.parse(localStorage.getItem(RECENT_PALETTES_KEY) || '[]');
-  } catch (_) {
-    return [];
-  }
+  return readJson(STORAGE_KEYS.recentPalettes, []);
+}
+
+export function saveRecentPalettes(ids) {
+  writeJson(STORAGE_KEYS.recentPalettes, ids);
 }
 
 export function addRecentPalette(id) {
   let recents = loadRecentPalettes().filter((r) => r !== id);
   recents.unshift(id);
   recents = recents.slice(0, MAX_RECENT_PALETTES);
-  localStorage.setItem(RECENT_PALETTES_KEY, JSON.stringify(recents));
+  saveRecentPalettes(recents);
 }

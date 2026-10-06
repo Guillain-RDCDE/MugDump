@@ -1,0 +1,252 @@
+/* Sidebar backdrop, breakpoints, overflow menus. */
+
+/* ── Sidebar overlay backdrop (tablet) ──────────────────────────────────── */
+#sidebar-backdrop {
+  display: none; /* shown only at ≤1024px when sidebar is open */
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 199;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+
+/* Sidebar toggle — hidden on desktop, shown at tablet as a simple arrow */
+#btn-sidebar-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  padding: 4px 10px;
+  line-height: 1;
+}
+
+/* ── Responsive: Small Laptop (≤1280px) ─────────────────────────────────── */
+@media (max-width: 1280px) {
+  /* Hide low-priority titlebar buttons; keep Open .sav + Open Pocket.
+     Must use !important to beat the .has-file .file-only { display: flex !important } rule. */
+  #tb-open-project,
+  #tb-save-project,
+  #tb-export-sav,
+  #tb-reload-sav {
+    display: none !important;
+  }
+
+  /* At 1280px tighten — keep subtitle fully visible */
+
+  /* Tighten the sidebar a touch */
+  #detail-panel {
+    width: 300px;
+  }
+
+  /* Copy/Paste settings buttons wrap awkwardly — hide in grid header */
+  .btn-copy-effects,
+  .btn-paste-effects {
+    display: none;
+  }
+}
+
+/* ── Responsive: Tablet (≤1024px) ──────────────────────────────────────── */
+@media (max-width: 1024px) {
+  /* Titlebar: no traffic-light gap needed; tighten padding */
+  #titlebar {
+    padding: 0 12px;
+    gap: 8px;
+  }
+
+  /* On tablet, keep only Open .sav + sidebar toggle */
+  #tb-open-pocket {
+    display: none;
+  }
+
+  /* Keep subtitle visible at all widths — version + link never disappear */
+
+  /* Show the sidebar toggle button */
+  #btn-sidebar-toggle {
+    display: inline-flex;
+  }
+
+  /* Palette bar: fav strip visibility is now JS-controlled (responsive chip count) */
+
+  /* Resize handle hidden — sidebar is an overlay, not inline */
+  #panel-resize-handle {
+    display: none;
+  }
+
+  /* Grid fills full width */
+  #grid-panel {
+    flex: 1;
+    width: 100%;
+  }
+
+  /* Tighten grid padding */
+  #photo-grid {
+    padding: 10px;
+    gap: 6px;
+  }
+  #grid-header {
+    gap: 6px;
+    padding: 6px 10px 4px;
+  }
+
+  /* Contact sheet export button — too wide for condensed header */
+  #btn-contact-sheet {
+    display: none;
+  }
+
+  /* Detail panel: slide-in overlay from the right */
+  #detail-panel {
+    position: fixed;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 320px;
+    max-width: 88vw;
+    flex-shrink: 0;
+    z-index: 200;
+    transform: translateX(101%); /* start off-screen */
+    transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -6px 0 32px rgba(0, 0, 0, 0.55);
+    overflow-y: auto;
+  }
+
+  /* Show sidebar when app has .sidebar-open class */
+  #app.sidebar-open #detail-panel {
+    transform: translateX(0);
+  }
+
+  /* Backdrop: only shown at this breakpoint */
+  #sidebar-backdrop {
+    display: block;
+  }
+  #app.sidebar-open #sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* Web version: no macOS traffic lights, so drop the 80px left padding */
+body.web #titlebar {
+  padding-left: 16px;
+}
+
+/* ── Overflow / collapse menus ──────────────────────────────────────────────
+   Three collapsible menus appear when their parent row runs out of space:
+   - #tools-menu-wrap  → titlebar (at ≤1280px, when tool buttons are hidden)
+   - #grid-actions-wrap → grid header (detected dynamically via JS)
+   - #fav-menu-wrap    → palette bar (at ≤1024px, when fav strip is hidden)
+   ────────────────────────────────────────────────────────────────────────── */
+
+.overflow-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.overflow-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 4px;
+  z-index: 600;
+  min-width: 190px;
+  max-height: 320px;
+  overflow-y: auto;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  -webkit-app-region: no-drag;
+}
+.overflow-dropdown.hidden {
+  display: none;
+}
+
+.overflow-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  -webkit-app-region: no-drag;
+}
+.overflow-item:hover {
+  background: var(--surface-3);
+}
+.overflow-item:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+.overflow-item:disabled:hover {
+  background: none;
+}
+
+/* File-only items inside overflow menus */
+.overflow-file-only {
+  display: none;
+}
+.has-file .overflow-file-only {
+  display: flex;
+}
+
+/* Grid-only items inside overflow menus (hidden in solo mode) */
+.overflow-grid-only {
+  display: flex;
+}
+#grid-panel.solo-mode .overflow-grid-only {
+  display: none;
+}
+
+/* Fav palette swatch inside dropdown */
+.overflow-pal-swatch {
+  display: inline-flex;
+  width: 44px;
+  height: 12px;
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.overflow-pal-swatch span {
+  flex: 1;
+}
+
+/* ── Overflow button visibility rules ─────────────────────────────────────── */
+
+/* Tools menu: always hidden until ≤1280px */
+#btn-tools-menu {
+  display: none;
+}
+@media (max-width: 1280px) {
+  #btn-tools-menu {
+    display: inline-flex;
+  }
+}
+
+/* Grid actions overflow button — JS adds .overflow-active to #grid-header when items overflow */
+#btn-grid-actions {
+  display: none;
+}
+#grid-header.overflow-active #btn-grid-actions {
+  display: inline-flex;
+}
+/* Must beat .has-file .file-only { display:flex !important } specificity (0,2,0).
+   Use .has-file prefix so we match specificity and win by source order (later in file). */
+#grid-header.overflow-active .grid-action-item,
+#grid-header.overflow-active.has-file .grid-action-item,
+.has-file #grid-header.overflow-active .grid-action-item {
+  display: none !important;
+}
+
+/* Fav menu: JS-controlled via setupFavCarouselResponsive(); hidden by default */
+#btn-fav-menu {
+  display: none;
+}

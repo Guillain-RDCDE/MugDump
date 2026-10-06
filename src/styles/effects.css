@@ -1,0 +1,104 @@
+/* Effects section and file-only controls. */
+
+/* ── Export filters/effects ───────────────────────────────────────────────── */
+
+.filter-seg {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.filter-btn {
+  padding: 6px 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.1s;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.2;
+}
+.filter-btn:hover {
+  border-color: var(--text-3);
+  color: var(--text);
+}
+.filter-btn.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  border-width: 2px;
+}
+.filter-btn.focused {
+  border-style: solid;
+  border-width: 2px;
+}
+
+#filter-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.filter-stack-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.filter-stack-chip.focused {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.filter-stack-rm {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.filter-stack-rm:hover {
+  opacity: 1;
+}
+
+#filter-focused-label {
+  font-size: 10px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+
+/* Video export button */
+#btn-export-video {
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 12px;
+}
+#btn-export-video:hover {
+  color: var(--text);
+  border-color: var(--text-3);
+  opacity: 1;
+}
+
+/* ── File-only titlebar controls (hidden until a .sav or project is loaded) ── */
+.file-only {
+  display: none !important;
+}
+.has-file .file-only {
+  display: flex !important;
+}

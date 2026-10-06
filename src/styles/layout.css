@@ -1,0 +1,138 @@
+/* App frame: layout grid, titlebar, palette bar, main body. */
+
+/* ── Layout ───────────────────────────────────────────────────────────────── */
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ── Titlebar / Header ────────────────────────────────────────────────────── */
+
+#titlebar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px 0 80px; /* 80px left for traffic lights */
+  height: 52px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-dim);
+  -webkit-app-region: drag;
+  flex-shrink: 0;
+  /* overflow must stay visible so the Tools dropdown can escape the bar */
+}
+/* Prevent buttons from shrinking and disappearing; spacer can still flex */
+#titlebar > * {
+  flex-shrink: 0;
+}
+#titlebar .spacer {
+  flex: 1;
+  min-width: 8px;
+}
+
+#titlebar .app-name-btn {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.2px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+#titlebar .app-name-btn:hover {
+  color: var(--accent);
+}
+
+#titlebar .app-subtitle {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-3);
+  letter-spacing: 0;
+}
+#titlebar .app-subtitle a {
+  color: var(--text-3);
+  text-decoration: none;
+  -webkit-app-region: no-drag;
+}
+#titlebar .app-subtitle a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+#titlebar .spacer {
+  flex: 1;
+}
+
+#titlebar button {
+  -webkit-app-region: no-drag;
+}
+
+/* ── Palette bar ──────────────────────────────────────────────────────────── */
+
+#palette-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-dim);
+  flex-shrink: 0;
+}
+
+#palette-bar .label {
+  font-size: 11px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-right: 4px;
+}
+
+.palette-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+
+.palette-btn:hover {
+  border-color: var(--text-3);
+  color: var(--text);
+}
+
+.palette-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.palette-swatch {
+  display: flex;
+  gap: 2px;
+}
+
+.palette-swatch span {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  display: block;
+}
+
+/* ── Main body ────────────────────────────────────────────────────────────── */
+
+#main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}

@@ -1,3 +1,4 @@
+import { STORAGE_KEYS, readJson, writeJson } from '../app/storage.js';
 import { PALETTES } from '../data/palettes/index.js';
 import { getDisplayPaletteId } from '../app/settings.js';
 import { showToast } from './feedback.js';
@@ -59,8 +60,6 @@ export function setupFavCarouselResponsive() {
 
 // ── Favourite palettes ─────────────────────────────────────────────────────
 
-export const FAV_PALETTES_KEY = 'gbcam_fav_palettes';
-
 const MAX_FAV_PALETTES = 64; // total you can star
 
 const FAV_PAGE_SIZE = 16; // max visible at once (hard cap)
@@ -70,11 +69,11 @@ let favOffset = 0; // current wheel position
 let _favVisibleCount = 16; // dynamically updated by setupFavCarouselResponsive
 
 export function loadFavPalettes() {
-  try {
-    return JSON.parse(localStorage.getItem(FAV_PALETTES_KEY) || '[]');
-  } catch (_) {
-    return [];
-  }
+  return readJson(STORAGE_KEYS.favPalettes, []);
+}
+
+export function saveFavPalettes(ids) {
+  writeJson(STORAGE_KEYS.favPalettes, ids);
 }
 
 export function isFavPalette(id) {
@@ -103,7 +102,7 @@ export function toggleFavPalette(id) {
     }
     favs.push(id);
   }
-  localStorage.setItem(FAV_PALETTES_KEY, JSON.stringify(favs));
+  saveFavPalettes(favs);
   renderFavPalettes();
   // Sync star state in any open picker list
   document.querySelectorAll(`.pal-item-star[data-palette="${id}"]`).forEach((btn) => {

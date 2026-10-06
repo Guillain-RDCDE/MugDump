@@ -1,3 +1,4 @@
+import { STORAGE_KEYS, readString, writeString } from './storage.js';
 import { parseSav } from '../core/gbcam.js';
 import { api } from '../platform/index.js';
 import { state } from './state.js';
@@ -76,14 +77,12 @@ export function setupDragDrop() {
 
 // ── Reload last .sav ─────────────────────────────────────────────────────────
 
-const LAST_SAV_PATH_KEY = 'gbcam_last_sav_path';
-
 function saveLastSavPath(filePath) {
-  if (filePath) localStorage.setItem(LAST_SAV_PATH_KEY, filePath);
+  if (filePath) writeString(STORAGE_KEYS.lastSavPath, filePath);
 }
 
 export async function reloadSav() {
-  const p = state.filePath || localStorage.getItem(LAST_SAV_PATH_KEY);
+  const p = state.filePath || readString(STORAGE_KEYS.lastSavPath);
   if (!p) {
     showToast('No file to reload');
     return;

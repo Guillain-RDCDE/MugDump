@@ -117,18 +117,19 @@ src/
   core/            pure logic, no DOM — decoder, savestates, GIF, colours, palette files
   data/            static data — palettes, border frames, effect definitions
   app/             state, effective settings, undo, file loading, custom-palette store
-  render/          canvas pipeline — photo + border, transforms, tone, effects
+  render/          canvas pipeline — photo + border, transforms, tone, effects/ (one file each)
   ui/              one module per panel or widget (grid, solo view, pickers, GIF builder…)
   features/        export (PNG, GIF, albums, contact sheet) and .gbcp project files
   platform/        `api` — browser implementation, or the Electron preload bridge
-  styles/, public/ stylesheet and static assets (frames, icons)
+  styles/, public/ stylesheet partials and static assets (frames, icons)
 electron/
   main.js          window, menu, security settings (sandboxed renderer)
   preload.cjs      the only bridge between renderer and main (`window.api`)
   ipc/             one file per concern: files, Pocket SD card, export, network
+types/             platform API contract (checked with tsc from JSDoc)
 tests/
-  unit/            node:test suites for src/core and the data tables
-  e2e/             Playwright smoke tests (web build and Electron) + visual regression tools
+  unit/            node:test suites for src/core, the project format, storage and data tables
+  e2e/             Playwright scenarios (web build and Electron) + visual regression tools
   fixtures/        synthetic Game Boy Camera saves — no ROM or real photo needed
 ```
 

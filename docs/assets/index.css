@@ -1,3 +1,12 @@
+/*
+ * MugDump stylesheet.
+ *
+ * The partials are imported in cascade order — they used to be one file, and
+ * later rules still override earlier ones of equal specificity. Keep new rules
+ * in the partial that owns the component they style.
+ */
+/* Reset, design tokens (colours, radii, fonts) and the light theme. */
+
 /* ── Reset & Base ─────────────────────────────────────────────────────────── */
 
 *,
@@ -59,6 +68,7 @@ body {
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
+/* App frame: layout grid, titlebar, palette bar, main body. */
 
 /* ── Layout ───────────────────────────────────────────────────────────────── */
 
@@ -196,6 +206,7 @@ body {
   overflow: hidden;
   min-height: 0;
 }
+/* Photo grid and solo view. */
 
 /* ── Photo grid / solo view panel ─────────────────────────────────────────── */
 
@@ -498,6 +509,7 @@ body {
   text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
   font-family: var(--font-mono);
 }
+/* Detail panel: preview, export controls, collapsible sections. */
 
 /* ── Detail panel ─────────────────────────────────────────────────────────── */
 
@@ -708,6 +720,7 @@ input[type='range'] {
   accent-color: var(--accent);
   cursor: pointer;
 }
+/* Button variants. */
 
 /* ── Buttons ──────────────────────────────────────────────────────────────── */
 
@@ -763,6 +776,7 @@ input[type='range'] {
 .btn-full {
   width: 100%;
 }
+/* Welcome / empty state. */
 
 /* ── Empty / Welcome state ────────────────────────────────────────────────── */
 
@@ -860,6 +874,7 @@ input[type='range'] {
   color: var(--accent);
   text-decoration: underline;
 }
+/* Status bar, Analogue Pocket modal, toast. */
 
 /* ── Status bar ───────────────────────────────────────────────────────────── */
 
@@ -1061,6 +1076,7 @@ input[type='range'] {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
 }
+/* GIF mode toolbar. */
 
 /* ── GIF mode toolbar ─────────────────────────────────────────────────────── */
 
@@ -1138,6 +1154,7 @@ input[type='range'] {
   border-color: rgba(255, 214, 10, 0.5);
   color: var(--yellow);
 }
+/* Drop overlay, grid header, panel resize handle, scale labels, scrollbars. */
 
 /* ── Drag & drop overlay ──────────────────────────────────────────────────── */
 
@@ -1320,6 +1337,7 @@ input[type='range'] {
   background: var(--surface-3);
   border-radius: 3px;
 }
+/* Palette picker dropdown, favourites strip, current-palette pin. */
 
 /* ── Palette picker (compact button + popover dropdown) ───────────────────── */
 
@@ -1737,6 +1755,7 @@ input[type='range'] {
   color: var(--accent);
   transform: scale(1.2);
 }
+/* All Palettes grid overlay. */
 
 /* ── Palette visual grid overlay ──────────────────────────────────────────── */
 
@@ -1888,6 +1907,7 @@ input[type='range'] {
   flex: 1;
   display: block;
 }
+/* Sidebar preview, filter scope toggle, border frame picker. */
 
 /* ── Sidebar preview ──────────────────────────────────────────────────────── */
 
@@ -2037,6 +2057,7 @@ input[type='range'] {
 .border-frame-btn.active span {
   color: var(--accent);
 }
+/* Effects section and file-only controls. */
 
 /* ── Export filters/effects ───────────────────────────────────────────────── */
 
@@ -2140,6 +2161,7 @@ input[type='range'] {
 .has-file .file-only {
   display: flex !important;
 }
+/* GIF frame strip, per-frame palette popover. */
 
 /* ── GIF frame strip ──────────────────────────────────────────────────────── */
 
@@ -2415,6 +2437,7 @@ input[type='range'] {
   color: var(--accent);
   letter-spacing: -0.3px;
 }
+/* Transform buttons, grid header layout, presentation overlay. */
 
 /* ── Photo transform buttons ──────────────────────────────────────────────── */
 
@@ -2454,25 +2477,6 @@ input[type='range'] {
   height: 16px;
   background: var(--border-dim);
   margin: 0 3px;
-}
-
-/* ── Hide-empty grid behaviour ────────────────────────────────────────────── */
-
-#photo-grid.hide-empty .photo-slot.empty {
-  display: none;
-}
-
-#btn-hide-empty.active,
-#btn-multiselect.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-#multiselect-count {
-  display: none;
-  font-size: 11px;
-  color: var(--text-3);
 }
 
 /* ── Grid header button layout ─────────────────────────────────────────────── */
@@ -2589,6 +2593,7 @@ input[type='range'] {
 #pres-next {
   right: 16px;
 }
+/* Parameter rows, scope toggle, tone controls, colour picker. */
 
 /* ── Per-filter param rows ────────────────────────────────────────────────── */
 
@@ -2788,6 +2793,7 @@ input[type='range'] {
 #tone-split-detail {
   margin-top: 4px;
 }
+/* Filter accordion, presets, section headings, custom checkboxes. */
 
 /* ── Filter checkbox list ────────────────────────────────────────────────── */
 
@@ -3172,6 +3178,7 @@ input[type='range'] {
   padding: 3px 0 0;
   font-family: var(--font-mono);
 }
+/* Sidebar backdrop, breakpoints, overflow menus. */
 
 /* ── Sidebar overlay backdrop (tablet) ──────────────────────────────────── */
 #sidebar-backdrop {
@@ -3423,6 +3430,7 @@ body.web #titlebar {
 #btn-fav-menu {
   display: none;
 }
+/* Spinner, onboarding card, border preview popover, effect family headers, repo link. */
 
 /* ── Loading spinner (Analogue Pocket scan, etc.) ─────────────────────────── */
 .loading-state {

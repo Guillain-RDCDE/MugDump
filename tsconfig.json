@@ -1,0 +1,29 @@
+{
+  // Type-checks the platform-independent core, the platform contract, the
+  // Electron shell and the tests from their JSDoc. The DOM-heavy ui/ modules
+  // are not covered (yet): add them to "include" when they get JSDoc types.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": [
+    "types/**/*.d.ts",
+    "src/core/**/*.js",
+    "src/platform/**/*.js",
+    "src/features/project-format.js",
+    "src/app/storage.js",
+    "electron/**/*.js",
+    "electron/**/*.cjs",
+    "scripts/**/*.mjs",
+    "tests/**/*.mjs"
+  ]
+}

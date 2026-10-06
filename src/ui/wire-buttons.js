@@ -16,7 +16,7 @@ import { openProject, saveProject } from '../features/project.js';
 import { applyTransformAction } from '../render/transform.js';
 import { dom } from './dom.js';
 import { copyEffects, pasteEffects } from './effects-clipboard.js';
-import { resetEffects, setSectionEnabled } from './effects-panel.js';
+import { resetEffects, setSectionEnabled } from './effects-actions.js';
 import { setExportFormat, setExportScale, updateCustomSizeDisplay } from './export-panel.js';
 import { showToast } from './feedback.js';
 import { clearGifFrames, setGifLoop, updateGifPreview } from './gif-builder.js';
@@ -26,7 +26,6 @@ import {
   deselectAll,
   repaintGrid,
   setThumbnailSize,
-  toggleHideEmpty,
 } from './grid.js';
 import { closePaletteGrid, openPaletteGrid } from './palette-grid.js';
 import { setPalette } from './palette-picker.js';
@@ -235,9 +234,6 @@ export function wireButtons() {
   document.getElementById('tb-save-project')?.addEventListener('click', saveProject);
   document.getElementById('tb-open-project')?.addEventListener('click', openProject);
   document.getElementById('tb-reload-sav')?.addEventListener('click', reloadSav);
-
-  // Grid header: hide empty
-  document.getElementById('btn-hide-empty')?.addEventListener('click', toggleHideEmpty);
 
   // Presentation overlay
   dom.presClose?.addEventListener('click', closePresentation);

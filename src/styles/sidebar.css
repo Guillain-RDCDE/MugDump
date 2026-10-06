@@ -1,0 +1,211 @@
+/* Detail panel: preview, export controls, collapsible sections. */
+
+/* ── Detail panel ─────────────────────────────────────────────────────────── */
+
+#detail-panel {
+  width: 35%;
+  min-width: 260px;
+  max-width: 600px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border-dim);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#detail-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-3);
+  font-size: 12px;
+  text-align: center;
+  padding: 24px;
+}
+
+/* Hide empty state + show controls once a file is loaded */
+.has-file #detail-empty {
+  display: none;
+}
+
+#detail-empty .icon {
+  font-size: 32px;
+  opacity: 0.4;
+}
+
+/* ── GIF animated preview (detail panel, GIF mode only) ─────────────────────── */
+
+#gif-preview-wrap {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border-dim);
+  padding: 12px 12px 8px;
+  flex-shrink: 0;
+}
+#gif-preview-wrap.visible {
+  display: flex;
+}
+
+#gif-preview-canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  max-width: 100%;
+  max-height: 180px;
+  width: auto;
+  height: auto;
+  display: block;
+}
+
+#gif-preview-info {
+  font-size: 10px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  margin-top: 5px;
+  letter-spacing: 0.2px;
+}
+
+/* ── Export controls ──────────────────────────────────────────────────────── */
+
+#export-controls {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.has-file #export-controls {
+  display: flex;
+}
+
+#export-controls::-webkit-scrollbar {
+  width: 4px;
+}
+#export-controls::-webkit-scrollbar-thumb {
+  background: var(--surface-3);
+  border-radius: 2px;
+}
+
+.ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ctrl-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-3);
+}
+
+/* ── Collapsible sidebar sections ─────────────────────────────────────────── */
+
+.ctrl-group.collapsible > .ctrl-label,
+.ctrl-group.collapsible > .tone-header {
+  user-select: none;
+}
+
+.section-chevron {
+  display: inline-block;
+  font-size: 18px;
+  color: var(--text-2);
+  margin-right: 5px;
+  transition: transform 0.15s ease;
+  line-height: 1;
+  font-weight: bold;
+  vertical-align: middle;
+}
+
+.ctrl-group.collapsed .section-chevron {
+  transform: rotate(-90deg);
+}
+
+.ctrl-label {
+  cursor: pointer;
+  transition: color 0.1s;
+}
+
+.ctrl-label:hover {
+  text-decoration: underline;
+}
+
+.section-body-outer {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.2s ease;
+  /* gap: 6px is inherited from .ctrl-group flex — remove it on outer wrapper */
+}
+
+.ctrl-group.collapsed > .section-body-outer {
+  grid-template-rows: 0fr;
+}
+
+.section-body-inner {
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.seg-control {
+  display: flex;
+  gap: 4px;
+}
+
+.seg-btn {
+  flex: 1;
+  padding: 5px 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.1s;
+}
+
+.seg-btn:hover {
+  border-color: var(--text-3);
+  color: var(--text);
+}
+.seg-btn.active {
+  background: var(--surface-2);
+  border-color: var(--surface-3);
+  color: var(--text);
+}
+
+/* (gif-controls removed — controls now live in #gif-toolbar) */
+
+.range-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.range-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.range-val {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-2);
+}
+
+input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}

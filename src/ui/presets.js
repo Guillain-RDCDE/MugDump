@@ -1,3 +1,4 @@
+import { STORAGE_KEYS, readJson, writeJson } from '../app/storage.js';
 import { getEffectiveSettings } from '../app/settings.js';
 import { state } from '../app/state.js';
 import { showToast } from './feedback.js';
@@ -8,14 +9,8 @@ import { syncControlsToEffectiveSettings } from './tone-controls.js';
 
 // ── Effect Presets ──────────────────────────────────────────────────────────
 
-export const PRESET_KEY = 'mugdump:presets:v1';
-
 export function getPresets() {
-  try {
-    return JSON.parse(localStorage.getItem(PRESET_KEY) || '{}');
-  } catch {
-    return {};
-  }
+  return readJson(STORAGE_KEYS.presets, {});
 }
 
 export function savePreset(name) {
@@ -40,7 +35,7 @@ export function savePreset(name) {
   };
   const presets = getPresets();
   presets[name] = src;
-  localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+  writeJson(STORAGE_KEYS.presets, presets);
   renderPresetList();
   showToast(`Preset "${name}" saved`);
 }
@@ -99,7 +94,7 @@ export function loadPreset(name) {
 export function deletePreset(name) {
   const presets = getPresets();
   delete presets[name];
-  localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+  writeJson(STORAGE_KEYS.presets, presets);
   renderPresetList();
 }
 
@@ -175,7 +170,7 @@ export function setupPresetControls() {
           throw new Error('Invalid format');
         const existing = getPresets();
         const merged = { ...existing, ...imported };
-        localStorage.setItem(PRESET_KEY, JSON.stringify(merged));
+        writeJson(STORAGE_KEYS.presets, merged);
         renderPresetList();
         showToast(`Imported ${Object.keys(imported).length} preset(s)`);
       } catch {

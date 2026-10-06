@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { updateFilterUI } from '../ui/effects-panel.js';
+import { updateFilterUI } from '../ui/effects-actions.js';
 import { showToast } from '../ui/feedback.js';
 import { repaintGrid } from '../ui/grid.js';
 import { updateSidebarPreview } from '../ui/sidebar-preview.js';
