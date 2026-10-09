@@ -8,6 +8,14 @@
 
 # MugDump
 
+<!-- opening -->
+> Rescue the photos trapped in a Game Boy Camera, straight from your browser.
+>
+> Analogue Pocket save-state support in the browser and in a desktop app, dated albums, direct SD-card access where the browser allows it.
+>
+> A small tool finished properly, for people who just want their photos back. Part of the work of [Guillain d’Erceville](https://github.com/Guillain-RDCDE), forward deployed engineer.
+<!-- opening -->
+
 **Dump and develop your Game Boy Camera mug shots.** Pull the photos off your
 Game Boy Camera and turn them into PNGs and GIFs — palettes, effects, frames and all.
 
