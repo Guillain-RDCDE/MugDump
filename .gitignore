@@ -9,3 +9,9 @@ tests/e2e/output/
 # ROMs commerciales : jamais redistribuees. Garder les cartouches en local.
 *.gb
 *.gbc
+
+# Shared tool settings are versioned; per-machine ones (settings.local.json) are not
+!.claude/
+.claude/*
+!.claude/settings.json
+!.claude/CLAUDE.md
