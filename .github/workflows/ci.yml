@@ -8,6 +8,7 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,8 +25,10 @@ jobs:
       - name: Check that docs/ is up to date
         run: git diff --exit-code --stat -- docs || (echo '::error::docs/ is stale — run `npm run build` and commit the result' && exit 1)
       - name: Web end-to-end scenarios (Playwright)
+        timeout-minutes: 8
         run: |
           npx playwright install --with-deps chromium
           npm run test:e2e
       - name: Desktop end-to-end scenarios (Electron under Xvfb)
+        timeout-minutes: 5
         run: xvfb-run -a npm run test:e2e:electron

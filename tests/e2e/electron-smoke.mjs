@@ -18,6 +18,17 @@ const junkPath = path.join(dir, 'junk.sav');
 writeFileSync(junkPath, Buffer.alloc(100));
 
 const app = await electron.launch({ args: ['.'] });
+
+// Watchdog: a stuck scenario fails fast instead of hanging the run.
+const TIMEOUT_MS = 3 * 60 * 1000;
+setTimeout(() => {
+  console.error(`electron e2e timed out after ${TIMEOUT_MS / 1000}s`);
+  try {
+    app.process().kill('SIGKILL');
+  } finally {
+    process.exit(1);
+  }
+}, TIMEOUT_MS).unref();
 const win = await app.firstWindow();
 const errors = trackErrors(win);
 
@@ -80,11 +91,25 @@ const refused = await win.evaluate(() =>
 );
 expect(/Refusing to fetch/.test(String(refused)), 'fetch-json only allows lospec.com');
 
+// Never let the test launch a real system browser: on a headless runner
+// xdg-open starts one that outlives the app and keeps the run alive forever.
+// The stub records the hand-off so it can still be checked.
+await app.evaluate(({ shell }) => {
+  /** @type {any} */ (globalThis).__openedExternal = [];
+  shell.openExternal = async (url) => {
+    /** @type {any} */ (globalThis).__openedExternal.push(url);
+  };
+});
 const opened = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length);
 await win.evaluate(() => window.open('https://example.com/'));
 await win.waitForTimeout(500);
 const after = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length);
 expect(opened === 1 && after === 1, 'window.open never spawns a second window');
+const external = await app.evaluate(() => /** @type {any} */ (globalThis).__openedExternal);
+expect(
+  external.length === 1 && external[0] === 'https://example.com/',
+  'window.open hands http links to the system browser',
+);
 
 if (process.env.SMOKE_SCREENSHOT) await win.screenshot({ path: process.env.SMOKE_SCREENSHOT });
 await app.close();
