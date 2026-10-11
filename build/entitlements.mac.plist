@@ -8,14 +8,9 @@
   <true/>
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
   <true/>
-  <!-- Read access to SD card / volumes -->
-  <key>com.apple.security.files.user-selected.read-only</key>
-  <true/>
-  <!-- Write access (for export) -->
-  <key>com.apple.security.files.user-selected.read-write</key>
-  <true/>
-  <!-- Allow reading removable volumes (SD card) -->
-  <key>com.apple.security.files.all</key>
-  <true/>
+  <!-- No com.apple.security.app-sandbox: the app is signed with the hardened
+       runtime only, so it reads the SD card and writes exports with the user's
+       own file permissions. (files.* entitlements only apply inside the App
+       Sandbox and are deliberately absent.) -->
 </dict>
 </plist>
