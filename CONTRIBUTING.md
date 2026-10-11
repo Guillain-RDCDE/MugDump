@@ -16,12 +16,12 @@ All work happens directly on `main`; the repository keeps no other branch.
 
 ```bash
 npm run check      # ESLint + Prettier + type-check (tsc on JSDoc) + unit tests
-npm run build      # regenerates docs/ — commit it with your change
 ```
 
-`docs/` is the GitHub Pages site **and** what the desktop app loads. It is generated
-from `src/` by Vite and committed on purpose; CI fails if it is out of date. Never edit
-files under `docs/` by hand.
+`docs/` is the web build (`npm run build`, Vite): the GitHub Pages site **and** what the
+desktop app loads. It is build output and is not committed; `npm start`, the end-to-end
+scripts and the `dist:*` scripts rebuild it first. Static assets (icons, frames, the
+social preview used by the README) live in `src/public/`.
 
 Optional, slower checks:
 
@@ -60,14 +60,12 @@ Rules of thumb:
 ## Releasing
 
 1. Bump `version` in `package.json` and add a CHANGELOG entry.
-2. `npm run build` and commit `docs/` — the version string in the app comes from
-   `package.json` at build time.
+2. The version string in the app comes from `package.json` at build time.
 3. `npm run dist:mac` / `dist:win` / `dist:linux` for installers. The packaged app contains
    only `electron/`, `src/core/`, `docs/` and `package.json`: everything the renderer
    needs is already bundled into `docs/`.
 
 ## Deploying the web app
 
-GitHub Pages currently serves the committed `docs/` folder. `.github/workflows/deploy-pages.yml`
-is ready for the day Pages is switched to "GitHub Actions" as its source (see the comment
-at the top of that file).
+Every push to `main` builds the web app and deploys it to GitHub Pages
+(`.github/workflows/deploy-pages.yml`, Pages source: "GitHub Actions").

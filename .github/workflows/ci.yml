@@ -20,10 +20,7 @@ jobs:
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build
-      # docs/ is the committed GitHub Pages output: it must match the sources.
-      - name: Check that docs/ is up to date
-        run: git diff --exit-code --stat -- docs || (echo '::error::docs/ is stale — run `npm run build` and commit the result' && exit 1)
+      # Both end-to-end scripts build docs/ (the web app Electron loads) first.
       - name: Web end-to-end scenarios (Playwright)
         timeout-minutes: 8
         run: |

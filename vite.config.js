@@ -27,7 +27,7 @@ export default defineConfig({
   build: {
     outDir: '../docs',
     emptyOutDir: true,
-    // Readable, diff-friendly output: docs/ is committed for GitHub Pages.
+    // Readable output: easy to inspect in the deployed site and the packaged app.
     minify: false,
     sourcemap: false,
     assetsInlineLimit: 0,

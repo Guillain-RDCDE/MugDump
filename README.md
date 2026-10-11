@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="docs/social-preview.png" width="100%" alt="MugDump — dump and develop your Game Boy Camera mug shots">
+  <img src="src/public/social-preview.png" width="100%" alt="MugDump — dump and develop your Game Boy Camera mug shots">
 </p>
 
 <p align="center">
-  <img src="docs/icon.png" width="120" alt="MugDump">
+  <img src="src/public/icon.png" width="120" alt="MugDump">
 </p>
 
 # MugDump
@@ -116,7 +116,8 @@ camera's management block (`src/core/savestate.js`).
 ### Project layout
 
 One source tree serves both targets. `npm run build` compiles `src/` into `docs/`
-(the GitHub Pages site, committed) and the Electron shell loads that same output.
+(build output, not committed): GitHub Actions builds and deploys it to GitHub Pages,
+and the Electron shell loads that same output.
 
 ```
 src/

@@ -1,7 +1,8 @@
 /**
  * Electron main process.
  *
- * Loads the same renderer bundle as the web app (docs/, built by Vite) and
+ * Loads the same renderer bundle as the web app (docs/, built by Vite — run
+ * `npm run build` first; `npm start` does) and
  * exposes native capabilities through electron/preload.cjs. In development
  * (`npm run dev`) it loads the Vite dev server instead.
  */

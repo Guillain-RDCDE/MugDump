@@ -4,6 +4,15 @@ All notable changes to MugDump. MugDump is a fork of
 [DMG DarkRoom](https://github.com/clickysteve/dmg-darkroom); versions below cover
 the MugDump line.
 
+## Unreleased
+- **Desktop:** Electron 44 (from 30, which no longer gets security fixes) and
+  electron-builder 26. The renderer stays sandboxed with context isolation and the same CSP.
+- **Desktop hardening.** `read-file` only reads a file the user opened, dropped or that
+  the Pocket scan found, and checks its size before reading it.
+- **Web:** GitHub Pages is now built and deployed by GitHub Actions on every push to
+  `main`; `docs/` is build output and no longer committed.
+- `npm test` runs on Windows (`cmd.exe`) as well.
+
 ## 0.11 — 2026-10-06
 - **Architecture overhaul.** The renderer is now a set of ES modules under `src/`
   (core / data / app / render / ui / features / platform) built with Vite into `docs/`;

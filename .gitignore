@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Web build output (npm run build): deployed to Pages by GitHub Actions
+docs/
 .DS_Store
 *.dmg
 test_saves/
