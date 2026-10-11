@@ -25,7 +25,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "node --test 'tests/unit/**/*.test.mjs'",
+    "test": "node --test \"tests/unit/**/*.test.mjs\"",
     "test:e2e": "node tests/e2e/web-smoke.mjs",
     "test:e2e:electron": "node tests/e2e/electron-smoke.mjs",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm test",
