@@ -28,15 +28,15 @@ MugDump-specific work is documented in README and CHANGELOG.
   `src/platform/` the `api` object (browser impl or Electron preload); contract in
   `types/platform-api.d.ts`.
 - `electron/` main (ESM), `preload.cjs`, `ipc/` per concern. Renderer is sandboxed.
-- `docs/` is **generated** by `npm run build` (Vite) and committed: it is the Pages site and
-  what Electron loads. Never edit by hand; rebuild and commit it with every change. CI fails
-  if it is stale.
+- `docs/` is **generated** by `npm run build` (Vite) and gitignored: Pages builds it in
+  `deploy-pages.yml` on every push to main, and Electron loads it (`npm start`, e2e and
+  `dist:*` build first). Never edit by hand.
 
 ## Workflow
 
 ```
 npm run check          # eslint + prettier + tsc (JSDoc) + unit tests — must pass
-npm run build          # regenerate docs/ before committing
+npm run build          # regenerate docs/ locally (not committed)
 npm run test:e2e       # web scenarios (set PLAYWRIGHT_CHROMIUM_PATH in sandboxes)
 xvfb-run -a npm run test:e2e:electron   # desktop scenarios on headless Linux
 ```
@@ -56,7 +56,5 @@ all artefacts identical to the pre-refactor build (0.10).
 
 ## Known leftovers
 
-- GitHub Pages still serves the committed `docs/`; `.github/workflows/deploy-pages.yml` is
-  ready (manual trigger) once the Pages source is switched to Actions.
 - The `.sta` extraction is verified on synthetic savestates only (no real Pocket sample in repo).
 - `src/ui/` is not type-checked yet (add to `tsconfig.json` "include" as JSDoc lands).
