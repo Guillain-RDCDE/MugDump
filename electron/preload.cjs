@@ -20,12 +20,15 @@ contextBridge.exposeInMainWorld('api', {
   openSavFile: invoke('open-sav-file'),
   readFile: (saveOrPath) =>
     ipcRenderer.invoke('read-file', typeof saveOrPath === 'string' ? saveOrPath : saveOrPath?.path),
+  // A dropped file's on-disk path; main is told so `read-file` (Reload) may
+  // read it later. webUtils only resolves real files the user provided.
   getPathForFile: (file) => {
+    let filePath = null;
     try {
-      return webUtils.getPathForFile(file) || null;
-    } catch {
-      return null;
-    }
+      filePath = webUtils.getPathForFile(file) || null;
+    } catch {}
+    if (filePath) ipcRenderer.send('allow-dropped-path', filePath);
+    return filePath;
   },
 
   // Analogue Pocket SD card

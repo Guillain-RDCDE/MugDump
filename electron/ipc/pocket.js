@@ -10,6 +10,7 @@ import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 import { decodeFirstPhoto, SRAM_SIZE } from '../../src/core/gbcam.js';
 import { assertString, windowOf } from './util.js';
+import { userFiles } from './files.js';
 
 const OPENFPGA_CORE_DIRS = ['gb', 'gbc', 'Game Boy', 'GameBoy', 'Analogue.gb', 'Analogue.gbc'];
 
@@ -104,6 +105,7 @@ export function registerPocketHandlers() {
     // Memories/ and Memories/Save States/ scans may overlap — dedupe by path.
     const seen = new Set();
     const saves = found.filter((s) => !seen.has(s.path) && seen.add(s.path));
+    for (const save of saves) userFiles.allow(save.path);
     await Promise.all(
       saves.map(async (save) => {
         save.previewPixels = await previewPixels(save.path);

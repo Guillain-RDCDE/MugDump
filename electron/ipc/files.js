@@ -2,6 +2,13 @@ import { dialog, ipcMain } from 'electron';
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 import { assertString, readCameraSave, windowOf } from './util.js';
+import { createPathAllowList, readAllowedCameraSave } from './read-save.js';
+
+/**
+ * Files the user handed to the app this session (open dialog, drop, Pocket
+ * scan): the only paths `read-file` will read.
+ */
+export const userFiles = createPathAllowList();
 
 const SAVE_FILTERS = [
   { name: 'Game Boy Camera Save / Savestate', extensions: ['sav', 'srm', 'sta'] },
@@ -16,6 +23,7 @@ export function registerFileHandlers() {
       properties: ['openFile'],
     });
     if (canceled || filePaths.length === 0) return null;
+    userFiles.allow(filePaths[0]);
     try {
       return await readCameraSave(filePaths[0]);
     } catch (e) {
@@ -23,13 +31,11 @@ export function registerFileHandlers() {
     }
   });
 
-  ipcMain.handle('read-file', async (_event, filePath) => {
-    try {
-      return await readCameraSave(filePath);
-    } catch (e) {
-      return { error: e.message };
-    }
-  });
+  // The preload reports the path of a file dropped on the window (resolved by
+  // webUtils.getPathForFile, which only knows real files the user provided).
+  ipcMain.on('allow-dropped-path', (_event, filePath) => userFiles.allow(filePath));
+
+  ipcMain.handle('read-file', (_event, filePath) => readAllowedCameraSave(userFiles, filePath));
 
   ipcMain.handle('export-sav', async (event, { buffer, defaultName }) => {
     const { canceled, filePath } = await dialog.showSaveDialog(windowOf(event), {

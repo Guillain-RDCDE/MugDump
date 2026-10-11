@@ -57,6 +57,31 @@ const summarise = (x) => ({
   path: 'path' in x ? x.path : null,
   error: 'error' in x ? x.error : null,
 });
+const untracked = summarise(await win.evaluate((p) => window.api.readFile(p), staPath));
+expect(
+  /Refusing to read/.test(untracked.error),
+  'read-file refuses a path that was never opened, dropped or found on a Pocket',
+);
+// Hand the files over the way a drop does: real files on disk, whose path the
+// preload resolves with webUtils.getPathForFile() and reports to main.
+await win.evaluate(() => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  input.id = 'e2e-files';
+  input.hidden = true;
+  document.body.append(input);
+});
+await win.setInputFiles('#e2e-files', [staPath, junkPath]);
+const handed = await win.evaluate(() =>
+  Array.from(/** @type {HTMLInputElement} */ (document.getElementById('e2e-files')).files, (f) =>
+    window.api.getPathForFile(f),
+  ),
+);
+expect(
+  handed[0] === staPath && handed[1] === junkPath,
+  'getPathForFile resolves the on-disk path of a user-provided file',
+);
 const viaSta = await win.evaluate(async (p) => {
   const x = await window.api.readFile(p);
   return { bytes: 'buffer' in x ? x.buffer.byteLength : null, path: 'path' in x ? x.path : null };
