@@ -5,7 +5,7 @@ All notable changes to MugDump. MugDump is a fork of
 the MugDump line.
 
 ## Unreleased
-- **Desktop:** Electron 44 (from 30, which no longer gets security fixes) and
+- **Desktop:** Electron 45 (from 30, which no longer gets security fixes) and
   electron-builder 26. The renderer stays sandboxed with context isolation and the same CSP.
 - **Desktop hardening.** `read-file` only reads a file the user opened, dropped or that
   the Pocket scan found, and checks its size before reading it.

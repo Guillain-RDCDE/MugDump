@@ -17,4 +17,4 @@ updates:
         dependency-type: development
         update-types: [minor, patch]
       everything-else:
-        patterns: ["*"]
+        patterns: ['*']
